@@ -1,4 +1,6 @@
 import { ref } from "vue";
+import axios from "axios";
+import { useCookie } from "#app";
 
 export function useAuth() {
   const token = useCookie("token");
@@ -8,22 +10,28 @@ export function useAuth() {
   const userRole = ref(role.value || "guest");
   const userName = ref(username.value || "");
 
+  const baseUrl = "http://localhost:4000";
+
   const login = async (usernameInput: string, passwordInput: string) => {
     try {
-      const res = await $fetch("/api/login", {
-        method: "POST",
-        body: { username: usernameInput, password: passwordInput },
+      const res = await axios.post(`${baseUrl}/auth/login`, {
+        username: usernameInput,
+        password: passwordInput,
       });
 
-      token.value = res.token;
-      role.value = res.role;
-      username.value = res.username;
+      // Ambil data dari response
+      const { accessToken, user } = res.data.data;
 
-      userRole.value = res.role;
-      userName.value = res.username;
+      token.value = accessToken;
+      role.value = user.role || "guest";
+      username.value = user.username || "";
+
+      userRole.value = role.value;
+      userName.value = username.value;
 
       return true;
     } catch (error) {
+      console.error("Login error:", error);
       return false;
     }
   };

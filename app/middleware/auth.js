@@ -13,7 +13,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   // Jika ada rule dan user role tidak ada di allowedRoles, redirect forbidden
   if (rule && !rule.allowedRoles.includes(userRole.value)) {
     return navigateTo("/forbidden");
-  }
+  } 
 
   // Jika user guest dan tidak di halaman login, redirect ke login
   if (userRole.value === "guest" && to.path !== "/login") {
