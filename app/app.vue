@@ -1,10 +1,20 @@
+
 <template>
   <!-- Wrapper utama -->
-  <div class="min-h-screen bg-base-200">
+  <div  class="min-h-screen bg-white">
     <!-- Layout yang dipilih per halaman -->
     <NuxtLayout>
       <!-- Isi halaman -->
       <NuxtPage />
+      <LoadingOverlay />
     </NuxtLayout>
   </div>
 </template>
+<script setup lang="ts"> 
+import LoadingOverlay from "@/components/LoadingOverlay.vue";
+useHead({
+  htmlAttrs: {
+    'data-theme': 'light'
+  }
+})
+</script>

@@ -18,6 +18,17 @@ export default defineEventHandler(() => {
       ]
     },
     { 
+      name: "Barang", 
+      icon: "Package", 
+      path: "/barang",
+      description: "Manage application users",
+      children: [
+        { name: "List Barang", path: "/barang/list", description: "View all barang" },
+        { name: "List tabel Barang", path: "/barang/listtable", description: "View all barang" },
+        { name: "Create barang", path: "/barang/create", description: "Add new barang" }
+      ]
+    },
+    { 
       name: "Settings", 
       icon: "Settings", 
       path: "/settings",

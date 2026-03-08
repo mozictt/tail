@@ -1,53 +1,71 @@
-import { ref } from "vue";
-import axios from "axios";
-import { useCookie } from "#app";
+import { ref, computed } from "vue";
+import { useCookie, useRuntimeConfig, navigateTo } from "#app";
 
 export function useAuth() {
-  const token = useCookie("token");
-  const role = useCookie("role");
-  const username = useCookie("username");
+
+  const config = useRuntimeConfig();
+
+  const token = useCookie<string | null>("token");
+  const role = useCookie<string | null>("role");
+  const username = useCookie<string | null>("username");
 
   const userRole = ref(role.value || "guest");
   const userName = ref(username.value || "");
 
-  const baseUrl = "http://localhost:4000";
+  const isLoggedIn = computed(() => !!token.value);
 
   const login = async (usernameInput: string, passwordInput: string) => {
+
     try {
-      const res = await axios.post(`${baseUrl}/auth/login`, {
-        username: usernameInput,
-        password: passwordInput,
-      });
 
-      // Ambil data dari response
-      const { accessToken, user } = res.data.data;
+      const res:any = await $fetch(`${config.public.apiBase}/auth/login`,{
+        method:"POST",
+        body:{
+          username: usernameInput,
+          password: passwordInput
+        }
+      })
 
-      token.value = accessToken;
-      role.value = user.role || "guest";
-      username.value = user.username || "";
+      const { accessToken, user } = res.data
 
-      userRole.value = role.value;
-      userName.value = username.value;
+      token.value = accessToken
+      role.value = user.role || "guest"
+      username.value = user.username || ""
 
-      return true;
+      userRole.value = role.value
+      userName.value = username.value
+
+      return true
+
     } catch (error) {
-      console.error("Login error:", error);
-      return false;
+
+      console.error("Login error:", error)
+      return false
+
     }
-  };
+
+  }
 
   const logout = () => {
-    token.value = null;
-    role.value = null;
-    username.value = null;
-    userRole.value = "guest";
-    userName.value = "";
-  };
+
+    token.value = null
+    role.value = null
+    username.value = null
+
+    userRole.value = "guest"
+    userName.value = ""
+
+    navigateTo("/login")
+
+  }
 
   return {
+    token,
     userRole,
     userName,
+    isLoggedIn,
     login,
-    logout,
-  };
+    logout
+  }
+
 }
