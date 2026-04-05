@@ -5,7 +5,9 @@ export function useAuth() {
 
   const config = useRuntimeConfig();
 
-  const token = useCookie<string | null>("token");
+  const token = useCookie<string | null>("access_token");
+  const refreshToken = useCookie<string | null>("refresh_token"); 
+  const id_user = useCookie<string | null>("refresh_token"); 
   const role = useCookie<string | null>("role");
   const username = useCookie<string | null>("username");
 
@@ -15,57 +17,58 @@ export function useAuth() {
   const isLoggedIn = computed(() => !!token.value);
 
   const login = async (usernameInput: string, passwordInput: string) => {
-
     try {
 
-      const res:any = await $fetch(`${config.public.apiBase}/auth/login`,{
-        method:"POST",
-        body:{
+      const res: any = await $fetch(`${config.public.apiBase}/auth/login`, {
+        method: "POST",
+        body: {
           username: usernameInput,
           password: passwordInput
         }
-      })
+      });
 
-      const { accessToken, user } = res.data
+      const { accessToken, refreshToken: newRefreshToken, user } = res.data;
 
-      token.value = accessToken
-      role.value = user.role || "guest"
-      username.value = user.username || ""
+      // ✅ simpan token
+      token.value = accessToken;
+      refreshToken.value = newRefreshToken;
 
-      userRole.value = role.value
-      userName.value = username.value
+      role.value = user.role || "guest";
+      username.value = user.username || "";
 
-      return true
+      userRole.value = role.value;
+      userName.value = username.value;
+
+      return true;
 
     } catch (error) {
-
-      console.error("Login error:", error)
-      return false
-
+      console.error("Login error:", error);
+      return false;
     }
-
-  }
+  };
 
   const logout = () => {
 
-    token.value = null
-    role.value = null
-    username.value = null
+    // ❌ hapus semua token
+    token.value = null;
+    refreshToken.value = null;
 
-    userRole.value = "guest"
-    userName.value = ""
+    role.value = null;
+    username.value = null;
 
-    navigateTo("/login")
+    userRole.value = "guest";
+    userName.value = "";
 
-  }
+    navigateTo("/login");
+  };
 
   return {
     token,
+    refreshToken, // ✅ expose kalau mau dipakai
     userRole,
     userName,
     isLoggedIn,
     login,
     logout
-  }
-
+  };
 }
