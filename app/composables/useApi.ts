@@ -1,19 +1,33 @@
 import { useRuntimeConfig } from "#app";
 import { useAuth } from "@/composables/useAuth";
-import { useToast } from "@/composables/useToast";
 import Swal from "sweetalert2";
 
 export const useApi = () => {
   const config = useRuntimeConfig();
-  const { token, refreshToken, logout } = useAuth();
-
-  let isRefreshing = false;
-  let pendingRequests: any[] = [];
+  const { token, isTokenExpired, refreshTokenAsync, logout } = useAuth();
 
   const api = $fetch.create({
     baseURL: config.public.apiBase,
 
-    onRequest({ options }) {
+    async onRequest({ options }) {
+      // cek token expired sebelum request
+      console.log("Cek token sebelum request:", isTokenExpired(token.value));
+      if (token.value && isTokenExpired(token.value)) {
+        try {
+          await refreshTokenAsync();
+        } catch (err) {
+          // gagal refresh token → logout
+          Swal.fire({
+            icon: "error",
+            title: "Session Berakhir",
+            text: "Token Anda sudah kedaluwarsa, silahkan login kembali",
+            confirmButtonText: "OK",
+          }).then(() => logout());
+          throw new Error("Token expired dan gagal refresh");
+        }
+      }
+
+      // pasang Authorization header
       if (token.value) {
         options.headers = {
           ...options.headers,
@@ -22,95 +36,55 @@ export const useApi = () => {
       }
     },
 
-    async onResponseError({ request, options, response }) {
-      // 🔥 handle unauthorized
-      if (response.status === 401) {
-        // ❌ kalau tidak ada refresh token → logout
-        if (!refreshToken.value) {
-          logout();
-          return;
-        }
+    // async onResponseError({ request, response }) {
+    //   if (!response) return; // network error
 
-        // 🔁 kalau sedang refresh → queue
-        if (isRefreshing) {
-          return new Promise((resolve) => {
-            pendingRequests.push((newToken: string) => {
-              resolve(
-                api(request, {
-                  ...options,
-                  headers: {
-                    ...options.headers,
-                    Authorization: `Bearer ${newToken}`,
-                  },
-                }),
-              );
-            });
-          });
-        }
+    //   if (response.status === 401) {
+    //     // 401 kemungkinan token expired / invalid
+    //     try {
+    //       await refreshTokenAsync();
+    //       // retry request setelah token baru
+    //       return api(request);
+    //     } catch (err: any) {
+    //       // gagal refresh → logout & notif
+    //       const message =
+    //         err?.data?.message?.message || // ✅ ini yang sesuai response kamu
+    //         err?.data?.message || // fallback kalau string
+    //         err?.response?._data?.message?.message ||
+    //         err?.response?._data?.message ||
+    //         "Sesi anda telah berakhir, silakan login kembali";
 
-        isRefreshing = true;
+    //       // Swal.fire({
+    //       //   icon: "error",
+    //       //   title: "Session Berakhir",
+    //       //   text: message,
+    //       //   confirmButtonText: "OK",
+    //       // }).then(() => logout());
+    //       Swal.fire({
+    //         icon: "error",
+    //         title: "Session Berakhir",
+    //         text: message,
+    //         showConfirmButton: false,
+    //         timer: 5000,
+    //         timerProgressBar: true,
+    //         didOpen: () => Swal.showLoading()
+    //       })
 
-        try {
-          const res: any = await $fetch(
-            `${config.public.apiBase}/auth/refresh`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token.value}`,
-              },
-              body: {
-                userId: 8,
-                refreshToken: refreshToken.value,
-              },
-            },
-          );
+    //       setTimeout(() => logout(), 5000)
+    //       throw err;
+    //     }
+    //   }
 
-          if (!res.success) throw new Error("Refresh token gagal");
+    //   // notif error lain
+    //   Swal.fire({
+    //     icon: "error",
+    //     title: `Error ${response.status}`,
+    //     text: response.statusText || "Terjadi kesalahan saat memproses request",
+    //     confirmButtonText: "OK",
+    //   });
 
-          const newAccessToken = res.data.accessToken;
-          const newRefreshToken = res.data.refreshToken;
-
-          token.value = newAccessToken;
-          refreshToken.value = newRefreshToken;
-
-          // 🔥 jalankan queue
-          pendingRequests.forEach((cb) => cb(newAccessToken));
-          pendingRequests = [];
-
-          // 🔥 retry request awal
-          return api(request, {
-            ...options,
-            headers: {
-              ...options.headers,
-              Authorization: `Bearer ${newAccessToken}`,
-            },
-          });
-        } catch (err: any) {
-          // console.error("Refresh token error:", err)
-          // ❌ refresh gagal (401 dari backend kamu)
-          const message =
-            err?.data?.message?.message || // ✅ ini yang sesuai response kamu
-            err?.data?.message || // fallback kalau string
-            err?.response?._data?.message?.message ||
-            err?.response?._data?.message ||
-            "Sesi anda telah berakhir, silakan login kembali";
-
-          await Swal.fire({
-            icon: "warning",
-            title: "Session Expired",
-            text: message,
-            confirmButtonText: "Login Ulang",
-            confirmButtonColor: "#6366f1",
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-          });
-
-          logout();
-        } finally {
-          isRefreshing = false;
-        }
-      }
-    },
+    //   throw new Error(`HTTP Error ${response.status}`);
+    // },
   });
 
   return api;

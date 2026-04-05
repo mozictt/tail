@@ -21,17 +21,21 @@ const headers = [
   { text: "Stok", value: "stok", sortable: true },
   { text: "Deskripsi", value: "deskripsi" }
 ];
+ 
 
 const fetchData = async () => {
   try {
     loading.value = true;
+
     const res: any = await api("/barang", {
-      params: { page: page.value, limit: limit.value, search: search.value }
+      params: { page: page.value, limit: limit.value, search: search.value },
     });
+    console.log("Fetch barang response:");
+    // update UI langsung
     items.value = res.data.array;
     totalItems.value = res.data.totalItems;
   } catch (err) {
-    console.error("Fetch barang error:", err);
+    console.log("Fetch barang error:");
   } finally {
     loading.value = false;
   }
