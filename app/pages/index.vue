@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useAccessControl } from "@/composables/useAccessControl/useAccessControl";
 
-definePageMeta({
-  layout: "admin",
-  middleware: "auth",
-});
+// definePageMeta({
+//   layout: "admin",
+//   middleware: "auth",
+// });
 </script>
 
 <template>

@@ -4,14 +4,13 @@ import Swal from "sweetalert2";
 
 export const useApi = () => {
   const config = useRuntimeConfig();
-  const { token, isTokenExpired, refreshTokenAsync, logout } = useAuth();
+  const { token,id_user, isTokenExpired, refreshTokenAsync, logout } = useAuth();
 
   const api = $fetch.create({
     baseURL: config.public.apiBase,
 
     async onRequest({ options }) {
-      // cek token expired sebelum request
-      console.log("Cek token sebelum request:", isTokenExpired(token.value));
+      // cek token expired sebelum request 
       if (token.value && isTokenExpired(token.value)) {
         try {
           await refreshTokenAsync();
