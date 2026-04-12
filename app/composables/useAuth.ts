@@ -9,7 +9,7 @@ const isTokenExpired = (token: string | null) => {
     const payloadJson = atob(payloadBase64);
     const payload = JSON.parse(payloadJson);
     const now = Math.floor(Date.now() / 1000);
-    return payload.exp < now + 3;
+    return payload.exp < now + 60;
   } catch (err) {
     return true;
   }
@@ -28,19 +28,28 @@ export function useAuth() {
   const userName = computed(() => username.value || "");
   const isLoggedIn = computed(() => !!token.value);
 
+  let refreshing: Promise<any> | null = null;
   const refreshTokenAsync = async () => {
-    if (!refreshToken.value) throw new Error("No refresh token");
+  if (refreshing) return refreshing;
 
-    const res: any = await $fetch(`${config.public.apiBase}/auth/refresh`, {
-      method: "POST",
-      body: { userId: id_user.value, refreshToken: refreshToken.value },
-    }); 
+  refreshing = (async () => {
+    try {
+      const res: any = await $fetch(`${config.public.apiBase}/auth/refresh`, {
+        method: "POST",
+        body: { userId: id_user.value, refreshToken: refreshToken.value },
+      });
 
-    token.value = res.data.accessToken;
-    refreshToken.value = res.data.refreshToken; 
+      token.value = res.data.accessToken;
+      refreshToken.value = res.data.refreshToken;
 
-    return token.value;
-  };
+      return token.value;
+    } finally {
+      refreshing = null;
+    }
+  })();
+
+  return refreshing;
+};
 
   const login = async (usernameInput: string, passwordInput: string) => {
     try {
@@ -71,6 +80,7 @@ export function useAuth() {
     refreshToken.value = null;
     role.value = null;
     username.value = null; 
+      id_user.value = null; 
 
     return navigateTo("/login");
   };
