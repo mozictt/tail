@@ -3,6 +3,8 @@ import { ref, onMounted, watch } from "vue";
 import * as icons from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
+import { useHead } from "#imports";
+
 
 const router = useRouter();
 const { userRole, logout } = useAuth();
@@ -16,6 +18,7 @@ const openSubmenu = ref<string | null>(null);
 const route = useRoute();
 
 const activeMenuName = ref("Menu");
+
 
 // Profile dropdown
 const profileDropdownOpen = ref(false);
@@ -101,6 +104,12 @@ const toggleSubmenu = (name: string) => {
 defineExpose({
   toggleMobileSidebar,
 });
+const config = useRuntimeConfig();
+useHead(() => ({
+  title: activeMenuName.value
+    ? `${activeMenuName.value} - ${config.public.appName}`
+    : `${config.public.appName}`,
+}));
 </script>
 
 <template>

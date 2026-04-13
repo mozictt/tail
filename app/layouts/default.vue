@@ -35,7 +35,9 @@ const { toast } = useToast();
         </div>
 
       </header> -->
-     <header class="bg-gradient-to-r from-pink-200 to-purple-300 shadow-sm border-b px-6 py-4 flex items-center justify-between">
+      <header
+        class="bg-gradient-to-r from-pink-200 to-purple-300 shadow-sm border-b px-6 py-4 flex items-center justify-between"
+      >
         <!-- LEFT -->
         <div class="flex items-center gap-4">
           <div class="p-2 rounded-lg bg-blue-100 text-blue-600">

@@ -1,5 +1,4 @@
-import { computed } from "vue";
-import { useAuthStore } from "@/stores/auth";
+import { computed } from "vue"; 
 import { useCookie, useRuntimeConfig, navigateTo } from "#app";
 
 const isTokenExpired = (token: string | null) => {

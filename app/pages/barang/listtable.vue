@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from "vue";
 import EasyDataTable from "vue3-easy-data-table";
 import "vue3-easy-data-table/dist/style.css";
 import { BarangService } from "@/services/barang.service";
+import HeaderSearch from "@/components/header-master.vue";
 
 const { showToast } = useToast();
 const barangService = BarangService();
@@ -56,6 +57,8 @@ const fetchBarang = async () => {
       page: serverOptions.value.page,
       limit: serverOptions.value.rowsPerPage,
       search: search.value,
+      sortBy: serverOptions.value.sortBy, // ✅ tambahan
+      sortType: serverOptions.value.sortType // ✅ tambahan
     });
 
     items.value = data.array;
@@ -135,77 +138,55 @@ const submitBarang = async () => {
 /* =========================
    INIT
 ========================= */
-onMounted(fetchBarang);
+onMounted(fetchBarang); 
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-
+  <div class="p-6 ">
     <!-- HEADER -->
-    <div class="flex justify-between items-center">
-      <div>
-        <h1 class="text-2xl font-bold">Data Barang</h1>
-        <p class="text-sm opacity-60">Manajemen barang</p>
-      </div>
-
-      <button class="btn btn-primary" @click="showModal = true">
-        + Tambah Barang
-      </button>
-    </div>
-
-    <!-- SEARCH -->
-    <div class="flex justify-between items-center">
-      <div class="flex gap-2">
-        <input
-          v-model="search"
-          @keyup.enter="doSearch"
-          class="input input-bordered"
-          placeholder="Cari barang..."
-        />
-        <button class="btn btn-primary" @click="doSearch">
-          Search
-        </button>
-      </div>
-
-      <div class="text-sm opacity-60">
-        Total: {{ totalItems }}
-      </div>
-    </div>
+    <HeaderSearch title="Data Barang" subtitle="Manajemen barang" :total="totalItems" v-model:search="search"
+      @search="doSearch" @add="showModal = true" />
 
     <!-- TABLE -->
-    <ClientOnly>
-      <EasyDataTable
-        :headers="headers"
-        :items="items"
-        :loading="loading"
-        :server-items-length="totalItems"
-        v-model:server-options="serverOptions"
-        @update:server-options="updateOptions"
-        buttons-pagination
-        border-cell
-        alternating
-        :rows-items="[10, 20, 50, 100]"
-      >
-        <template #item-harga="{ harga }">
-          <span class="badge badge-success">
-            Rp {{ Number(harga).toLocaleString() }}
-          </span>
-        </template>
+    <div class="bg-base-100 border rounded-lg shadow-sm">
+      <!-- HEADER -->
+      <div class="px-4 py-3 border-b flex justify-between items-center">
+        <h2 class="font-semibold text-lg">Daftar Barang</h2>
+      </div>
 
-        <template #item-stok="{ stok }">
-          <span :class="['badge', stok > 10 ? 'badge-success' : 'badge-warning']">
-            {{ stok }}
-          </span>
-        </template>
-      </EasyDataTable>
-    </ClientOnly>
+      <!-- BODY -->
+      <div class="p-4">
+        <div class="overflow-x-auto">
+          <ClientOnly>
+            <div class="overflow-x-auto">
+              <EasyDataTable :headers="headers" :items="items" :loading="loading" :server-items-length="totalItems"
+                v-model:server-options="serverOptions" @update:server-options="updateOptions" buttons-pagination
+                border-cell alternating :rows-items="[10, 20, 50, 100]">
+                <template #item-harga="{ harga }">
+                  <span class="badge badge-success">
+                    Rp {{ Number(harga).toLocaleString() }}
+                  </span>
+                </template>
 
+                <template #item-stok="{ stok }">
+                  <span :class="[
+                    'badge',
+                    stok > 10 ? 'badge-success' : 'badge-warning',
+                  ]">
+                    {{ stok }}
+                  </span>
+                </template>
+              </EasyDataTable>
+            </div>
+          </ClientOnly>
+        </div>
+      </div>
+    </div>
     <!-- MODAL -->
     <input type="checkbox" class="modal-toggle" v-model="showModal" />
 
     <div class="modal">
-      <div class="modal-box">
-
+      <div class="modal-box max-w-3xl">
         <h3 class="font-bold text-lg mb-4">Tambah Barang</h3>
 
         <div class="space-y-3">
@@ -216,16 +197,12 @@ onMounted(fetchBarang);
         </div>
 
         <div class="modal-action">
-          <button class="btn btn-primary" @click="submitBarang">
-            Simpan
-          </button>
+          <button class="btn btn-primary" @click="submitBarang">Simpan</button>
           <button class="btn btn-outline" @click="showModal = false">
             Batal
           </button>
         </div>
-
       </div>
     </div>
-
   </div>
 </template>
