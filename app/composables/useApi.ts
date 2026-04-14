@@ -1,19 +1,21 @@
 import { useRuntimeConfig } from "#app";
-import { useAuth } from "@/composables/useAuth";
+// import { useAuth } from "@/composables/useAuth";
+import { useAuthStore } from "@/stores/auth";
 import Swal from "sweetalert2";
 
 export const useApi = () => {
   const config = useRuntimeConfig();
-  const { token,id_user, isTokenExpired, refreshTokenAsync, logout } = useAuth();
+  // const { token,id_user, isTokenExpired, refreshTokenAsync, logout } = useAuth();
+  const auth = useAuthStore(); 
 
   const api = $fetch.create({
     baseURL: config.public.apiBase,
 
     async onRequest({ options }) {
       // cek token expired sebelum request 
-      if (token.value && isTokenExpired(token.value)) {
+      if (auth.token && auth.isTokenExpired(auth.token)) {
         try {
-          await refreshTokenAsync();
+          await auth.refreshTokenAsync();
         } catch (err) {
           // gagal refresh token → logout
           Swal.fire({
@@ -27,10 +29,10 @@ export const useApi = () => {
       }
 
       // pasang Authorization header
-      if (token.value) {
+      if (auth.token) {
         options.headers = {
           ...options.headers,
-          Authorization: `Bearer ${token.value}`,
+          Authorization: `Bearer ${auth.token}`,
         };
       }
     },

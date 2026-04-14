@@ -3,11 +3,13 @@ import { ref, onMounted, watch } from "vue";
 import * as icons from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
+import { useAuthStore } from "@/stores/auth";
 import { useHead } from "#imports";
 
 
 const router = useRouter();
 const { userRole, logout } = useAuth();
+const auth = useAuthStore();
 
 const emit = defineEmits(["update-active"]);
 
@@ -29,9 +31,8 @@ const closeProfileDropdown = () => {
   profileDropdownOpen.value = false;
 };
 
-const handleLogout = () => {
-  logout();
-  router.push("/login");
+const handleLogout = async () => {
+  await auth.logout(); // sudah handle clear state + redirect
   profileDropdownOpen.value = false;
 };
 

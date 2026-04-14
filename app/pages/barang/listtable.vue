@@ -148,7 +148,7 @@ onMounted(fetchBarang);
       @search="doSearch" @add="showModal = true" />
 
     <!-- TABLE -->
-    <div class="bg-base-100 border rounded-lg shadow-sm">
+    <div class="bg-base-100 border rounded-lg shadow-sm p-4 mt-5">
       <!-- HEADER -->
       <div class="px-4 py-3 border-b flex justify-between items-center">
         <h2 class="font-semibold text-lg">Daftar Barang</h2>

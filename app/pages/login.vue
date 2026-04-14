@@ -1,35 +1,40 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { useAuth } from "@/composables/useAuth";
+import { ref, watchEffect } from "vue";
+import { useAuthStore } from "@/stores/auth";
+import { navigateTo } from "#app";
 
 const username = ref("");
 const password = ref("");
 const error = ref("");
-const loading = ref(false); // state loading
-const router = useRouter();
+const loading = ref(false);
 
-const { login, userRole } = useAuth();
+const auth = useAuthStore();
 
-if (userRole.value !== "guest") {
-  router.push("/");
-}
+// ✅ redirect kalau sudah login
+watchEffect(() => {
+  if (auth.isLoggedIn) {
+    navigateTo("/");
+  }
+});
 
 const doLogin = async (e?: Event) => {
   if (e) e.preventDefault();
+
   error.value = "";
-  loading.value = true; // mulai loading
+  loading.value = true;
+
   try {
-    const success = await login(username.value, password.value);
+    const success = await auth.login(username.value, password.value);
+
     if (success) {
-      router.push("/");
+      await navigateTo("/");
     } else {
       error.value = "Username atau password salah";
     }
   } catch (err) {
     error.value = "Terjadi kesalahan. Silakan coba lagi.";
   } finally {
-    loading.value = false; // selesai loading
+    loading.value = false;
   }
 };
 

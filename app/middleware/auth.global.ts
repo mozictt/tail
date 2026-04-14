@@ -1,13 +1,9 @@
 export default defineNuxtRouteMiddleware(async (to, from) => {
-  const {
-    token,
-    refreshTokenAsync,
-    isTokenExpired,
-    logout,
-  } = useAuth();
+  const { token, refreshTokenAsync, isTokenExpired, logout } = useAuth();
 
-  const authStore = useAuthStore();
-
+  const auth = useAuthStore();
+  if (!auth.isHydrated) return;
+  console.log(auth.token);
   // ✅ PUBLIC ROUTES (WAJIB PALING ATAS)
   const publicPages = ["/login", "/forbidden"];
 
@@ -16,24 +12,21 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // ❌ belum login
-  // console.log(token.value);
-  if (!token.value) {
+  if (!auth.token) {
     return navigateTo("/login");
   }
-  console.log(token.value );
+  console.log(auth.token);
   // 🔐 cek menu
-  const menus_midd =
-    token.value
-      ? JSON.parse(atob(token.value.split(".")[1])).menus || []
-      : [];
+  const menus_midd = auth.token
+    ? JSON.parse(atob(auth.token.split(".")[1])).menus || []
+    : [];
 
-    // console.log("authStore.menus",authStore.menus);
+  // console.log("authStore.menus",authStore.menus);
 
   const allowedMenus = menus_midd.map((m: any) => m.path);
 
   const isAllowed = allowedMenus.some(
-    (path) =>
-      to.path === path || to.path.startsWith(path + "/")
+    (path) => to.path === path || to.path.startsWith(path + "/"),
   );
 
   if (!isAllowed) {
