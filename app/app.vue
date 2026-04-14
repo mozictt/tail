@@ -7,6 +7,7 @@
       <!-- Isi halaman -->
       <NuxtPage />
       <LoadingOverlay />
+       <GlobalToast />
     </NuxtLayout>
   </div>
 </template>

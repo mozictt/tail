@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import * as icons from "lucide-vue-next";
-import Sidebar from "@/components/Sidebar.vue";
-import { useToast } from "@/composables/useToast";
+import Sidebar from "@/components/Sidebar.vue"; 
 
 const activeMenu = ref<any>(null);
 
 const onUpdateActive = (menuItem: any) => {
   activeMenu.value = menuItem;
 };
-
-const { toast } = useToast();
+ 
 </script>
 
 <template>
@@ -95,48 +93,8 @@ const { toast } = useToast();
         <slot />
       </main>
     </div>
-  </div>
+  </div> 
 
   <!-- TOAST -->
-  <transition
-    enter-active-class="transform transition duration-300"
-    enter-from-class="translate-x-full opacity-0"
-    enter-to-class="translate-x-0 opacity-100"
-    leave-active-class="transition duration-200"
-    leave-from-class="opacity-100"
-    leave-to-class="opacity-0"
-  >
-    <div v-if="toast.show" class="fixed top-5 right-5 z-50">
-      <div
-        :class="[
-          'flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white',
-          toast.type === 'success'
-            ? 'bg-green-500'
-            : toast.type === 'error'
-              ? 'bg-red-500'
-              : toast.type === 'warning'
-                ? 'bg-yellow-500'
-                : 'bg-blue-500',
-        ]"
-      >
-        <!-- ICON -->
-        <component
-          :is="
-            toast.type === 'success'
-              ? icons.CheckCircle
-              : toast.type === 'error'
-                ? icons.XCircle
-                : toast.type === 'warning'
-                  ? icons.AlertTriangle
-                  : icons.Info
-          "
-          class="w-5 h-5"
-        />
-
-        <span class="text-sm font-medium">
-          {{ toast.message }}
-        </span>
-      </div>
-    </div>
-  </transition>
+ 
 </template>

@@ -30,6 +30,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   );
 
   if (!isAllowed) {
-    return navigateTo("/forbidden");
+    // return navigateTo("/forbidden");
   }
 });
