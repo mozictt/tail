@@ -17,4 +17,9 @@ useHead({
     'data-theme': 'light'
   }
 })
+const auth = useAuthStore();
+
+onMounted(() => {
+  auth.setHydrated();
+});
 </script>

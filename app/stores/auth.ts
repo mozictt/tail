@@ -52,7 +52,7 @@ export const useAuthStore = defineStore("auth", {
                 userId: this.id_user,
                 refreshToken: this.refreshToken,
               },
-            }
+            },
           );
 
           this.token = res.data.accessToken;
@@ -71,16 +71,13 @@ export const useAuthStore = defineStore("auth", {
       const config = useRuntimeConfig();
 
       try {
-        const res: any = await $fetch(
-          `${config.public.apiBase}/auth/login`,
-          {
-            method: "POST",
-            body: {
-              username: usernameInput,
-              password: passwordInput,
-            },
-          }
-        );
+        const res: any = await $fetch(`${config.public.apiBase}/auth/login`, {
+          method: "POST",
+          body: {
+            username: usernameInput,
+            password: passwordInput,
+          },
+        });
 
         const { accessToken, refreshToken, user } = res.data;
 
