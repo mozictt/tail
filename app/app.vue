@@ -20,7 +20,7 @@ useHead({
 })
 const auth = useAuthStore();
 
-onMounted(() => {
-  auth.setHydrated();
-});
+// onMounted(() => {
+//   auth.setHydrated();
+// });
 </script>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import * as icons from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
@@ -8,23 +8,21 @@ import { useUIStore } from "@/stores/ui";
 import { useHead } from "#imports";
 
 const router = useRouter();
-const route = useRoute();
-const auth = useAuthStore();
-const ui = useUIStore();
 const { logout } = useAuth();
+const auth = useAuthStore();
+const route = useRoute();
+const ui = useUIStore();
 
 const emit = defineEmits(["update-active"]);
 
 // ===== STATE =====
 const isOpen = ref(true); // desktop
+const isMobileOpen = computed(() => ui.isMobileSidebarOpen); // mobile
 const isMobile = ref(false);
 
 const menu = ref<any[]>([]);
 const openSubmenu = ref<string | null>(null);
 const activeMenuName = ref("Menu");
-
-// 👉 FIX: pakai store langsung
-const isMobileOpen = computed(() => ui.isMobileSidebarOpen);
 
 // ===== PROFILE =====
 const profileDropdownOpen = ref(false);
@@ -47,26 +45,20 @@ const checkScreen = () => {
   isMobile.value = window.innerWidth < 768;
 };
 
-// ===== SIDEBAR CONTROL =====
 const toggleSidebar = () => {
   isOpen.value = !isOpen.value;
   if (!isOpen.value) profileDropdownOpen.value = false;
 };
 
-// 👉 FIX MOBILE SIDEBAR
 const toggleMobileSidebar = () => {
-  ui.toggleMobileSidebar();
-};
-
-const closeMobileSidebar = () => {
-  ui.closeMobileSidebar();
+  isMobileOpen.value = !isMobileOpen.value;
 };
 
 defineExpose({
   toggleMobileSidebar,
 });
 
-// ===== MENU HELPERS =====
+// ===== MENU =====
 const isActive = (path: string) =>
   route.path === path || route.path.startsWith(path + "/");
 
@@ -103,9 +95,9 @@ const handleMenuClick = (item: any) => {
   if (item.children) {
     toggleSubmenu(item.name);
   } else {
-    // 👉 AUTO CLOSE MOBILE SIDEBAR
+    // auto close mobile
     if (isMobile.value) {
-      closeMobileSidebar();
+      isMobileOpen.value = false;
     }
   }
 };
@@ -139,7 +131,7 @@ watch(
   () => route.path,
   () => {
     updateActiveMenu();
-    if (isMobile.value) closeMobileSidebar();
+    if (isMobile.value) isMobileOpen.value = false;
   },
   { immediate: true }
 );
@@ -152,26 +144,16 @@ useHead(() => ({
     ? `${activeMenuName.value} - ${config.public.appName}`
     : config.public.appName,
 }));
-// ===== SIDEBAR WIDTH =====
-const sidebarWidthClass = computed(() => {
-  if (isMobile.value) return 'w-64'; // mobile selalu full
-  return isOpen.value ? 'w-64' : 'w-20'; // desktop toggle
-});
-watch(isMobile, (val) => {
-  if (val) {
-    // MOBILE → selalu terbuka
-    isOpen.value = true;
-  }
-});
 </script>
+
 <template>
   <!-- OVERLAY -->
   <Transition name="fade">
-     <div
-    v-if="isMobileOpen"
-    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
-    @click="closeMobileSidebar"
-  />
+    <div
+      v-if="isMobileOpen"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
+      @click="isMobileOpen = false"
+    ></div>
   </Transition>
 
   <!-- SIDEBAR -->

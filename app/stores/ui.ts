@@ -10,9 +10,13 @@ export const useUIStore = defineStore("ui", {
     toggleMobileSidebar() {
       this.isMobileSidebarOpen = !this.isMobileSidebarOpen;
     },
+    openMobileSidebar() {
+      this.isMobileSidebarOpen = true;
+    },
     closeMobileSidebar() {
       this.isMobileSidebarOpen = false;
     },
+
     toggleDesktopSidebar() {
       this.isDesktopSidebarOpen = !this.isDesktopSidebarOpen;
     },

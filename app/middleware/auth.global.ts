@@ -1,13 +1,9 @@
-export default defineNuxtRouteMiddleware(async (to, from) => {
-  const { token, refreshTokenAsync, isTokenExpired, logout } = useAuth();
+export default defineNuxtRouteMiddleware(async (to, from) => { 
 
   const auth = useAuthStore();
   // ✅ PUBLIC ROUTES (WAJIB PALING ATAS)
-  const publicPages = ["/login", "/forbidden"];
-  if (!auth.isHydrated) {
-    return;
-  }
-
+  const publicPages = ["/login", "/forbidden"]; 
+  
   if (publicPages.includes(to.path)) {
     return; // ⛔ stop di sini
   }
