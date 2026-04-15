@@ -1,15 +1,14 @@
 import { defineStore } from "pinia";
-import { useRuntimeConfig, navigateTo } from "#app";
+import { useRuntimeConfig, navigateTo, useCookie } from "#app";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: null as string | null,
-    refreshToken: null as string | null,
-    id_user: null as string | null,
-    role: null as string | null,
-    username: null as string | null,
+    token: useCookie<string | null>("token").value || null,
+    refreshToken: useCookie<string | null>("refreshToken").value || null,
+    id_user: useCookie<string | null>("id_user").value || null,
+    role: useCookie<string | null>("role").value || null,
+    username: useCookie<string | null>("username").value || null,
     refreshing: null as Promise<any> | null,
-    isHydrated: false, // ✅ tambahkan di state
   }),
 
   getters: {
@@ -19,9 +18,20 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
-    // ✅ TARUH DI SINI
-    setHydrated() {
-      this.isHydrated = true;
+    syncCookies() {
+      this.token = useCookie("token").value || null;
+      this.refreshToken = useCookie("refreshToken").value || null;
+      this.id_user = useCookie("id_user").value || null;
+      this.role = useCookie("role").value || null;
+      this.username = useCookie("username").value || null;
+    },
+
+    saveCookies() {
+      useCookie("token").value = this.token;
+      useCookie("refreshToken").value = this.refreshToken;
+      useCookie("id_user").value = this.id_user;
+      useCookie("role").value = this.role;
+      useCookie("username").value = this.username;
     },
 
     isTokenExpired(token: string | null) {
@@ -35,36 +45,6 @@ export const useAuthStore = defineStore("auth", {
       } catch {
         return true;
       }
-    },
-
-    async refreshTokenAsync() {
-      const config = useRuntimeConfig();
-
-      if (this.refreshing) return this.refreshing;
-
-      this.refreshing = (async () => {
-        try {
-          const res: any = await $fetch(
-            `${config.public.apiBase}/auth/refresh`,
-            {
-              method: "POST",
-              body: {
-                userId: this.id_user,
-                refreshToken: this.refreshToken,
-              },
-            },
-          );
-
-          this.token = res.data.accessToken;
-          this.refreshToken = res.data.refreshToken;
-
-          return this.token;
-        } finally {
-          this.refreshing = null;
-        }
-      })();
-
-      return this.refreshing;
     },
 
     async login(usernameInput: string, passwordInput: string) {
@@ -87,11 +67,46 @@ export const useAuthStore = defineStore("auth", {
         this.username = user.username || "";
         this.id_user = user.id || "";
 
+        // ✅ PENTING: sync ke cookie (FIX refresh issue)
+        this.saveCookies();
+
         return true;
       } catch (error) {
         console.error("Login error:", error);
         return false;
       }
+    },
+
+    async refreshTokenAsync() {
+      const config = useRuntimeConfig();
+
+      if (this.refreshing) return this.refreshing;
+
+      this.refreshing = (async () => {
+        try {
+          const res: any = await $fetch(
+            `${config.public.apiBase}/auth/refresh`,
+            {
+              method: "POST",
+              body: {
+                userId: this.id_user,
+                refreshToken: this.refreshToken,
+              },
+            }
+          );
+
+          this.token = res.data.accessToken;
+          this.refreshToken = res.data.refreshToken;
+
+          this.saveCookies();
+
+          return this.token;
+        } finally {
+          this.refreshing = null;
+        }
+      })();
+
+      return this.refreshing;
     },
 
     logout() {
@@ -101,9 +116,9 @@ export const useAuthStore = defineStore("auth", {
       this.username = null;
       this.id_user = null;
 
+      this.saveCookies();
+
       return navigateTo("/login");
     },
   },
-
-  persist: true,
 });
