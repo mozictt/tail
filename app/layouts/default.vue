@@ -14,38 +14,38 @@ const onUpdateActive = (menuItem: any) => {
 </script>
 
 <template>
-  <div class="flex h-screen">
+  <div class="flex h-screen bg-slate-50/50 overflow-hidden">
     <Sidebar @update-active="onUpdateActive" />
 
-    <div class="flex-1 flex flex-col bg-gray-50">
+    <div class="flex-1 flex flex-col min-w-0">
       
       <!-- HEADER -->
       <header
-        class="relative z-10 bg-gradient-to-r from-pink-200 to-purple-300 shadow-sm border-b px-6 py-4 flex items-center justify-between"
+        class="bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-6 py-4 flex items-center justify-between sticky top-0 z-10"
       >
         <!-- LEFT -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3.5">
           
           <!-- ✅ MOBILE BUTTON -->
           <button
-            class="md:hidden bg-blue-900 text-white p-2 rounded-lg shadow"
+            class="md:hidden btn btn-ghost btn-sm text-slate-500 p-2 rounded-lg"
             @click="ui.toggleMobileSidebar()"
           >
             <icons.Menu class="w-5 h-5" />
           </button>
 
-          <div class="p-2 rounded-lg bg-blue-100 text-blue-600">
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 text-primary">
             <component
               :is="activeMenu?.icon ? icons[activeMenu.icon] : icons.Menu"
-              class="w-6 h-6"
+              class="w-5 h-5"
             />
           </div>
 
           <div>
-            <h1 class="font-semibold text-lg text-gray-800">
+            <h1 class="text-base font-bold text-slate-800 tracking-tight leading-none mb-1">
               {{ activeMenu?.name || "Dashboard" }}
             </h1>
-            <p class="text-xs text-gray-500">
+            <p class="text-xs font-medium text-slate-400">
               {{ activeMenu?.description || "Selamat datang di sistem" }}
             </p>
           </div>
@@ -56,28 +56,29 @@ const onUpdateActive = (menuItem: any) => {
           <!-- SEARCH -->
           <div class="relative hidden md:block">
             <icons.Search
-              class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <input
               type="text"
               placeholder="Search..."
-              class="pl-9 pr-3 py-2 border rounded-lg text-sm"
+              class="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-slate-50/50 focus:bg-white"
             />
           </div>
 
           <!-- NOTIF -->
-          <button class="relative p-2 hover:bg-gray-100 rounded-lg">
-            <icons.Bell class="w-5 h-5 text-gray-600" />
+          <button class="relative p-2 hover:bg-slate-50 border border-slate-200/40 rounded-xl transition text-slate-600">
+            <icons.Bell class="w-5 h-5" />
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full ring-2 ring-white"></span>
           </button>
 
           <!-- USER -->
           <div class="flex items-center gap-2">
-            <img src="https://i.pravatar.cc/40" class="w-8 h-8 rounded-full" />
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop" class="w-8 h-8 rounded-xl object-cover ring-2 ring-slate-100" />
           </div>
         </div>
       </header>
 
-      <main class="flex-1 p-6 overflow-auto">
+      <main class="flex-1 p-6 overflow-y-auto">
         <slot />
       </main>
     </div>

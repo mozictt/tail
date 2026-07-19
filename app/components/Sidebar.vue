@@ -101,6 +101,7 @@ const toggleSubmenu = (name: string) => {
 
 const handleMenuClick = (item: any) => {
   if (item.children) {
+     isOpen.value = true;
     toggleSubmenu(item.name);
   } else {
     // 👉 AUTO CLOSE MOBILE SIDEBAR
@@ -167,92 +168,95 @@ watch(isMobile, (val) => {
 <template>
   <!-- OVERLAY -->
   <Transition name="fade">
-     <div
-    v-if="isMobileOpen"
-    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
-    @click="closeMobileSidebar"
-  />
+    <div
+      v-if="isMobileOpen"
+      class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden"
+      @click="closeMobileSidebar"
+    />
   </Transition>
 
   <!-- SIDEBAR -->
   <aside
     :class="[
-      'h-screen flex flex-col fixed md:static z-40 transition-all duration-300 rounded-r-xl',
-      'bg-gradient-to-b from-[#e0f7fa] to-[#d0f0fd]',
-
-      // WIDTH
+      'h-screen flex flex-col fixed md:static z-40 transition-all duration-300 border-r border-slate-200/80 bg-white',
       isOpen ? 'w-64' : 'w-20',
-
-      // 👉 FIX POSITION
-      isMobileOpen
-        ? 'translate-x-0'
-        : '-translate-x-full md:translate-x-0',
+      isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
     ]"
   >
-    <!-- HEADER -->
-    <div class="flex items-center justify-between p-4 bg-blue-900 text-white">
-      <span v-if="isOpen" class="font-bold">Admin Panel</span>
-
-      <button class="hidden md:inline-flex" @click="toggleSidebar">
-        <icons.Menu class="w-5 h-5" />
+    <!-- HEADER BRANDING -->
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <div v-if="isOpen" class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20">
+          <icons.Layers class="w-5 h-5" />
+        </div>
+        <span class="font-bold text-slate-800 text-lg tracking-tight">Admin Panel</span>
+      </div>
+      <div v-else class="w-full flex justify-center">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-md">
+          <icons.Layers class="w-5 h-5" />
+        </div>
+      </div>
+      
+      <button class="hidden md:inline-flex text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1.5 rounded-lg transition" @click="toggleSidebar">
+        <component :is="isOpen ? icons.ChevronLeft : icons.Menu" class="w-4 h-4" />
       </button>
     </div>
 
-    <!-- MENU -->
-    <nav class="flex flex-col gap-1 p-4 overflow-y-auto flex-1 min-h-0">
+    <!-- MENU LIST -->
+    <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0">
       <div v-for="(item, idx) in menu" :key="idx">
-        <!-- SINGLE -->
+        <!-- SINGLE MENU -->
         <NuxtLink
           v-if="!item.children"
           :to="item.path"
           @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg transition"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           :class="
             isActive(item.path)
-              ? 'bg-blue-500 text-white'
-              : 'hover:bg-blue-100'
+              ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary shadow-sm'
+              : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" />
+          <component :is="icons[item.icon]" class="w-5 h-5" :class="isActive(item.path) ? 'text-primary' : 'text-slate-400'" />
           <span v-if="isOpen">{{ item.name }}</span>
         </NuxtLink>
 
-        <!-- PARENT -->
+        <!-- PARENT MENU (WITH SUBMENU) -->
         <div
           v-else
           @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 font-medium text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           :class="
             isParentActive(item.children)
-              ? 'bg-blue-500 text-white'
-              : 'hover:bg-blue-100'
+              ? 'bg-slate-50 text-slate-900'
+              : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" />
+          <component :is="icons[item.icon]" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-slate-400'" />
           <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
 
           <icons.ChevronDown
             v-if="isOpen"
-            :class="{ 'rotate-180': openSubmenu === item.name }"
-            class="w-4 h-4 transition-transform"
+            :class="{ 'rotate-180 text-primary': openSubmenu === item.name }"
+            class="w-4 h-4 transition-transform text-slate-400"
           />
         </div>
 
-        <!-- SUBMENU -->
+        <!-- SUBMENU SECTION -->
         <div
           v-if="item.children && openSubmenu === item.name && isOpen"
-          class="pl-8 mt-1 space-y-1"
+          class="pl-9 mt-1 space-y-1 relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-100"
         >
           <NuxtLink
             v-for="(child, i) in item.children"
             :key="i"
             :to="child.path"
             @click="handleMenuClick(child)"
-            class="block py-1 text-sm rounded px-2 transition"
+            class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50"
             :class="
               isActive(child.path)
-                ? 'bg-blue-500 text-white'
-                : 'hover:text-blue-600'
+                ? 'text-primary bg-primary/5 hover:text-primary hover:bg-primary/10'
+                : ''
             "
           >
             {{ child.name }}
@@ -261,55 +265,60 @@ watch(isMobile, (val) => {
       </div>
     </nav>
 
-    <!-- PROFILE -->
-    <div class="mt-auto pt-4 border-t border-blue-300 relative">
+    <!-- FOOTER PROFILE -->
+    <div class="p-4 border-t border-slate-100 relative bg-white">
       <div
-        class="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-blue-100"
+        class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-slate-50 transition"
         @click="toggleProfileDropdown"
       >
-        <img
-          src="https://i.pravatar.cc/100?img=3"
-          class="w-10 h-10 rounded-full"
-        />
+        <div class="relative">
+          <img
+            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop"
+            class="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-100"
+          />
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-white"></span>
+        </div>
 
-        <div v-if="isOpen" class="flex flex-col flex-1">
-          <span class="font-semibold truncate">John Doe</span>
-          <span class="text-xs opacity-70 truncate">Administrator</span>
+        <div v-if="isOpen" class="flex flex-col flex-1 min-w-0">
+          <span class="font-semibold text-slate-800 text-sm truncate">John Doe</span>
+          <span class="text-xs text-slate-400 truncate font-medium">Administrator</span>
         </div>
 
         <icons.ChevronDown
           v-if="isOpen"
-          class="w-4 h-4 ml-auto transition-transform"
+          class="w-4 h-4 ml-auto text-slate-400 transition-transform"
           :class="{ 'rotate-180': profileDropdownOpen }"
         />
       </div>
 
+      <!-- PROFIL DROPDOWN MENU -->
       <Transition name="fade">
         <div
           v-if="profileDropdownOpen"
-          class="absolute bottom-14 left-0 w-full bg-white shadow-lg rounded-md py-2 z-20"
+          class="absolute bottom-16 left-4 right-4 bg-white border border-slate-200/80 shadow-premium rounded-xl py-2 z-20"
         >
           <NuxtLink
-            to="/profile"
-            class="flex items-center gap-2 px-4 py-2 hover:bg-blue-100"
+            to="/settings/profile"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition font-medium"
+            @click="closeProfileDropdown"
           >
-            <icons.User class="w-5 h-5" />
+            <icons.User class="w-4 h-4 text-slate-400" />
             Profile
           </NuxtLink>
-
           <NuxtLink
-            to="/settings"
-            class="flex items-center gap-2 px-4 py-2 hover:bg-blue-100"
+            to="/settings/security"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition font-medium"
+            @click="closeProfileDropdown"
           >
-            <icons.Settings class="w-5 h-5" />
-            Settings
+            <icons.Settings class="w-4 h-4 text-slate-400" />
+            Security
           </NuxtLink>
-
+          <div class="border-t border-slate-100 my-1"></div>
           <button
             @click="handleLogout"
-            class="flex items-center gap-2 px-4 py-2 hover:bg-red-100 w-full text-left"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left transition font-semibold"
           >
-            <icons.LogOut class="w-5 h-5" />
+            <icons.LogOut class="w-4 h-4" />
             Logout
           </button>
         </div>

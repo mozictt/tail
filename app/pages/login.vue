@@ -44,60 +44,68 @@ definePageMeta({
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-6">
-    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-8 space-y-6" role="form">
-      <h1 class="text-3xl font-extrabold text-gray-800 text-center">Welcome Back</h1>
-      <p class="text-center text-gray-500 text-sm mb-6">
-        Masuk menggunakan akun kamu untuk melanjutkan
-      </p>
+  <div class="min-h-screen flex items-center justify-center bg-slate-50/50 p-6 relative overflow-hidden">
+    <!-- Abstract background blobs for premium feel -->
+    <div class="absolute -top-40 -right-40 w-96 h-96 bg-indigo-200/40 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-200/40 rounded-full blur-3xl"></div>
+
+    <div class="bg-white border border-slate-200/60 rounded-2xl shadow-premium max-w-md w-full p-8 space-y-6 relative z-10" role="form">
+      <div class="text-center space-y-2">
+        <div class="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white mx-auto shadow-md shadow-primary/20">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Selamat Datang Kembali</h1>
+        <p class="text-slate-400 text-xs font-medium">
+          Masuk menggunakan kredensial akun Anda untuk melanjutkan
+        </p>
+      </div>
 
       <form @submit="doLogin" class="space-y-4">
         <div>
-          <label for="username" class="block text-gray-700 font-medium mb-1">Username</label>
+          <label for="username" class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Username</label>
           <input
             id="username"
             v-model="username"
             type="text"
             autocomplete="username"
-            placeholder="Masukkan username"
-            class="w-full px-4 py-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300"
+            placeholder="Masukkan username Anda"
+            class="input input-bordered w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200"
           />
         </div>
 
         <div>
-          <label for="password" class="block text-gray-700 font-medium mb-1">Password</label>
+          <label for="password" class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Password</label>
           <input
             id="password"
             v-model="password"
             type="password"
             autocomplete="current-password"
-            placeholder="Masukkan password"
-            class="w-full px-4 py-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-300"
+            placeholder="Masukkan password Anda"
+            class="input input-bordered w-full rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200"
           />
         </div>
 
         <!-- Tombol login dengan animasi loading -->
         <button
           type="submit"
-          class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md shadow-md transition duration-300 flex items-center justify-center"
+          class="btn btn-primary w-full rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-300 flex items-center justify-center font-bold"
           :disabled="loading"
         >
-          <span v-if="!loading">Masuk</span>
+          <span v-if="!loading">Masuk ke Dashboard</span>
           <span v-else class="flex items-center gap-2">
-            <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-            Loading....
+            <span class="loading loading-spinner loading-xs"></span>
+            Memproses...
           </span>
         </button>
 
-        <p v-if="error" class="text-center text-red-600 font-medium mt-3">{{ error }}</p>
+        <p v-if="error" class="text-center text-error text-xs font-semibold mt-3">{{ error }}</p>
       </form>
 
-      <p class="text-center text-gray-400 text-xs mt-4">
-        Belum punya akun?
-        <a href="#" class="text-indigo-600 hover:underline">Daftar di sini</a>
+      <p class="text-center text-slate-400 text-xs font-medium mt-4">
+        Belum memiliki akun?
+        <NuxtLink to="/register" class="text-primary hover:underline font-semibold ml-1">Daftar sekarang</NuxtLink>
       </p>
     </div>
   </div>

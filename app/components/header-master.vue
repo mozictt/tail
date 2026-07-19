@@ -14,41 +14,41 @@ const emit = defineEmits([
 </script>
 
 <template>
-  <div class="card bg-base-100 shadow-md border">
-    <div class="card-body space-y-4">
-      
-      <!-- HEADER -->
-      <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-2xl font-bold">{{ title }}</h1>
-          <p class="text-sm opacity-60">{{ subtitle }}</p>
+  <div class="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-premium space-y-4">
+    <!-- TOP ROW: TITLE & ADD BUTTON -->
+    <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-bold text-slate-800 tracking-tight">{{ title }}</h1>
+          <span class="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-lg">
+            {{ total }} Item
+          </span>
         </div>
-
-        <button class="btn btn-primary" @click="emit('add')">
-          + Tambah
-        </button>
+        <p class="text-xs font-medium text-slate-400 mt-1">{{ subtitle }}</p>
       </div>
 
-      <!-- SEARCH -->
-      <div class="flex justify-between items-center">
-        <div class="flex gap-2">
-          <input
-            :value="search"
-            @input="emit('update:search', $event.target.value)"
-            @keyup.enter="emit('search')"
-            class="input input-bordered"
-            placeholder="Cari..."
-          />
-          <button class="btn btn-primary" @click="emit('search')">
-            Search
-          </button>
-        </div>
+      <button class="btn btn-primary rounded-xl font-bold shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 self-start sm:self-auto" @click="emit('add')">
+        + Tambah Data
+      </button>
+    </div>
 
-        <div class="text-sm opacity-60">
-          Total: {{ total }}
-        </div>
+    <!-- BOTTOM ROW: SEARCH INPUTS -->
+    <div class="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-slate-100">
+      <div class="relative w-full sm:max-w-xs">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.637 10.637Z" />
+        </svg>
+        <input
+          :value="search"
+          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+          @keyup.enter="emit('search')"
+          class="input input-bordered w-full pl-10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-slate-50/50 focus:bg-white"
+          placeholder="Cari data..."
+        />
       </div>
-
+      <button class="btn btn-outline border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-xl text-slate-600 font-bold w-full sm:w-auto" @click="emit('search')">
+        Cari
+      </button>
     </div>
   </div>
 </template>

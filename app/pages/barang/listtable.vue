@@ -5,6 +5,7 @@ import "vue3-easy-data-table/dist/style.css";
 import { BarangService } from "@/services/barang.service";
 import HeaderSearch from "@/components/header-master.vue";
 import Swal from "sweetalert2";
+import { Pencil, Trash2 } from "lucide-vue-next";
 
 const { showToast } = useToast();
 const barangService = BarangService();
@@ -30,6 +31,8 @@ const search = ref("");
    MODAL & FORM
 ========================= */
 const showModal = ref(false);
+const modalLoading = ref(false);
+const submitLoading = ref(false);
 
 interface BarangForm {
   nama: string;
@@ -44,16 +47,43 @@ const form = ref<BarangForm>({
   stok: 0,
   deskripsi: "",
 });
+
+const formErrors = ref({
+  nama: "",
+  harga: "",
+  stok: "",
+});
+
 const validateForm = () => {
-  if (!form.value.nama) {
-    showToast("Nama wajib diisi", "warning");
-    return false;
+  let isValid = true;
+  formErrors.value = {
+    nama: "",
+    harga: "",
+    stok: "",
+  };
+
+  if (!form.value.nama.trim()) {
+    formErrors.value.nama = "Nama barang wajib diisi";
+    isValid = false;
   }
-  if (form.value.harga <= 0) {
-    showToast("Harga harus > 0", "warning");
-    return false;
+
+  if (form.value.harga === undefined || form.value.harga === null || String(form.value.harga) === "") {
+    formErrors.value.harga = "Harga barang wajib diisi";
+    isValid = false;
+  } else if (form.value.harga <= 0) {
+    formErrors.value.harga = "Harga harus lebih besar dari Rp 0";
+    isValid = false;
   }
-  return true;
+
+  if (form.value.stok === undefined || form.value.stok === null || String(form.value.stok) === "") {
+    formErrors.value.stok = "Stok barang wajib diisi";
+    isValid = false;
+  } else if (form.value.stok < 0) {
+    formErrors.value.stok = "Stok tidak boleh bernilai negatif";
+    isValid = false;
+  }
+
+  return isValid;
 };
 
 /* =========================
@@ -65,7 +95,7 @@ const headers = [
   { text: "Harga", value: "harga", sortable: true },
   { text: "Stok", value: "stok", sortable: true },
   { text: "Deskripsi", value: "deskripsi" },
-  { text: "Aksi", value: "aksi" }, // ✅ tambahan
+  { text: "Aksi", value: "aksi" },
 ];
 
 /* =========================
@@ -79,8 +109,8 @@ const fetchBarang = async () => {
       page: serverOptions.value.page,
       limit: serverOptions.value.rowsPerPage,
       search: search.value,
-      sortBy: serverOptions.value.sortBy, // ✅ tambahan
-      sortType: serverOptions.value.sortType, // ✅ tambahan
+      sortBy: serverOptions.value.sortBy,
+      sortType: serverOptions.value.sortType as "asc" | "desc",
     });
 
     items.value = data.array;
@@ -130,6 +160,11 @@ const resetForm = () => {
     stok: 0,
     deskripsi: "",
   };
+  formErrors.value = {
+    nama: "",
+    harga: "",
+    stok: "",
+  };
 }; 
 
 /* =========================
@@ -138,9 +173,12 @@ const resetForm = () => {
 const editBarang = (item: any) => {
   getBarangById(item.id);
 };
+
 onMounted(fetchBarang);
+
 const getBarangById = async (id: number) => {
-  loading.value = true;
+  showModal.value = true;
+  modalLoading.value = true;
   try {
     const res: any = await barangService.getBarangById(id);
 
@@ -148,23 +186,24 @@ const getBarangById = async (id: number) => {
       nama: res.nama,
       harga: res.harga,
       stok: res.stok,
-      deskripsi: res.deskripsi,
+      deskripsi: res.deskripsi || "",
     };
 
     selectedId.value = id;
     isEdit.value = true;
-    showModal.value = true;
   } catch (err) {
     console.error(err);
     showToast("Gagal mengambil detail barang", "error");
+    showModal.value = false;
   } finally {
-    loading.value = false;
+    modalLoading.value = false;
   }
 };
+
 const updateBarang = async () => {
   if (!selectedId.value) return;
 
-  loading.value = true;
+  submitLoading.value = true;
   try {
     const res: any = await barangService.updateBarang(
       selectedId.value,
@@ -185,15 +224,17 @@ const updateBarang = async () => {
     console.error(err);
     showToast("Terjadi kesalahan server", "error");
   } finally {
-    loading.value = false;
+    submitLoading.value = false;
   }
 };
+
 const submitBarang = async () => {
-   if (!validateForm()) return;
+  if (!validateForm()) return;
   return isEdit.value ? updateBarang() : createBarang();
 };
+
 const createBarang = async () => {
-  loading.value = true;
+  submitLoading.value = true;
   try {
     const res: any = await barangService.createBarang(form.value);
 
@@ -209,18 +250,24 @@ const createBarang = async () => {
     console.error(err);
     showToast("Terjadi kesalahan server", "error");
   } finally {
-    loading.value = false;
+    submitLoading.value = false;
   }
-}
+};
+
 const deleteBarang = async (id: number) => {
   const result = await Swal.fire({
-    title: "Yakin hapus?",
-    text: "Data tidak bisa dikembalikan!",
+    title: "Hapus Barang?",
+    text: "Data yang dihapus tidak dapat dikembalikan.",
     icon: "warning",
     showCancelButton: true,
-    confirmButtonText: "Ya, hapus",
+    confirmButtonText: "Ya, Hapus",
     cancelButtonText: "Batal",
+    confirmButtonColor: "#ef4444",
+    cancelButtonColor: "#94a3b8",
     reverseButtons: true,
+    customClass: {
+      popup: "rounded-2xl border border-slate-100",
+    },
   });
 
   if (!result.isConfirmed) return;
@@ -253,77 +300,145 @@ const openCreateModal = () => {
 </script>
 
 <template>
-  <div class="p-6">
+  <div class="space-y-6">
     <!-- HEADER -->
-    <HeaderSearch title="Data Barang" subtitle="Manajemen barang" :total="totalItems" v-model:search="search"
+    <HeaderSearch title="Data Barang" subtitle="Kelola dan monitoring inventori barang Anda" :total="totalItems" v-model:search="search"
       @search="doSearch" @add="openCreateModal" />
 
-    <!-- TABLE -->
-    <div class="bg-base-100 border rounded-lg shadow-sm p-4 mt-5">
-      <!-- HEADER -->
-      <div class="px-4 py-3 border-b flex justify-between items-center">
-        <h2 class="font-semibold text-lg">Daftar Barang</h2>
+    <!-- TABLE WRAPPER -->
+    <div class="bg-white border border-slate-200/60 rounded-2xl shadow-premium p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="font-bold text-slate-800 text-lg tracking-tight">Daftar Barang</h2>
       </div>
 
-      <!-- BODY -->
-      <div class="p-4">
-        <div class="overflow-x-auto">
-          <ClientOnly>
-            <div class="overflow-x-auto">
-              <EasyDataTable :headers="headers" :items="items" :loading="loading" :server-items-length="totalItems"
-                v-model:server-options="serverOptions" @update:server-options="updateOptions" buttons-pagination
-                border-cell alternating :rows-items="[10, 20, 50, 100]">
-                <template #item-harga="{ harga }">
-                  <span class="badge badge-success">
-                    Rp {{ Number(harga).toLocaleString() }}
-                  </span>
-                </template>
+      <div class="overflow-x-auto">
+        <ClientOnly>
+          <EasyDataTable :headers="headers" :items="items" :loading="loading" :server-items-length="totalItems"
+            v-model:server-options="serverOptions" @update:server-options="updateOptions" buttons-pagination
+            :rows-items="[10, 20, 50, 100]">
+            <!-- Column Customizers -->
+            <template #item-id="{ id }">
+              <span class="font-semibold text-slate-400">#{{ id }}</span>
+            </template>
 
-                <template #item-stok="{ stok }">
-                  <span :class="[
-                    'badge',
-                    stok > 10 ? 'badge-success' : 'badge-warning',
-                  ]">
-                    {{ stok }}
-                  </span>
-                </template>
-                <template #item-aksi="item">
-                  <button class="btn btn-sm btn-warning mr-2" @click="editBarang(item)">
-                    Edit
-                  </button>
-                  <button class="btn btn-sm btn-error" @click="deleteBarang(item.id)">
-                    Delete
-                  </button>
-                </template>
-              </EasyDataTable>
-            </div>
-          </ClientOnly>
-        </div>
+            <template #item-nama="{ nama }">
+              <span class="font-bold text-slate-700">{{ nama }}</span>
+            </template>
+
+            <template #item-harga="{ harga }">
+              <span class="font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg text-xs">
+                Rp {{ Number(harga).toLocaleString() }}
+              </span>
+            </template>
+
+            <template #item-stok="{ stok }">
+              <span class="font-semibold px-2.5 py-1 rounded-lg text-xs" :class="[
+                stok > 10 ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' : 'text-amber-600 bg-amber-50 border border-amber-100',
+              ]">
+                {{ stok }} Pcs
+              </span>
+            </template>
+
+            <template #item-deskripsi="{ deskripsi }">
+              <span class="text-slate-500 text-xs block max-w-xs truncate" :title="deskripsi">
+                {{ deskripsi || '-' }}
+              </span>
+            </template>
+
+            <template #item-aksi="item">
+              <div class="flex items-center gap-1">
+                <button class="btn btn-sm btn-ghost hover:bg-indigo-50 text-indigo-500 hover:text-indigo-600 rounded-lg p-2 transition flex items-center gap-1.5" @click="editBarang(item)" title="Edit">
+                  <Pencil class="w-4 h-4" />
+                  <span class="hidden lg:inline text-xs font-semibold">Edit</span>
+                </button>
+                <button class="btn btn-sm btn-ghost hover:bg-rose-50 text-rose-500 hover:text-rose-600 rounded-lg p-2 transition flex items-center gap-1.5" @click="deleteBarang(item.id)" title="Hapus">
+                  <Trash2 class="w-4 h-4" />
+                  <span class="hidden lg:inline text-xs font-semibold">Hapus</span>
+                </button>
+              </div>
+            </template>
+          </EasyDataTable>
+        </ClientOnly>
       </div>
     </div>
-    <!-- MODAL -->
-    <input type="checkbox" class="modal-toggle" v-model="showModal" />
 
-    <div class="modal">
-      <div class="modal-box max-w-3xl">
-        <h3 class="font-bold text-lg mb-4">
-          {{ isEdit ? "Edit Barang" : "Tambah Barang" }}
-        </h3>
+    <!-- MODAL (backdrop-blur-md) -->
+    <Teleport to="body">
+      <input type="checkbox" class="modal-toggle" v-model="showModal" />
 
-        <div class="space-y-3">
-          <input v-model="form.nama" class="input input-bordered w-full" placeholder="Nama" />
-          <input v-model.number="form.harga" class="input input-bordered w-full" placeholder="Harga" />
-          <input v-model.number="form.stok" class="input input-bordered w-full" placeholder="Stok" />
-          <textarea v-model="form.deskripsi" class="textarea textarea-bordered w-full" />
-        </div>
-
-        <div class="modal-action">
-          <button class="btn btn-primary" @click="submitBarang">Simpan</button>
-          <button class="btn btn-outline" @click="showModal = false">
-            Batal
+      <div class="modal backdrop-blur-md bg-slate-900/30" @click.self="!submitLoading && (showModal = false)">
+        <div class="modal-box max-w-2xl bg-white rounded-2xl border border-slate-100 p-6 shadow-premium relative">
+          <!-- Close button x -->
+          <button class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition" @click="showModal = false">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </button>
+
+          <h3 class="font-bold text-slate-800 text-lg tracking-tight mb-4">
+            {{ isEdit ? "Edit Data Barang" : "Tambah Barang Baru" }}
+          </h3>
+
+          <!-- Skeleton loader inside Modal -->
+          <div v-if="modalLoading" class="space-y-4 py-8 animate-pulse">
+            <div class="space-y-1.5">
+              <div class="h-3 bg-slate-200 rounded w-20"></div>
+              <div class="h-10 bg-slate-100 rounded-xl w-full"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <div class="h-3 bg-slate-200 rounded w-16"></div>
+                <div class="h-10 bg-slate-100 rounded-xl"></div>
+              </div>
+              <div class="space-y-1.5">
+                <div class="h-3 bg-slate-200 rounded w-12"></div>
+                <div class="h-10 bg-slate-100 rounded-xl"></div>
+              </div>
+            </div>
+            <div class="space-y-1.5">
+              <div class="h-3 bg-slate-200 rounded w-24"></div>
+              <div class="h-28 bg-slate-100 rounded-xl w-full"></div>
+            </div>
+          </div>
+
+          <div v-else class="space-y-4">
+            <div>
+              <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Nama Barang</label>
+              <input v-model="form.nama" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.nama}" placeholder="Masukkan nama barang" />
+              <span v-if="formErrors.nama" class="text-xs text-error font-medium mt-1 block">{{ formErrors.nama }}</span>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Harga Barang</label>
+                <input v-model.number="form.harga" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.harga}" placeholder="Rp 0" />
+                <span v-if="formErrors.harga" class="text-xs text-error font-medium mt-1 block">{{ formErrors.harga }}</span>
+              </div>
+              <div>
+                <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Stok</label>
+                <input v-model.number="form.stok" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.stok}" placeholder="0" />
+                <span v-if="formErrors.stok" class="text-xs text-error font-medium mt-1 block">{{ formErrors.stok }}</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Deskripsi Barang <span class="text-slate-400 font-normal text-[10px] lowercase">(opsional)</span></label>
+              <textarea v-model="form.deskripsi" class="textarea textarea-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 h-28" placeholder="Masukkan deskripsi barang..." />
+            </div>
+          </div>
+
+          <div class="modal-action gap-2" v-if="!modalLoading">
+            <button class="btn btn-ghost hover:bg-slate-100 rounded-xl font-bold" @click="showModal = false" :disabled="submitLoading">
+              Batal
+            </button>
+            <button class="btn btn-primary rounded-xl font-bold px-6 shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 flex items-center gap-2" @click="submitBarang" :disabled="submitLoading">
+              <span v-if="submitLoading" class="loading loading-spinner loading-xs"></span>
+              {{ isEdit ? "Simpan Data" : "Tambah Data" }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
+

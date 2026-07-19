@@ -23,7 +23,7 @@ export const useApi = () => {
             title: "Session Berakhir",
             text: "Token Anda sudah kedaluwarsa, silahkan login kembali",
             confirmButtonText: "OK",
-          }).then(() => logout());
+          }).then(() => auth.logout());
           throw new Error("Token expired dan gagal refresh");
         }
       }

@@ -17,6 +17,7 @@ export default defineNuxtConfig({
     head: {
       titleTemplate: `%s | ${process.env.NUXT_PUBLIC_APP_NAME}`,
     },
+    pageTransition: { name: 'page', mode: 'out-in' }
   },
 
   runtimeConfig: {
