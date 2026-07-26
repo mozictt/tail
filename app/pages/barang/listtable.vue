@@ -174,7 +174,9 @@ const editBarang = (item: any) => {
   getBarangById(item.id);
 };
 
-onMounted(fetchBarang);
+onMounted(() => {
+  fetchBarang();
+});
 
 const getBarangById = async (id: number) => {
   showModal.value = true;
@@ -306,9 +308,9 @@ const openCreateModal = () => {
       @search="doSearch" @add="openCreateModal" />
 
     <!-- TABLE WRAPPER -->
-    <div class="bg-white border border-slate-200/60 rounded-2xl shadow-premium p-6">
+    <div class="bg-base-100 border border-base-content/10 rounded-2xl shadow-premium p-6">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="font-bold text-slate-800 text-lg tracking-tight">Daftar Barang</h2>
+        <h2 class="font-bold text-base-content text-lg tracking-tight">Daftar Barang</h2>
       </div>
 
       <div class="overflow-x-auto">
@@ -318,40 +320,40 @@ const openCreateModal = () => {
             :rows-items="[10, 20, 50, 100]">
             <!-- Column Customizers -->
             <template #item-id="{ id }">
-              <span class="font-semibold text-slate-400">#{{ id }}</span>
+              <span class="font-semibold text-base-content/40">#{{ id }}</span>
             </template>
 
             <template #item-nama="{ nama }">
-              <span class="font-bold text-slate-700">{{ nama }}</span>
+              <span class="font-bold text-base-content">{{ nama }}</span>
             </template>
 
             <template #item-harga="{ harga }">
-              <span class="font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg text-xs">
+              <span class="font-semibold text-success bg-success/10 border border-success/20 px-2.5 py-1 rounded-lg text-xs">
                 Rp {{ Number(harga).toLocaleString() }}
               </span>
             </template>
 
             <template #item-stok="{ stok }">
               <span class="font-semibold px-2.5 py-1 rounded-lg text-xs" :class="[
-                stok > 10 ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' : 'text-amber-600 bg-amber-50 border border-amber-100',
+                stok > 10 ? 'text-success bg-success/10 border border-success/20' : 'text-warning bg-warning/10 border border-warning/20',
               ]">
                 {{ stok }} Pcs
               </span>
             </template>
 
             <template #item-deskripsi="{ deskripsi }">
-              <span class="text-slate-500 text-xs block max-w-xs truncate" :title="deskripsi">
+              <span class="text-base-content/60 text-xs block max-w-xs truncate" :title="deskripsi">
                 {{ deskripsi || '-' }}
               </span>
             </template>
 
             <template #item-aksi="item">
               <div class="flex items-center gap-1">
-                <button class="btn btn-sm btn-ghost hover:bg-indigo-50 text-indigo-500 hover:text-indigo-600 rounded-lg p-2 transition flex items-center gap-1.5" @click="editBarang(item)" title="Edit">
+                <button class="btn btn-sm btn-ghost hover:bg-primary/10 text-primary hover:text-primary rounded-lg p-2 transition flex items-center gap-1.5" @click="editBarang(item)" title="Edit">
                   <Pencil class="w-4 h-4" />
                   <span class="hidden lg:inline text-xs font-semibold">Edit</span>
                 </button>
-                <button class="btn btn-sm btn-ghost hover:bg-rose-50 text-rose-500 hover:text-rose-600 rounded-lg p-2 transition flex items-center gap-1.5" @click="deleteBarang(item.id)" title="Hapus">
+                <button class="btn btn-sm btn-ghost hover:bg-error/10 text-error hover:text-error rounded-lg p-2 transition flex items-center gap-1.5" @click="deleteBarang(item.id)" title="Hapus">
                   <Trash2 class="w-4 h-4" />
                   <span class="hidden lg:inline text-xs font-semibold">Hapus</span>
                 </button>
@@ -366,69 +368,69 @@ const openCreateModal = () => {
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showModal" />
 
-      <div class="modal backdrop-blur-md bg-slate-900/30" @click.self="!submitLoading && (showModal = false)">
-        <div class="modal-box max-w-2xl bg-white rounded-2xl border border-slate-100 p-6 shadow-premium relative">
+      <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!submitLoading && (showModal = false)">
+        <div class="modal-box max-w-2xl bg-base-100 rounded-2xl border border-base-content/10 p-6 shadow-premium relative text-base-content">
           <!-- Close button x -->
-          <button class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition" @click="showModal = false">
+          <button class="absolute top-4 right-4 text-base-content/40 hover:text-base-content/70 transition" @click="showModal = false">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
 
-          <h3 class="font-bold text-slate-800 text-lg tracking-tight mb-4">
+          <h3 class="font-bold text-base-content text-lg tracking-tight mb-4">
             {{ isEdit ? "Edit Data Barang" : "Tambah Barang Baru" }}
           </h3>
 
           <!-- Skeleton loader inside Modal -->
           <div v-if="modalLoading" class="space-y-4 py-8 animate-pulse">
             <div class="space-y-1.5">
-              <div class="h-3 bg-slate-200 rounded w-20"></div>
-              <div class="h-10 bg-slate-100 rounded-xl w-full"></div>
+              <div class="h-3 bg-base-300 rounded w-20"></div>
+              <div class="h-10 bg-base-200 rounded-xl w-full"></div>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div class="space-y-1.5">
-                <div class="h-3 bg-slate-200 rounded w-16"></div>
-                <div class="h-10 bg-slate-100 rounded-xl"></div>
+                <div class="h-3 bg-base-300 rounded w-16"></div>
+                <div class="h-10 bg-base-200 rounded-xl"></div>
               </div>
               <div class="space-y-1.5">
-                <div class="h-3 bg-slate-200 rounded w-12"></div>
-                <div class="h-10 bg-slate-100 rounded-xl"></div>
+                <div class="h-3 bg-base-300 rounded w-12"></div>
+                <div class="h-10 bg-base-200 rounded-xl"></div>
               </div>
             </div>
             <div class="space-y-1.5">
-              <div class="h-3 bg-slate-200 rounded w-24"></div>
-              <div class="h-28 bg-slate-100 rounded-xl w-full"></div>
+              <div class="h-3 bg-base-300 rounded w-24"></div>
+              <div class="h-28 bg-base-200 rounded-xl w-full"></div>
             </div>
           </div>
 
           <div v-else class="space-y-4">
             <div>
-              <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Nama Barang</label>
-              <input v-model="form.nama" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.nama}" placeholder="Masukkan nama barang" />
+              <label class="block text-base-content/80 text-xs font-semibold uppercase tracking-wider mb-1.5">Nama Barang</label>
+              <input v-model="form.nama" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-base-100 text-base-content" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.nama}" placeholder="Masukkan nama barang" />
               <span v-if="formErrors.nama" class="text-xs text-error font-medium mt-1 block">{{ formErrors.nama }}</span>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Harga Barang</label>
-                <input v-model.number="form.harga" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.harga}" placeholder="Rp 0" />
+                <label class="block text-base-content/80 text-xs font-semibold uppercase tracking-wider mb-1.5">Harga Barang</label>
+                <input v-model.number="form.harga" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-base-100 text-base-content" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.harga}" placeholder="Rp 0" />
                 <span v-if="formErrors.harga" class="text-xs text-error font-medium mt-1 block">{{ formErrors.harga }}</span>
               </div>
               <div>
-                <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Stok</label>
-                <input v-model.number="form.stok" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.stok}" placeholder="0" />
+                <label class="block text-base-content/80 text-xs font-semibold uppercase tracking-wider mb-1.5">Stok</label>
+                <input v-model.number="form.stok" type="number" class="input input-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-base-100 text-base-content" :class="{'border-error focus:ring-error/20 focus:border-error': formErrors.stok}" placeholder="0" />
                 <span v-if="formErrors.stok" class="text-xs text-error font-medium mt-1 block">{{ formErrors.stok }}</span>
               </div>
             </div>
 
             <div>
-              <label class="block text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1.5">Deskripsi Barang <span class="text-slate-400 font-normal text-[10px] lowercase">(opsional)</span></label>
-              <textarea v-model="form.deskripsi" class="textarea textarea-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 h-28" placeholder="Masukkan deskripsi barang..." />
+              <label class="block text-base-content/80 text-xs font-semibold uppercase tracking-wider mb-1.5">Deskripsi Barang <span class="text-base-content/40 font-normal text-[10px] lowercase">(opsional)</span></label>
+              <textarea v-model="form.deskripsi" class="textarea textarea-bordered w-full rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 h-28 bg-base-100 text-base-content" placeholder="Masukkan deskripsi barang..." />
             </div>
           </div>
 
           <div class="modal-action gap-2" v-if="!modalLoading">
-            <button class="btn btn-ghost hover:bg-slate-100 rounded-xl font-bold" @click="showModal = false" :disabled="submitLoading">
+            <button class="btn btn-ghost hover:bg-base-200 rounded-xl font-bold" @click="showModal = false" :disabled="submitLoading">
               Batal
             </button>
             <button class="btn btn-primary rounded-xl font-bold px-6 shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 flex items-center gap-2" @click="submitBarang" :disabled="submitLoading">

@@ -22,38 +22,41 @@ details[open] > ul {
 
 /* Customize vue3-easy-data-table to fit modern theme */
 .vue3-easy-data-table {
-  --easy-table-border: 1px solid #f1f5f9;
+  --easy-table-border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.08));
   --easy-table-header-font-size: 13px;
-  --easy-table-header-background-color: #f8fafc;
-  --easy-table-header-font-color: #64748b;
-  --easy-table-row-border: 1px solid #f1f5f9;
-  --easy-table-footer-background-color: #ffffff;
-  --easy-table-footer-font-color: #64748b;
+  --easy-table-header-background-color: var(--fallback-b2, oklch(var(--b2) / 1));
+  --easy-table-header-font-color: var(--fallback-bc, oklch(var(--bc) / 0.7));
+  --easy-table-row-border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.08));
+  --easy-table-footer-background-color: var(--fallback-b1, oklch(var(--b1) / 1));
+  --easy-table-footer-font-color: var(--fallback-bc, oklch(var(--bc) / 0.7));
   --easy-table-footer-font-size: 13px;
+  --easy-table-body-row-background-color: var(--fallback-b1, oklch(var(--b1) / 1));
+  --easy-table-body-row-font-color: var(--fallback-bc, oklch(var(--bc) / 0.9));
+  --easy-table-loading-mask-background-color: var(--fallback-b1, oklch(var(--b1) / 0.5));
   border-radius: 0.75rem;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.1));
 }
 
 .vue3-easy-data-table__main {
   border-radius: 0.75rem;
 }
 
-/* Force inputs and textareas to have clean white backgrounds with dark text */
+/* Force inputs and textareas to follow the active theme variables */
 .input, .textarea {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #e2e8f0 !important;
+  background-color: var(--fallback-b1, oklch(var(--b1) / 1)) !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+  border-color: var(--fallback-bc, oklch(var(--bc) / 0.2)) !important;
 }
 
 .input::placeholder, .textarea::placeholder {
-  color: #94a3b8 !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 0.4)) !important;
   opacity: 1 !important;
 }
 
 .input:focus, .textarea:focus {
-  border-color: #4f46e5 !important;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15) !important;
+  border-color: var(--fallback-p, oklch(var(--p) / 1)) !important;
+  box-shadow: 0 0 0 2px var(--fallback-p, oklch(var(--p) / 0.15)) !important;
   outline: none !important;
 }
 

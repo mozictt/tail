@@ -17,40 +17,28 @@ const pages = computed(() => {
 })
 
 const fetchData = async () => {
-
   try {
-
-    loading.value = true
-
+    loading.value = true;
     const res:any = await api("/barang", {
       params: {
         page: page.value,
         limit: limit.value
       }
-    })
+    });
 
-    items.value = res.data.array
-    totalPages.value = res.data.totalPages
-
+    items.value = res.data.array;
+    totalPages.value = res.data.totalPages;
   } catch (err) {
-
-    console.error("Fetch barang error:", err)
-
+    console.error("Fetch barang error:", err);
   } finally {
-
-    loading.value = false
-
+    loading.value = false;
   }
-
 }
 
 const changePage = (p:number) => {
-
-  if (p < 1 || p > totalPages.value) return
-
-  page.value = p
-  fetchData()
-
+  if (p < 1 || p > totalPages.value) return;
+  page.value = p;
+  fetchData();
 }
 
 onMounted(fetchData)

@@ -8,6 +8,8 @@ import { useAccessControl } from "@/composables/useAccessControl/useAccessContro
 </script>
 
 <template>
-  <h1 class="text-2xl font-bold">Dashboard</h1>
-  <p>Welcome to your admin panel 🎉</p>
+  <div>
+    <h1 class="text-2xl font-bold">Dashboard</h1>
+    <p>Welcome to your admin panel 🎉</p>
+  </div>
 </template>

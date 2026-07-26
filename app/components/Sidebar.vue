@@ -170,7 +170,7 @@ watch(isMobile, (val) => {
   <Transition name="fade">
     <div
       v-if="isMobileOpen"
-      class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden"
+      class="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-30 md:hidden"
       @click="closeMobileSidebar"
     />
   </Transition>
@@ -178,26 +178,26 @@ watch(isMobile, (val) => {
   <!-- SIDEBAR -->
   <aside
     :class="[
-      'h-screen flex flex-col fixed md:static z-40 transition-all duration-300 border-r border-slate-200/80 bg-white',
+      'h-screen flex flex-col fixed md:static z-40 transition-all duration-300 border-r border-base-content/10 bg-base-100',
       isOpen ? 'w-64' : 'w-20',
       isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
     ]"
   >
     <!-- HEADER BRANDING -->
-    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+    <div class="flex items-center justify-between p-5 border-b border-base-content/5">
       <div v-if="isOpen" class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-md shadow-primary/20">
           <icons.Layers class="w-5 h-5" />
         </div>
-        <span class="font-bold text-slate-800 text-lg tracking-tight">Admin Panel</span>
+        <span class="font-bold text-base-content text-lg tracking-tight">Admin Panel</span>
       </div>
       <div v-else class="w-full flex justify-center">
-        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-md">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-md">
           <icons.Layers class="w-5 h-5" />
         </div>
       </div>
       
-      <button class="hidden md:inline-flex text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1.5 rounded-lg transition" @click="toggleSidebar">
+      <button class="hidden md:inline-flex text-base-content/40 hover:text-base-content/80 hover:bg-base-200 p-1.5 rounded-lg transition" @click="toggleSidebar">
         <component :is="isOpen ? icons.ChevronLeft : icons.Menu" class="w-4 h-4" />
       </button>
     </div>
@@ -210,14 +210,14 @@ watch(isMobile, (val) => {
           v-if="!item.children"
           :to="item.path"
           @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
           :class="
             isActive(item.path)
               ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary shadow-sm'
               : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" :class="isActive(item.path) ? 'text-primary' : 'text-slate-400'" />
+          <component :is="icons[item.icon]" class="w-5 h-5" :class="isActive(item.path) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen">{{ item.name }}</span>
         </NuxtLink>
 
@@ -225,34 +225,34 @@ watch(isMobile, (val) => {
         <div
           v-else
           @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 font-medium text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
           :class="
             isParentActive(item.children)
-              ? 'bg-slate-50 text-slate-900'
+              ? 'bg-base-200/50 text-base-content'
               : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-slate-400'" />
+          <component :is="icons[item.icon]" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
 
           <icons.ChevronDown
             v-if="isOpen"
             :class="{ 'rotate-180 text-primary': openSubmenu === item.name }"
-            class="w-4 h-4 transition-transform text-slate-400"
+            class="w-4 h-4 transition-transform text-base-content/40"
           />
         </div>
 
         <!-- SUBMENU SECTION -->
         <div
           v-if="item.children && openSubmenu === item.name && isOpen"
-          class="pl-9 mt-1 space-y-1 relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-100"
+          class="pl-9 mt-1 space-y-1 relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-0.5 before:bg-base-200"
         >
           <NuxtLink
             v-for="(child, i) in item.children"
             :key="i"
             :to="child.path"
             @click="handleMenuClick(child)"
-            class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+            class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-base-content/60 hover:text-base-content hover:bg-base-200"
             :class="
               isActive(child.path)
                 ? 'text-primary bg-primary/5 hover:text-primary hover:bg-primary/10'
@@ -266,27 +266,27 @@ watch(isMobile, (val) => {
     </nav>
 
     <!-- FOOTER PROFILE -->
-    <div class="p-4 border-t border-slate-100 relative bg-white">
+    <div class="p-4 border-t border-base-content/5 relative bg-base-100">
       <div
-        class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-slate-50 transition"
+        class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-base-200 transition"
         @click="toggleProfileDropdown"
       >
         <div class="relative">
           <img
             src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop"
-            class="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-100"
+            class="w-10 h-10 rounded-xl object-cover ring-2 ring-base-200"
           />
-          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-white"></span>
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100"></span>
         </div>
 
         <div v-if="isOpen" class="flex flex-col flex-1 min-w-0">
-          <span class="font-semibold text-slate-800 text-sm truncate">John Doe</span>
-          <span class="text-xs text-slate-400 truncate font-medium">Administrator</span>
+          <span class="font-semibold text-base-content text-sm truncate">John Doe</span>
+          <span class="text-xs text-base-content/50 truncate font-medium">Administrator</span>
         </div>
 
         <icons.ChevronDown
           v-if="isOpen"
-          class="w-4 h-4 ml-auto text-slate-400 transition-transform"
+          class="w-4 h-4 ml-auto text-base-content/40 transition-transform"
           :class="{ 'rotate-180': profileDropdownOpen }"
         />
       </div>
@@ -295,28 +295,28 @@ watch(isMobile, (val) => {
       <Transition name="fade">
         <div
           v-if="profileDropdownOpen"
-          class="absolute bottom-16 left-4 right-4 bg-white border border-slate-200/80 shadow-premium rounded-xl py-2 z-20"
+          class="absolute bottom-16 left-4 right-4 bg-base-100 border border-base-content/10 shadow-premium rounded-xl py-2 z-20"
         >
           <NuxtLink
             to="/settings/profile"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition font-medium"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >
-            <icons.User class="w-4 h-4 text-slate-400" />
+            <icons.User class="w-4 h-4 text-base-content/40" />
             Profile
           </NuxtLink>
           <NuxtLink
             to="/settings/security"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition font-medium"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >
-            <icons.Settings class="w-4 h-4 text-slate-400" />
+            <icons.Settings class="w-4 h-4 text-base-content/40" />
             Security
           </NuxtLink>
-          <div class="border-t border-slate-100 my-1"></div>
+          <div class="border-t border-base-content/5 my-1"></div>
           <button
             @click="handleLogout"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left transition font-semibold"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 w-full text-left transition font-semibold"
           >
             <icons.LogOut class="w-4 h-4" />
             Logout

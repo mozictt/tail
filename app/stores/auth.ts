@@ -38,7 +38,10 @@ export const useAuthStore = defineStore("auth", {
       if (!token) return true;
       try {
         const payloadBase64 = token.split(".")[1];
-        const payloadJson = atob(payloadBase64);
+        if (!payloadBase64) return true;
+        // Fix base64url format
+        const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+        const payloadJson = atob(base64);
         const payload = JSON.parse(payloadJson);
         const now = Math.floor(Date.now() / 1000);
         return payload.exp < now + 60;
