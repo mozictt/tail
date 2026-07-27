@@ -6,6 +6,7 @@ export const useAuthStore = defineStore("auth", {
     token: useCookie<string | null>("token").value || null,
     refreshToken: useCookie<string | null>("refreshToken").value || null,
     id_user: useCookie<string | null>("id_user").value || null,
+    id_role: useCookie<string | null>("id_role").value || null,
     role: useCookie<string | null>("role").value || null,
     username: useCookie<string | null>("username").value || null,
     refreshing: null as Promise<any> | null,
@@ -22,6 +23,7 @@ export const useAuthStore = defineStore("auth", {
       this.token = useCookie("token").value || null;
       this.refreshToken = useCookie("refreshToken").value || null;
       this.id_user = useCookie("id_user").value || null;
+      this.id_role = useCookie("id_role").value || null;
       this.role = useCookie("role").value || null;
       this.username = useCookie("username").value || null;
     },
@@ -30,6 +32,7 @@ export const useAuthStore = defineStore("auth", {
       useCookie("token").value = this.token;
       useCookie("refreshToken").value = this.refreshToken;
       useCookie("id_user").value = this.id_user;
+      useCookie("id_role").value = this.id_role;
       useCookie("role").value = this.role;
       useCookie("username").value = this.username;
     },
@@ -67,6 +70,7 @@ export const useAuthStore = defineStore("auth", {
         this.token = accessToken;
         this.refreshToken = refreshToken;
         this.role = user.role || "guest";
+        this.id_role = user.id_role || "";
         this.username = user.username || "";
         this.id_user = user.id || "";
 
@@ -116,6 +120,7 @@ export const useAuthStore = defineStore("auth", {
       this.token = null;
       this.refreshToken = null;
       this.role = null;
+      this.id_role = null;
       this.username = null;
       this.id_user = null;
 

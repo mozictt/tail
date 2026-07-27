@@ -12,30 +12,49 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (!auth.token) {
     return navigateTo("/login");
   }
-  // 🔐 cek menu
-  let menus_midd = [];
-  try {
-    if (auth.token) {
-      const payload = auth.token.split(".")[1];
-      if (payload) {
-        // Handle base64url to base64 conversion for safety
-        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-        menus_midd = JSON.parse(atob(base64)).menus || [];
-      }
-    }
-  } catch (e) {
-    console.error("Token parsing error in middleware:", e);
+  // 🔐 cek menu dari backend via store
+  const menuStore = useMenuStore();
+  
+  if (auth.id_role && !menuStore.hasFetched) {
+    await menuStore.fetchMenus();
   }
 
-  console.log(menus_midd);
+  // Helper untuk mendapatkan semua URL dari nested menu
+  const extractUrls = (menus: any[]): string[] => {
+    let urls: string[] = [];
+    for (const m of menus) {
+      const path = m.url || m.path;
+      if (path) urls.push(path);
+      if (m.children && m.children.length > 0) {
+        urls = urls.concat(extractUrls(m.children));
+      }
+    }
+    return urls;
+  };
 
-  const allowedMenus = menus_midd.map((m: any) => m.path);
+  const allowedMenus = extractUrls(menuStore.menus);
 
-  const isAllowed = allowedMenus.some(
-    (path) => to.path === path || to.path.startsWith(path + "/"),
-  );
+  // Default allowed paths if needed (misal dashboard selalu diizinkan)
+  if (to.path === "/") {
+    return;
+  }
+
+  const isAllowed = allowedMenus.some((path) => {
+    // 1. Exact match
+    if (to.path === path) return true;
+    
+    // 2. Cegah parent menu (seperti "/barang") memberikan akses penuh ke seluruh sub-menu (seperti "/barang/list").
+    // Hanya izinkan prefix match jika path-nya sudah cukup spesifik (misal "/barang/edit" untuk mengizinkan "/barang/edit/1").
+    // Kita cek jumlah segmen URL.
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length >= 2 && to.path.startsWith(path + "/")) {
+      return true;
+    }
+
+    return false;
+  });
 
   if (!isAllowed) {
-    // return navigateTo("/forbidden");
+    return navigateTo("/forbidden");
   }
 });

@@ -2,16 +2,16 @@
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import * as icons from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
-import { useAuth } from "@/composables/useAuth";
 import { useAuthStore } from "@/stores/auth";
 import { useUIStore } from "@/stores/ui";
+import { useMenuStore } from "@/stores/menu";
 import { useHead } from "#imports";
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const ui = useUIStore();
-const { logout } = useAuth();
+const menuStore = useMenuStore();
 
 const emit = defineEmits(["update-active"]);
 
@@ -19,7 +19,7 @@ const emit = defineEmits(["update-active"]);
 const isOpen = ref(true); // desktop
 const isMobile = ref(false);
 
-const menu = ref<any[]>([]);
+const menu = computed(() => menuStore.menus);
 const openSubmenu = ref<string | null>(null);
 const activeMenuName = ref("Menu");
 
@@ -38,6 +38,7 @@ const closeProfileDropdown = () => {
 };
 
 const handleLogout = async () => {
+  menuStore.clearMenus(); // Clear menus on logout
   await auth.logout();
   closeProfileDropdown();
 };
@@ -66,17 +67,19 @@ defineExpose({
   toggleMobileSidebar,
 });
 
-// ===== MENU HELPERS =====
-const isActive = (path: string) =>
-  route.path === path || route.path.startsWith(path + "/");
+const isActive = (path: string) => {
+  if (!path) return false;
+  return route.path === path || route.path.startsWith(path + "/");
+};
 
 const isParentActive = (children: any[]) =>
-  children.some((c) => isActive(c.path));
+  children && children.some((c) => isActive(c.url || c.path));
 
 const findActiveMenu = (items: any[]): any | null => {
   for (const item of items) {
-    if (item.path && isActive(item.path)) return item;
-    if (item.children) {
+    const itemPath = item.url || item.path;
+    if (itemPath && isActive(itemPath)) return item;
+    if (item.children && item.children.length > 0) {
       const child = findActiveMenu(item.children);
       if (child) return child;
     }
@@ -100,7 +103,7 @@ const toggleSubmenu = (name: string) => {
 };
 
 const handleMenuClick = (item: any) => {
-  if (item.children) {
+  if (item.children && item.children.length > 0) {
      isOpen.value = true;
     toggleSubmenu(item.name);
   } else {
@@ -113,13 +116,15 @@ const handleMenuClick = (item: any) => {
 
 // ===== LIFECYCLE =====
 onMounted(async () => {
-  menu.value = await $fetch("/api/menu");
+  if (!menuStore.hasFetched && auth.id_role) {
+    await menuStore.fetchMenus();
+  }
 
   checkScreen();
   window.addEventListener("resize", checkScreen);
 
-  menu.value.forEach((item) => {
-    if (item.children?.some((c) => isActive(c.path))) {
+  menu.value.forEach((item: any) => {
+    if (item.children?.some((c: any) => isActive(c.url || c.path))) {
       openSubmenu.value = item.name;
     }
   });
@@ -207,17 +212,17 @@ watch(isMobile, (val) => {
       <div v-for="(item, idx) in menu" :key="idx">
         <!-- SINGLE MENU -->
         <NuxtLink
-          v-if="!item.children"
-          :to="item.path"
+          v-if="!item.children || item.children.length === 0"
+          :to="item.url || item.path"
           @click="handleMenuClick(item)"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
           :class="
-            isActive(item.path)
+            isActive(item.url || item.path)
               ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary shadow-sm'
               : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" :class="isActive(item.path) ? 'text-primary' : 'text-base-content/40'" />
+          <component :is="icons[item.icon as keyof typeof icons] || icons.Circle" class="w-5 h-5" :class="isActive(item.url || item.path) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen">{{ item.name }}</span>
         </NuxtLink>
 
@@ -232,7 +237,7 @@ watch(isMobile, (val) => {
               : ''
           "
         >
-          <component :is="icons[item.icon]" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
+          <component :is="icons[item.icon as keyof typeof icons] || icons.Folder" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
 
           <icons.ChevronDown
@@ -244,17 +249,17 @@ watch(isMobile, (val) => {
 
         <!-- SUBMENU SECTION -->
         <div
-          v-if="item.children && openSubmenu === item.name && isOpen"
+          v-if="item.children && item.children.length > 0 && openSubmenu === item.name && isOpen"
           class="pl-9 mt-1 space-y-1 relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-0.5 before:bg-base-200"
         >
           <NuxtLink
             v-for="(child, i) in item.children"
             :key="i"
-            :to="child.path"
+            :to="child.url || child.path"
             @click="handleMenuClick(child)"
             class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-base-content/60 hover:text-base-content hover:bg-base-200"
             :class="
-              isActive(child.path)
+              isActive(child.url || child.path)
                 ? 'text-primary bg-primary/5 hover:text-primary hover:bg-primary/10'
                 : ''
             "
