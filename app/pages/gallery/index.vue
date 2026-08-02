@@ -238,6 +238,13 @@ const deleteMedia = async (id: string) => {
   }
 };
 
+const deleteMediaFromLightbox = async (id: string) => {
+  viewMediaItem.value = null;
+  setTimeout(() => {
+    deleteMedia(id);
+  }, 300); // wait for lightbox transition
+};
+
 const currentAlbumTitle = computed(() => {
   if (selectedAlbumId.value === 'uncategorized') return 'Tanpa Album (Uncategorized)';
   const found = albumList.value.find(a => a.id === selectedAlbumId.value);
@@ -383,9 +390,9 @@ onMounted(() => {
             <!-- Media Preview (Secure Fetch) -->
             <SecureMedia :filename="item.fileName" :type="item.type" />
             
-            <!-- Gradient Overlay on Hover -->
+            <!-- Gradient Overlay (Always visible on mobile, hover on desktop) -->
             <div 
-              class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 z-10 cursor-pointer"
+              class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 z-10 cursor-pointer"
               @click="viewMediaItem = item"
             >
               
@@ -399,21 +406,21 @@ onMounted(() => {
                   </div>
                 </div>
                 
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 md:gap-2">
                   <button 
-                    class="w-8 h-8 rounded-lg bg-base-100/20 hover:bg-base-100 text-white hover:text-base-content flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-base-100/20 hover:bg-base-100 text-white hover:text-base-content flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="handleDownload(item)"
                     title="Unduh Asli"
                   >
-                    <Download v-if="downloadLoadingId !== item.id" class="w-4 h-4" />
+                    <Download v-if="downloadLoadingId !== item.id" class="w-4 h-4 md:w-4 md:h-4" />
                     <span v-else class="loading loading-spinner loading-xs text-white"></span>
                   </button>
                   <button 
-                    class="w-8 h-8 rounded-lg bg-error/90 hover:bg-error text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-error/90 hover:bg-error text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="deleteMedia(item.id!)"
                     title="Hapus"
                   >
-                    <Trash2 class="w-4 h-4" />
+                    <Trash2 class="w-4 h-4 md:w-4 md:h-4" />
                   </button>
                 </div>
               </div>
@@ -526,16 +533,23 @@ onMounted(() => {
                 <p class="text-xs text-white/60">{{ formatSize(viewMediaItem.size) }}</p>
              </div>
              
-             <div class="flex items-center gap-3 pointer-events-auto">
+             <div class="flex items-center gap-2 md:gap-3 pointer-events-auto">
                <button 
-                  class="btn btn-sm btn-circle btn-ghost text-white hover:bg-white/20"
+                  class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-error hover:text-white"
+                  @click="deleteMediaFromLightbox(viewMediaItem.id!)"
+                  title="Hapus"
+                >
+                  <Trash2 class="w-5 h-5" />
+               </button>
+               <button 
+                  class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20"
                   @click="handleDownload(viewMediaItem)"
                   title="Unduh Asli"
                 >
                   <Download v-if="downloadLoadingId !== viewMediaItem.id" class="w-5 h-5" />
                   <span v-else class="loading loading-spinner loading-xs"></span>
                </button>
-               <button class="btn btn-sm btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error" @click="viewMediaItem = null" title="Tutup">
+               <button class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error" @click="viewMediaItem = null" title="Tutup">
                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                </button>
              </div>

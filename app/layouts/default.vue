@@ -21,7 +21,7 @@ const onUpdateActive = (menuItem: any) => {
       
       <!-- HEADER -->
       <header
-        class="bg-base-100/85 backdrop-blur-md border-b border-base-content/10 px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+        class="bg-base-100/85 backdrop-blur-md border-b border-base-content/10 px-6 py-4 flex items-center justify-between sticky top-0 z-50"
       >
         <!-- LEFT -->
         <div class="flex items-center gap-3.5">

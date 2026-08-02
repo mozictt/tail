@@ -33,6 +33,8 @@ Untuk otorisasi tingkat lanjut, gunakan pendekatan ABAC (Attribute-Based Access 
 3. Kualitas & Performa Kode
 Patuhi standar penulisan kode: PSR-12 untuk PHP, ESLint / Prettier standar untuk JavaScript/TypeScript.
 
+4. halaman selalu di buat responsive ketika di mobile phone
+
 Pastikan kode efisien dalam menangani database query (hindari masalah N+1 query, optimalkan indexing pada PostgreSQL/Oracle).
 
 Gunakan asynchronous programming dengan benar pada Node.js/NestJS.
