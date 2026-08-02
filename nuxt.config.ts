@@ -21,13 +21,31 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    // Private: hanya dipakai di server Nuxt (tidak terekspos ke browser)
+    backendUrl: process.env.API_BASE || "http://localhost:4000",
     public: {
-      apiBase: process.env.API_BASE || "http://localhost:4000",
+      // Public: dipakai browser, arahkan ke proxy internal Nuxt
+      apiBase: "/api/proxy",
       appName: process.env.NUXT_PUBLIC_APP_NAME,
+    }
+  },
+
+  // Nitro Proxy: teruskan /api/proxy/** ke backend secara server-side
+  nitro: {
+    routeRules: {
+      '/api/proxy/**': {
+        proxy: `${process.env.API_BASE || 'http://localhost:4000'}/**`,
+      }
     }
   },
 
   experimental: {
     scanPageMeta: false
-  }
+  },
+
+  vite: {
+    server: {
+      allowedHosts: true, // Izinkan semua host (berguna untuk Cloudflare Tunnel/Ngrok)
+    }
+  },
 });
