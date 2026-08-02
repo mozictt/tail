@@ -9,9 +9,7 @@ import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
 import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye } from "lucide-vue-next";
 
-definePageMeta({
-  layout: "admin",
-});
+
 
 const route = useRoute();
 const router = useRouter();
