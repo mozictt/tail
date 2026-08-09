@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import { useSlugRoute } from "@/composables/useSlugRoute";
 
 const router = useRouter();
+const { slugPath } = useSlugRoute();
 
 const form = ref({
   name: "",
@@ -12,7 +14,7 @@ const form = ref({
 
 const submitForm = () => {
   alert(`User ${form.value.name} berhasil ditambahkan!`);
-  router.push("/users");
+  router.push(slugPath("/users"));
 };
 </script>
 

@@ -5,12 +5,14 @@ import HeaderSearch from "@/components/header-master.vue";
 import Swal from "sweetalert2";
 import { Pencil, Trash2, Image as ImageIcon, FolderOpen, Calendar, ArrowRight } from "lucide-vue-next";
 import { useRouter } from "vue-router";
+import { useSlugRoute } from "@/composables/useSlugRoute";
 
 
 
 const { showToast } = useToast();
 const albumService = AlbumService();
 const router = useRouter();
+const { slugPath } = useSlugRoute();
 
 const isEdit = ref(false);
 const selectedId = ref<string | null>(null);
@@ -202,7 +204,7 @@ const openCreateModal = () => {
 };
 
 const viewGallery = (id: string) => {
-  router.push({ path: '/gallery', query: { albumId: id } });
+  router.push({ path: slugPath('/gallery'), query: { albumId: id } });
 };
 </script>
 

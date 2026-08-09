@@ -8,6 +8,7 @@ import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
 import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye } from "lucide-vue-next";
+import { useSlugRoute } from "@/composables/useSlugRoute";
 
 
 
@@ -18,6 +19,7 @@ const albumIdParam = route.query.albumId as string | undefined;
 const { showToast } = useToast();
 const galleryService = GalleryService();
 const albumService = AlbumService();
+const { slugPath } = useSlugRoute();
 
 /* =========================
    STATE
@@ -304,7 +306,7 @@ onMounted(() => {
           <h3 class="font-bold text-base-content mb-1">Belum Ada Album</h3>
           <p class="text-base-content/60 text-sm">Buat album baru terlebih dahulu atau unggah media tanpa album.</p>
           <div class="flex items-center justify-center gap-3 mt-4">
-             <NuxtLink to="/album" class="btn btn-outline btn-primary btn-sm rounded-lg px-6">Kelola Album</NuxtLink>
+             <NuxtLink :to="slugPath('/album')" class="btn btn-outline btn-primary btn-sm rounded-lg px-6">Kelola Album</NuxtLink>
              <button class="btn btn-primary btn-sm rounded-lg px-6" @click="openUploadModal">Unggah Media</button>
           </div>
         </div>

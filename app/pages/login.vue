@@ -12,8 +12,8 @@ const auth = useAuthStore();
 
 // ✅ redirect kalau sudah login
 watchEffect(() => {
-  if (auth.isLoggedIn) {
-    navigateTo("/");
+  if (auth.isLoggedIn && auth.slug) {
+    navigateTo(`/${auth.slug}/dashboard`);
   }
 });
 
@@ -27,7 +27,8 @@ const doLogin = async (e?: Event) => {
     const success = await auth.login(username.value, password.value);
 
     if (success) {
-      await navigateTo("/");
+      // Redirect ke /{slug}/dashboard setelah login berhasil
+      await navigateTo(`/${auth.slug}/dashboard`);
     } else {
       error.value = "Username atau password salah";
     }

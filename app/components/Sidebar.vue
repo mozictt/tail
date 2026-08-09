@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useUIStore } from "@/stores/ui";
 import { useMenuStore } from "@/stores/menu";
+import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useHead } from "#imports";
 
 const router = useRouter();
@@ -12,6 +13,7 @@ const route = useRoute();
 const auth = useAuthStore();
 const ui = useUIStore();
 const menuStore = useMenuStore();
+const { slugPath, currentSlug } = useSlugRoute();
 
 const emit = defineEmits(["update-active"]);
 
@@ -69,7 +71,9 @@ defineExpose({
 
 const isActive = (path: string) => {
   if (!path) return false;
-  return route.path === path || route.path.startsWith(path + "/");
+  // Bandingkan path menu (tanpa slug) dengan path URL (tanpa slug prefix)
+  const currentPath = route.path.replace(`/${currentSlug.value}`, '') || '/';
+  return currentPath === path || currentPath.startsWith(path + "/");
 };
 
 const isParentActive = (children: any[]) =>
@@ -213,7 +217,7 @@ watch(isMobile, (val) => {
         <!-- SINGLE MENU -->
         <NuxtLink
           v-if="!item.children || item.children.length === 0"
-          :to="item.url || item.path"
+          :to="slugPath(item.url || item.path)"
           @click="handleMenuClick(item)"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
           :class="
@@ -255,7 +259,7 @@ watch(isMobile, (val) => {
           <NuxtLink
             v-for="(child, i) in item.children"
             :key="i"
-            :to="child.url || child.path"
+            :to="slugPath(child.url || child.path)"
             @click="handleMenuClick(child)"
             class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-base-content/60 hover:text-base-content hover:bg-base-200"
             :class="
@@ -303,7 +307,7 @@ watch(isMobile, (val) => {
           class="absolute bottom-16 left-4 right-4 bg-base-100 border border-base-content/10 shadow-premium rounded-xl py-2 z-20"
         >
           <NuxtLink
-            to="/settings/profile"
+            :to="slugPath('/settings/profile')"
             class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >
@@ -311,7 +315,7 @@ watch(isMobile, (val) => {
             Profile
           </NuxtLink>
           <NuxtLink
-            to="/settings/security"
+            :to="slugPath('/settings/security')"
             class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >

@@ -9,20 +9,25 @@
       </svg>
     </div>
     <h1 class="text-7xl font-extrabold text-red-700 mb-4 drop-shadow-lg">403</h1>
-    <h2 class="text-3xl font-semibold mb-3 text-red-800 tracking-wide">Access Denied</h2>
+    <h2 class="text-3xl font-semibold mb-3 text-red-800 tracking-wide">Akses Ditolak</h2>
     <p class="mb-8 text-center max-w-lg text-gray-700">
-      You do not have permission to view this page. Please contact your administrator if you believe this is an error.
+      Anda tidak memiliki izin untuk mengakses halaman ini. Silakan hubungi administrator jika Anda merasa ini adalah kesalahan.
     </p>
     <NuxtLink
-      to="/"
+      :to="auth.slug ? `/${auth.slug}/dashboard` : '/login'"
       class="bg-red-600 hover:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-4 focus:ring-red-300 text-white font-semibold px-8 py-3 rounded-lg shadow-lg transition duration-300 ease-in-out"
     >
-      Go Back Home
+      Kembali ke Dashboard
     </NuxtLink>
   </div>
 </template>
-<script lang="ts">
+
+<script setup lang="ts">
+import { useAuthStore } from '@/stores/auth';
+
+const auth = useAuthStore();
+
 definePageMeta({
-  layout: 'blank'  // pakai layout blank tanpa sidebar
+  layout: 'blank' // pakai layout blank tanpa sidebar
 })
 </script>

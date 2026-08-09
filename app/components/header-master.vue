@@ -27,9 +27,11 @@ const emit = defineEmits([
         <p class="text-xs font-medium text-base-content/60 mt-1">{{ subtitle }}</p>
       </div>
 
-      <button class="btn btn-primary rounded-xl font-bold shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 self-start sm:self-auto" @click="emit('add')">
-        + Tambah Data
-      </button>
+      <slot name="actions">
+        <button class="btn btn-primary rounded-xl font-bold shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 self-start sm:self-auto" @click="emit('add')">
+          + Tambah Data
+        </button>
+      </slot>
     </div>
 
     <!-- BOTTOM ROW: SEARCH INPUTS -->

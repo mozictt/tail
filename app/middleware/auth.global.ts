@@ -1,18 +1,35 @@
 export default defineNuxtRouteMiddleware(async (to, from) => { 
 
   const auth = useAuthStore();
-  // ✅ PUBLIC ROUTES (WAJIB PALING ATAS)
-  const publicPages = ["/login", "/forbidden"]; 
+  
+  // ✅ PUBLIC ROUTES — tidak memerlukan autentikasi
+  const publicPages = ["/login", "/register", "/forbidden"]; 
   
   if (publicPages.includes(to.path)) {
     return; // ⛔ stop di sini
   }
 
-  // ❌ belum login
+  // ❌ Belum login → redirect ke login
   if (!auth.token) {
     return navigateTo("/login");
   }
-  // 🔐 cek menu dari backend via store
+
+  // ✅ Root path "/" → redirect ke /{slug}/dashboard
+  if (to.path === "/") {
+    if (auth.slug) {
+      return navigateTo(`/${auth.slug}/dashboard`, { replace: true });
+    }
+    return navigateTo("/login");
+  }
+
+  // 🔐 Validasi slug di URL harus cocok dengan slug tenant user
+  const urlSlug = to.params.slug as string | undefined;
+  if (urlSlug && auth.slug && urlSlug !== auth.slug) {
+    // Slug di URL tidak cocok → redirect ke forbidden
+    return navigateTo("/forbidden");
+  }
+
+  // 🔐 Cek menu dari backend via store (permission-based access)
   const menuStore = useMenuStore();
   
   if (auth.id_role && !menuStore.hasFetched) {
@@ -34,20 +51,24 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
   const allowedMenus = extractUrls(menuStore.menus);
 
-  // Default allowed paths if needed (misal dashboard selalu diizinkan)
-  if (to.path === "/") {
+  // Ambil path tanpa prefix slug untuk dicocokkan dengan menu backend
+  // Contoh: /klinik-sehat/dashboard → /dashboard
+  const pathWithoutSlug = urlSlug 
+    ? to.path.replace(`/${urlSlug}`, '') || '/'
+    : to.path;
+
+  // Dashboard dan Roles diizinkan untuk user yang terotentikasi
+  if (pathWithoutSlug === '/dashboard' || pathWithoutSlug === '/' || pathWithoutSlug === '/roles' || pathWithoutSlug.startsWith('/roles/')) {
     return;
   }
 
-  const isAllowed = allowedMenus.some((path) => {
+  const isAllowed = allowedMenus.some((menuPath) => {
     // 1. Exact match
-    if (to.path === path) return true;
+    if (pathWithoutSlug === menuPath) return true;
     
-    // 2. Cegah parent menu (seperti "/barang") memberikan akses penuh ke seluruh sub-menu (seperti "/barang/list").
-    // Hanya izinkan prefix match jika path-nya sudah cukup spesifik (misal "/barang/edit" untuk mengizinkan "/barang/edit/1").
-    // Kita cek jumlah segmen URL.
-    const segments = path.split("/").filter(Boolean);
-    if (segments.length >= 2 && to.path.startsWith(path + "/")) {
+    // 2. Prefix match untuk path yang cukup spesifik (misal /barang/edit → /barang/edit/1)
+    const segments = menuPath.split("/").filter(Boolean);
+    if (segments.length >= 2 && pathWithoutSlug.startsWith(menuPath + "/")) {
       return true;
     }
 
