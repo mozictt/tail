@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { GalleryService, type Gallery } from "@/services/gallery.service";
 import { AlbumService, type Album } from "@/services/album.service";
@@ -7,7 +7,7 @@ import HeaderSearch from "@/components/header-master.vue";
 import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
-import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye } from "lucide-vue-next";
+import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight } from "lucide-vue-next";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 
 
@@ -108,6 +108,69 @@ const uploadAlbumId = ref<string | undefined>(albumIdParam);
 ========================= */
 const viewMediaItem = ref<Gallery | null>(null);
 const downloadLoadingId = ref<string | null>(null);
+
+const currentIndex = computed(() => {
+  if (!viewMediaItem.value) return -1;
+  return items.value.findIndex(item => item.id === viewMediaItem.value?.id);
+});
+
+const hasNext = computed(() => currentIndex.value >= 0 && currentIndex.value < items.value.length - 1);
+const hasPrev = computed(() => currentIndex.value > 0);
+
+const nextMedia = () => {
+  if (hasNext.value) {
+    viewMediaItem.value = items.value[currentIndex.value + 1];
+  }
+};
+
+const prevMedia = () => {
+  if (hasPrev.value) {
+    viewMediaItem.value = items.value[currentIndex.value - 1];
+  }
+};
+
+/* Keyboard Navigation */
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (!viewMediaItem.value) return;
+  if (e.key === "ArrowRight") {
+    nextMedia();
+  } else if (e.key === "ArrowLeft") {
+    prevMedia();
+  } else if (e.key === "Escape") {
+    viewMediaItem.value = null;
+  }
+};
+
+/* Touch Swipe Navigation for Mobile */
+let touchStartX = 0;
+let touchEndX = 0;
+
+const handleTouchStart = (e: TouchEvent) => {
+  touchStartX = e.changedTouches[0].screenX;
+};
+
+const handleTouchEnd = (e: TouchEvent) => {
+  touchEndX = e.changedTouches[0].screenX;
+  const diff = touchEndX - touchStartX;
+  const minSwipeDistance = 40;
+  if (diff < -minSwipeDistance) {
+    nextMedia();
+  } else if (diff > minSwipeDistance) {
+    prevMedia();
+  }
+};
+
+watch(viewMediaItem, (newItem) => {
+  if (newItem) {
+    window.addEventListener("keydown", handleKeyDown);
+  } else {
+    window.removeEventListener("keydown", handleKeyDown);
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
+});
 
 const handleDownload = async (item: Gallery) => {
   downloadLoadingId.value = item.id!;
@@ -526,16 +589,27 @@ onMounted(() => {
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
       >
-        <div v-if="viewMediaItem" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8" @click.self="viewMediaItem = null">
+        <div 
+          v-if="viewMediaItem" 
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8 select-none" 
+          @click.self="viewMediaItem = null"
+          @touchstart="handleTouchStart"
+          @touchend="handleTouchEnd"
+        >
           
           <!-- Top Bar -->
-          <div class="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-slate-950/80 to-transparent flex items-center justify-between px-6 pointer-events-none z-50">
-             <div class="text-white pointer-events-auto max-w-[60%]">
-                <p class="font-medium truncate">{{ viewMediaItem.originalName }}</p>
-                <p class="text-xs text-white/60">{{ formatSize(viewMediaItem.size) }}</p>
+          <div class="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-slate-950/90 to-transparent flex items-center justify-between px-4 md:px-6 pointer-events-none z-50">
+             <div class="text-white pointer-events-auto max-w-[50%] md:max-w-[60%]">
+                <div class="flex items-center gap-2">
+                  <p class="font-medium truncate text-sm md:text-base">{{ viewMediaItem.originalName }}</p>
+                  <span v-if="currentIndex >= 0" class="text-xs bg-white/20 text-white/90 px-2 py-0.5 rounded-full font-mono flex-shrink-0">
+                    {{ currentIndex + 1 }} / {{ items.length }}
+                  </span>
+                </div>
+                <p class="text-xs text-white/60 hidden sm:block">{{ formatSize(viewMediaItem.size) }}</p>
              </div>
              
-             <div class="flex items-center gap-2 md:gap-3 pointer-events-auto">
+             <div class="flex items-center gap-1.5 md:gap-3 pointer-events-auto">
                <button 
                   class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-error hover:text-white"
                   @click="deleteMediaFromLightbox(viewMediaItem.id!)"
@@ -551,14 +625,33 @@ onMounted(() => {
                   <Download v-if="downloadLoadingId !== viewMediaItem.id" class="w-5 h-5" />
                   <span v-else class="loading loading-spinner loading-xs"></span>
                </button>
-               <button class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error" @click="viewMediaItem = null" title="Tutup">
+               <button class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error" @click="viewMediaItem = null" title="Tutup (Esc)">
                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                </button>
              </div>
           </div>
 
+          <!-- Navigation Buttons: Previous & Next -->
+          <button 
+            v-if="hasPrev"
+            @click="prevMedia"
+            class="fixed left-2 md:left-6 top-1/2 -translate-y-1/2 z-[60] p-2.5 md:p-3.5 rounded-full bg-slate-900/70 hover:bg-slate-800 backdrop-blur-md border border-white/10 text-white shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 group focus:outline-none"
+            title="Sebelumnya (Panah Kiri)"
+          >
+            <ChevronLeft class="w-6 h-6 md:w-8 md:h-8 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+
+          <button 
+            v-if="hasNext"
+            @click="nextMedia"
+            class="fixed right-2 md:right-6 top-1/2 -translate-y-1/2 z-[60] p-2.5 md:p-3.5 rounded-full bg-slate-900/70 hover:bg-slate-800 backdrop-blur-md border border-white/10 text-white shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 group focus:outline-none"
+            title="Berikutnya (Panah Kanan)"
+          >
+            <ChevronRight class="w-6 h-6 md:w-8 md:h-8 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+
           <!-- Media Container -->
-          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent pointer-events-none">
+          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent pointer-events-none px-8 md:px-16">
              <div class="w-full h-full pointer-events-auto flex items-center justify-center drop-shadow-2xl">
                <SecureMedia :filename="viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>

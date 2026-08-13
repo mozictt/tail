@@ -193,7 +193,7 @@ watch(isMobile, (val) => {
     ]"
   >
     <!-- HEADER BRANDING -->
-    <div class="flex items-center justify-between p-5 border-b border-base-content/5">
+    <div class="flex items-center justify-between p-4 md:p-5 border-b border-base-content/5">
       <div v-if="isOpen" class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-md shadow-primary/20">
           <icons.Layers class="w-5 h-5" />
@@ -208,6 +208,10 @@ watch(isMobile, (val) => {
       
       <button class="hidden md:inline-flex text-base-content/40 hover:text-base-content/80 hover:bg-base-200 p-1.5 rounded-lg transition" @click="toggleSidebar">
         <component :is="isOpen ? icons.ChevronLeft : icons.Menu" class="w-4 h-4" />
+      </button>
+
+      <button class="md:hidden text-base-content/50 hover:text-base-content hover:bg-base-200 p-1.5 rounded-lg transition" @click="closeMobileSidebar" title="Tutup Menu">
+        <icons.X class="w-5 h-5" />
       </button>
     </div>
 

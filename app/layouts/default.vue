@@ -21,47 +21,48 @@ const onUpdateActive = (menuItem: any) => {
       
       <!-- HEADER -->
       <header
-        class="bg-base-100/85 backdrop-blur-md border-b border-base-content/10 px-6 py-4 flex items-center justify-between sticky top-0 z-50"
+        class="bg-base-100/85 backdrop-blur-md border-b border-base-content/10 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 z-50"
       >
         <!-- LEFT -->
-        <div class="flex items-center gap-3.5">
+        <div class="flex items-center gap-2.5 md:gap-3.5 min-w-0">
           
-          <!-- ✅ MOBILE BUTTON -->
+          <!-- ✅ MOBILE BUTTON (SEBELAH KIRI) -->
           <button
-            class="md:hidden btn btn-ghost btn-sm text-base-content/70 p-2 rounded-lg"
+            class="md:hidden btn btn-ghost btn-sm text-base-content/70 p-1.5 rounded-lg flex-shrink-0"
             @click="ui.toggleMobileSidebar()"
+            title="Toggle Menu"
           >
-            <icons.Menu class="w-5 h-5" />
+            <icons.Menu class="w-5.5 h-5.5" />
           </button>
 
-          <div class="p-2.5 rounded-xl bg-base-200 border border-base-content/5 text-primary">
+          <div class="p-2 md:p-2.5 rounded-xl bg-base-200 border border-base-content/5 text-primary flex-shrink-0">
             <component
               :is="activeMenu?.icon ? icons[activeMenu.icon] : icons.Menu"
               class="w-5 h-5"
             />
           </div>
 
-          <div>
-            <h1 class="text-base font-bold text-base-content tracking-tight leading-none mb-1">
+          <div class="min-w-0">
+            <h1 class="text-sm md:text-base font-bold text-base-content tracking-tight leading-none mb-1 truncate">
               {{ activeMenu?.name || "Dashboard" }}
             </h1>
-            <p class="text-xs font-medium text-base-content/60">
+            <p class="text-[11px] md:text-xs font-medium text-base-content/60 truncate">
               {{ activeMenu?.description || "Selamat datang di sistem" }}
             </p>
           </div>
         </div>
 
         <!-- RIGHT -->
-        <div class="flex items-center gap-4">
-          <!-- SEARCH -->
-          <div class="relative hidden md:block">
+        <div class="flex items-center gap-2 md:gap-4 flex-shrink-0">
+          <!-- SEARCH (DESKTOP) -->
+          <div class="relative hidden lg:block">
             <icons.Search
               class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"
             />
             <input
               type="text"
               placeholder="Search..."
-              class="pl-9 pr-4 py-2 border border-base-content/15 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-base-200/50 focus:bg-base-100 text-base-content"
+              class="pl-9 pr-4 py-1.5 border border-base-content/15 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition duration-200 bg-base-200/50 focus:bg-base-100 text-base-content"
             />
           </div>
 
@@ -70,7 +71,7 @@ const onUpdateActive = (menuItem: any) => {
 
           <!-- NOTIF -->
           <button class="relative p-2 hover:bg-base-200 border border-base-content/10 rounded-xl transition text-base-content/85">
-            <icons.Bell class="w-5 h-5" />
+            <icons.Bell class="w-4 h-4 md:w-5 md:h-5" />
             <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full ring-2 ring-base-100"></span>
           </button>
 
@@ -81,7 +82,7 @@ const onUpdateActive = (menuItem: any) => {
         </div>
       </header>
 
-      <main class="flex-1 p-6 overflow-y-auto">
+      <main class="flex-1 p-4 md:p-6 overflow-y-auto">
         <slot />
       </main>
     </div>
