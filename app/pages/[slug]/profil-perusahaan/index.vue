@@ -107,7 +107,7 @@
                 :logo-filename="profile.logoFilename"
                 :logo-path="profile.logoPath"
                 :alt="profile.name"
-                img-class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                img-class="max-w-full max-h-full w-auto h-auto object-contain p-2 transition-transform duration-300 group-hover:scale-105"
               />
             </div>
 
@@ -876,7 +876,7 @@
                 :logo-filename="profile.logoFilename"
                 :logo-path="profile.logoPath"
                 :alt="profile.name"
-                img-class="w-full h-full object-contain p-2"
+                img-class="max-w-full max-h-full w-auto h-auto object-contain p-2"
               />
               <icons.Building2 v-else class="w-12 h-12 text-base-content/30" />
             </div>

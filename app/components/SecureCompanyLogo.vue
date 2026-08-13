@@ -10,7 +10,7 @@
       v-else-if="secureLogoUrl"
       :src="secureLogoUrl"
       :alt="alt || 'Logo Perusahaan'"
-      :class="imgClass || 'w-full h-full object-contain p-2'"
+      :class="imgClass || 'max-w-full max-h-full w-auto h-auto object-contain p-2'"
     />
 
     <!-- Fallback / Default Image State -->
@@ -19,7 +19,7 @@
         <img
           src="/default-logo.png"
           :alt="alt || 'Default Logo'"
-          :class="imgClass || 'w-full h-full object-contain p-2'"
+          :class="imgClass || 'max-w-full max-h-full w-auto h-auto object-contain p-2'"
         />
       </slot>
     </div>
@@ -47,7 +47,7 @@ const props = defineProps({
   },
   imgClass: {
     type: String,
-    default: "w-full h-full object-contain p-2",
+    default: "max-w-full max-h-full w-auto h-auto object-contain p-2",
   },
 });
 

@@ -63,20 +63,96 @@ const formErrors = ref({
   url: "",
 });
 
-// Common Lucide icon suggestions
-const iconPresets = [
-  "dashboard",
-  "users",
-  "settings",
-  "list",
-  "box-icon",
-  "Picture",
-  "Folder",
-  "Layers",
-  "Menus",
-  "role",
-  "plus"
-];
+// DYNAMIC FULL LUCIDE ICON LIST (Extracts ALL 1,000+ Lucide icons automatically)
+const allLucideIconNames = computed(() => {
+  return Object.keys(icons).filter((key) => {
+    return (
+      key !== 'createLucideIcon' &&
+      key !== 'default' &&
+      key !== 'icons' &&
+      typeof (icons as any)[key] !== 'undefined'
+    );
+  });
+});
+
+const iconSearchText = ref("");
+const displayIconLimit = ref(72);
+
+const totalMatchingIcons = computed(() => {
+  const query = iconSearchText.value.toLowerCase().trim();
+  if (!query) return allLucideIconNames.value.length;
+
+  const searchAliasMap: Record<string, string[]> = {
+    dashboard: ["layoutdashboard", "grid", "gauge"],
+    user: ["users", "user", "usercheck", "userplus", "shieldcheck"],
+    users: ["users", "user", "group"],
+    pengguna: ["users", "user"],
+    settings: ["settings", "sliders", "cog", "wrench"],
+    pengaturan: ["settings", "sliders", "cog", "wrench"],
+    barang: ["package", "box", "boxes", "shoppingbag", "shoppingcart", "store"],
+    produk: ["package", "box", "boxes", "shoppingbag", "shoppingcart"],
+    foto: ["image", "images", "camera", "picture", "photo", "film"],
+    gallery: ["images", "image", "camera", "picture", "photo"],
+    gambar: ["image", "images", "camera", "picture", "photo"],
+    folder: ["folder", "folderplus", "folderopen"],
+    laporan: ["filetext", "file", "document", "clipboard", "barchart", "barchart3"],
+    perusahaan: ["building", "building2", "store", "factory"],
+    role: ["shieldcheck", "shield", "lock", "key", "usercheck"],
+    hakakses: ["shieldcheck", "shield", "lock", "key"],
+    menu: ["menu", "layers", "list", "layout"],
+  };
+
+  const aliasMatches = searchAliasMap[query] || [];
+
+  return allLucideIconNames.value.filter((name) => {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes(query)) return true;
+    if (aliasMatches.some((alias) => lowerName.includes(alias))) return true;
+    return false;
+  }).length;
+});
+
+const filteredDynamicIconList = computed(() => {
+  const query = iconSearchText.value.toLowerCase().trim();
+  let list = allLucideIconNames.value;
+
+  if (query) {
+    const searchAliasMap: Record<string, string[]> = {
+      dashboard: ["layoutdashboard", "grid", "gauge"],
+      user: ["users", "user", "usercheck", "userplus", "shieldcheck"],
+      users: ["users", "user", "group"],
+      pengguna: ["users", "user"],
+      settings: ["settings", "sliders", "cog", "wrench"],
+      pengaturan: ["settings", "sliders", "cog", "wrench"],
+      barang: ["package", "box", "boxes", "shoppingbag", "shoppingcart", "store"],
+      produk: ["package", "box", "boxes", "shoppingbag", "shoppingcart"],
+      foto: ["image", "images", "camera", "picture", "photo", "film"],
+      gallery: ["images", "image", "camera", "picture", "photo"],
+      gambar: ["image", "images", "camera", "picture", "photo"],
+      folder: ["folder", "folderplus", "folderopen"],
+      laporan: ["filetext", "file", "document", "clipboard", "barchart", "barchart3"],
+      perusahaan: ["building", "building2", "store", "factory"],
+      role: ["shieldcheck", "shield", "lock", "key", "usercheck"],
+      hakakses: ["shieldcheck", "shield", "lock", "key"],
+      menu: ["menu", "layers", "list", "layout"],
+    };
+
+    const aliasMatches = searchAliasMap[query] || [];
+
+    list = allLucideIconNames.value.filter((name) => {
+      const lowerName = name.toLowerCase();
+      if (lowerName.includes(query)) return true;
+      if (aliasMatches.some((alias) => lowerName.includes(alias))) return true;
+      return false;
+    });
+  }
+
+  return list.slice(0, displayIconLimit.value);
+});
+
+const loadMoreIcons = () => {
+  displayIconLimit.value += 72;
+};
 
 // Common Resource Key suggestions
 const resourcePresets = ["Menu", "User", "Role", "Barang", "Gallery", "Album"];
@@ -148,9 +224,58 @@ const isExpanded = (id: number) => {
   return expandedParentIds.value.includes(id);
 };
 
+// Normalizer component helper untuk Lucide icons (Case-insensitive & Aliases)
 const getIconComponent = (iconName?: string | null) => {
-  if (!iconName) return icons.Circle;
-  return (icons as any)[iconName] || icons.Circle;
+  if (!iconName || !iconName.trim()) return icons.Circle;
+
+  const raw = iconName.trim();
+  const cleanName = raw.replace(/[-_]/g, "").toLowerCase();
+
+  // Custom Aliases mapping untuk nama populer/legacy
+  const aliases: Record<string, string> = {
+    dashboard: "LayoutDashboard",
+    layoutdashboard: "LayoutDashboard",
+    users: "Users",
+    user: "User",
+    settings: "Settings",
+    setting: "Settings",
+    picture: "Image",
+    gallery: "Images",
+    image: "Image",
+    photo: "Image",
+    role: "ShieldCheck",
+    roles: "ShieldCheck",
+    menus: "Menu",
+    menu: "Menu",
+    boxicon: "Package",
+    box: "Package",
+    barang: "Package",
+    plus: "Plus",
+    folder: "Folder",
+    layers: "Layers",
+    company: "Building2",
+    perusahaan: "Building2",
+  };
+
+  if (aliases[cleanName] && (icons as any)[aliases[cleanName]]) {
+    return (icons as any)[aliases[cleanName]];
+  }
+
+  // Direct match di objek icons (PascalCase)
+  if ((icons as any)[raw]) {
+    return (icons as any)[raw];
+  }
+
+  // Search case-insensitive match
+  const foundKey = Object.keys(icons).find(
+    (k) => k.toLowerCase() === cleanName || k.replace(/[-_]/g, "").toLowerCase() === cleanName
+  );
+
+  if (foundKey) {
+    return (icons as any)[foundKey];
+  }
+
+  return icons.Circle;
 };
 
 /* =========================
@@ -650,34 +775,84 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- ICON INPUT WITH PRESETS -->
-            <div>
-              <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-2">
-                Icon Name <span class="text-base-content/40 font-normal normal-case">(Lucide Icon)</span>
-              </label>
-              <div class="flex items-center gap-3 mb-2">
-                <div class="w-10 h-10 rounded-xl bg-base-200 border border-base-content/10 flex items-center justify-center text-primary shrink-0">
-                  <component :is="getIconComponent(form.icon)" class="w-5 h-5" />
-                </div>
-                <input
-                  v-model="form.icon"
-                  class="input input-bordered w-full rounded-2xl h-12 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 bg-base-100 font-mono text-sm"
-                  placeholder="Cth: dashboard, list, Picture, settings"
-                />
+            <!-- DYNAMIC FULL LUCIDE ICON SELECTOR & LIVE SEARCH -->
+            <div class="space-y-2.5">
+              <div class="flex items-center justify-between">
+                <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider">
+                  Pilih Icon Navigasi <span class="text-base-content/40 font-normal normal-case">(Bebas pilih dari {{ allLucideIconNames.length }}+ Ikon Lucide)</span>
+                </label>
+                <span class="text-[11px] text-primary font-bold">
+                  {{ totalMatchingIcons }} Ikon Ditemukan
+                </span>
               </div>
-              <!-- Presets -->
-              <div class="flex flex-wrap gap-1.5 mt-2">
-                <span class="text-xs text-base-content/50 font-medium self-center mr-1">Rekomendasi:</span>
-                <button
-                  v-for="iconName in iconPresets"
-                  :key="iconName"
-                  type="button"
-                  @click="form.icon = iconName"
-                  class="btn btn-xs btn-ghost border border-base-content/10 rounded-lg text-xs hover:bg-primary/10 hover:text-primary font-mono"
-                  :class="{ 'bg-primary/15 text-primary border-primary': form.icon === iconName }"
-                >
-                  {{ iconName }}
-                </button>
+              
+              <!-- Input & Live Preview -->
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-sm">
+                  <component :is="getIconComponent(form.icon)" class="w-6 h-6" />
+                </div>
+                <div class="relative w-full">
+                  <input
+                    v-model="form.icon"
+                    class="input input-bordered w-full rounded-2xl h-12 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 bg-base-100 font-mono text-sm"
+                    placeholder="Ketik nama ikon (cth: LayoutDashboard, Users, Package, Settings, Camera)..."
+                  />
+                  <button
+                    v-if="form.icon"
+                    type="button"
+                    @click="form.icon = ''"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-base-content/40 hover:text-error font-bold"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              <!-- Live Search Filter Input -->
+              <div class="relative mt-2">
+                <input
+                  v-model="iconSearchText"
+                  type="text"
+                  class="input input-bordered input-sm w-full pl-8 rounded-xl text-xs bg-base-200/60 focus:bg-base-100 transition"
+                  placeholder="Cari dari seluruh perpustakaan ikon Lucide (cth: user, chart, mail, arrow, check, edit, lock, wifi)..."
+                />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.637 10.637Z" />
+                </svg>
+              </div>
+
+              <!-- Dynamic Interactive Icon Grid -->
+              <div class="p-3 bg-base-200/40 border border-base-content/10 rounded-2xl max-h-52 overflow-y-auto space-y-3">
+                <div v-if="filteredDynamicIconList.length > 0" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                  <button
+                    v-for="iconName in filteredDynamicIconList"
+                    :key="iconName"
+                    type="button"
+                    @click="form.icon = iconName"
+                    class="flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 group"
+                    :class="form.icon === iconName || (form.icon && getIconComponent(form.icon) === getIconComponent(iconName))
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 scale-105' 
+                      : 'bg-base-100 border-base-content/10 hover:bg-primary/10 hover:border-primary/40 text-base-content/80'"
+                    :title="iconName"
+                  >
+                    <component :is="getIconComponent(iconName)" class="w-4 h-4 mb-1" />
+                    <span class="text-[9px] font-mono font-medium truncate w-full text-center">{{ iconName }}</span>
+                  </button>
+                </div>
+                <div v-else class="text-center py-6 text-xs text-base-content/50 italic">
+                  Tidak ada ikon Lucide yang cocok dengan kata kunci "{{ iconSearchText }}". Ketik nama ikon secara manual di atas.
+                </div>
+
+                <!-- Load More Button -->
+                <div v-if="filteredDynamicIconList.length < totalMatchingIcons" class="text-center pt-1">
+                  <button
+                    type="button"
+                    @click="loadMoreIcons"
+                    class="btn btn-xs btn-ghost text-xs text-primary font-bold hover:bg-primary/10 rounded-lg"
+                  >
+                    + Muat Lebih Banyak Ikon (Tersisa {{ totalMatchingIcons - filteredDynamicIconList.length }})
+                  </button>
+                </div>
               </div>
             </div>
 

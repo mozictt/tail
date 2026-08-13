@@ -52,6 +52,57 @@ const checkScreen = () => {
   isMobile.value = window.innerWidth < 768;
 };
 
+// Helper normalizer icon untuk Sidebar (Case-insensitive & Aliases)
+const getMenuIcon = (iconName?: string | null, fallbackIcon: any = icons.Circle) => {
+  if (!iconName || !iconName.trim()) return fallbackIcon;
+
+  const raw = iconName.trim();
+  const cleanName = raw.replace(/[-_]/g, "").toLowerCase();
+
+  const aliases: Record<string, string> = {
+    dashboard: "LayoutDashboard",
+    layoutdashboard: "LayoutDashboard",
+    users: "Users",
+    user: "User",
+    settings: "Settings",
+    setting: "Settings",
+    picture: "Image",
+    gallery: "Images",
+    image: "Image",
+    photo: "Image",
+    role: "ShieldCheck",
+    roles: "ShieldCheck",
+    menus: "Menu",
+    menu: "Menu",
+    boxicon: "Package",
+    box: "Package",
+    barang: "Package",
+    plus: "Plus",
+    folder: "Folder",
+    layers: "Layers",
+    company: "Building2",
+    perusahaan: "Building2",
+  };
+
+  if (aliases[cleanName] && (icons as any)[aliases[cleanName]]) {
+    return (icons as any)[aliases[cleanName]];
+  }
+
+  if ((icons as any)[raw]) {
+    return (icons as any)[raw];
+  }
+
+  const foundKey = Object.keys(icons).find(
+    (k) => k.toLowerCase() === cleanName || k.replace(/[-_]/g, "").toLowerCase() === cleanName
+  );
+
+  if (foundKey) {
+    return (icons as any)[foundKey];
+  }
+
+  return fallbackIcon;
+};
+
 // ===== SIDEBAR CONTROL =====
 const toggleSidebar = () => {
   isOpen.value = !isOpen.value;
@@ -209,7 +260,7 @@ watch(isMobile, (val) => {
             :logo-filename="companyProfileStore.logoFilename"
             :logo-path="companyProfileStore.logoPath"
             :alt="companyProfileStore.appName"
-            img-class="w-full h-full object-contain p-0.5"
+            img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
           />
         </div>
         <span class="font-bold text-base-content text-lg tracking-tight truncate" :title="companyProfileStore.appName">
@@ -222,7 +273,7 @@ watch(isMobile, (val) => {
             :logo-filename="companyProfileStore.logoFilename"
             :logo-path="companyProfileStore.logoPath"
             :alt="companyProfileStore.appName"
-            img-class="w-full h-full object-contain p-0.5"
+            img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
           />
         </div>
       </div>
@@ -251,7 +302,7 @@ watch(isMobile, (val) => {
               : ''
           "
         >
-          <component :is="icons[item.icon as keyof typeof icons] || icons.Circle" class="w-5 h-5" :class="isActive(item.url || item.path) ? 'text-primary' : 'text-base-content/40'" />
+          <component :is="getMenuIcon(item.icon, icons.Circle)" class="w-5 h-5" :class="isActive(item.url || item.path) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen">{{ item.name }}</span>
         </NuxtLink>
 
@@ -266,7 +317,7 @@ watch(isMobile, (val) => {
               : ''
           "
         >
-          <component :is="icons[item.icon as keyof typeof icons] || icons.Folder" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
+          <component :is="getMenuIcon(item.icon, icons.Folder)" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
           <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
 
           <icons.ChevronDown
@@ -332,12 +383,12 @@ watch(isMobile, (val) => {
           class="absolute bottom-16 left-4 right-4 bg-base-100 border border-base-content/10 shadow-premium rounded-xl py-2 z-20"
         >
           <NuxtLink
-            :to="slugPath('/settings/profile')"
+            :to="slugPath('/profil-perusahaan')"
             class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >
-            <icons.User class="w-4 h-4 text-base-content/40" />
-            Profile
+            <icons.Building2 class="w-4 h-4 text-base-content/40" />
+            Profil Perusahaan
           </NuxtLink>
           <NuxtLink
             :to="slugPath('/settings/security')"
