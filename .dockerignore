@@ -1,0 +1,16 @@
+node_modules
+.nuxt
+.output
+.data
+.cache
+.nitro
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+Dockerfile*
+docker-compose*
+README.md
+npm-debug.log*

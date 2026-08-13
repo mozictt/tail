@@ -21,21 +21,12 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    // Private: hanya dipakai di server Nuxt (tidak terekspos ke browser)
-    backendUrl: process.env.API_BASE || "http://localhost:4000",
+    // Private: hanya dipakai di server Nuxt (dinamis di runtime)
+    backendUrl: process.env.API_BASE || process.env.NUXT_BACKEND_URL || "http://host.docker.internal:4000",
     public: {
       // Public: dipakai browser, arahkan ke proxy internal Nuxt
       apiBase: "/api/proxy",
       appName: process.env.NUXT_PUBLIC_APP_NAME,
-    }
-  },
-
-  // Nitro Proxy: teruskan /api/proxy/** ke backend secara server-side
-  nitro: {
-    routeRules: {
-      '/api/proxy/**': {
-        proxy: `${process.env.API_BASE || 'http://localhost:4000'}/**`,
-      }
     }
   },
 
