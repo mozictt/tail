@@ -58,9 +58,9 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     : to.path;
 
   // Dashboard dan Roles diizinkan untuk user yang terotentikasi
-  if (pathWithoutSlug === '/dashboard' || pathWithoutSlug === '/' || pathWithoutSlug === '/roles' || pathWithoutSlug.startsWith('/roles/')) {
-    return;
-  }
+  // if (pathWithoutSlug === '/dashboard' || pathWithoutSlug === '/' || pathWithoutSlug === '/roles' || pathWithoutSlug.startsWith('/roles/')) {
+  //   return;
+  // }
 
   const isAllowed = allowedMenus.some((menuPath) => {
     // 1. Exact match

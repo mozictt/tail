@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useUIStore } from "@/stores/ui";
 import { useMenuStore } from "@/stores/menu";
+import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useHead } from "#imports";
 
@@ -13,6 +14,7 @@ const route = useRoute();
 const auth = useAuthStore();
 const ui = useUIStore();
 const menuStore = useMenuStore();
+const companyProfileStore = useCompanyProfileStore();
 const { slugPath, currentSlug } = useSlugRoute();
 
 const emit = defineEmits(["update-active"]);
@@ -124,6 +126,10 @@ onMounted(async () => {
     await menuStore.fetchMenus();
   }
 
+  if (auth.isLoggedIn) {
+    await companyProfileStore.fetchProfile();
+  }
+
   checkScreen();
   window.addEventListener("resize", checkScreen);
 
@@ -157,11 +163,14 @@ watch(
 // ===== TITLE =====
 const config = useRuntimeConfig();
 
-useHead(() => ({
-  title: activeMenuName.value
-    ? `${activeMenuName.value} - ${config.public.appName}`
-    : config.public.appName,
-}));
+useHead(() => {
+  const baseAppName = companyProfileStore.appName || config.public.appName || "Admin Panel";
+  return {
+    title: activeMenuName.value
+      ? `${activeMenuName.value} - ${baseAppName}`
+      : baseAppName,
+  };
+});
 // ===== SIDEBAR WIDTH =====
 const sidebarWidthClass = computed(() => {
   if (isMobile.value) return 'w-64'; // mobile selalu full
@@ -194,15 +203,27 @@ watch(isMobile, (val) => {
   >
     <!-- HEADER BRANDING -->
     <div class="flex items-center justify-between p-4 md:p-5 border-b border-base-content/5">
-      <div v-if="isOpen" class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-md shadow-primary/20">
-          <icons.Layers class="w-5 h-5" />
+      <div v-if="isOpen" class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shadow-primary/10 shrink-0 overflow-hidden">
+          <SecureCompanyLogo
+            :logo-filename="companyProfileStore.logoFilename"
+            :logo-path="companyProfileStore.logoPath"
+            :alt="companyProfileStore.appName"
+            img-class="w-full h-full object-contain p-0.5"
+          />
         </div>
-        <span class="font-bold text-base-content text-lg tracking-tight">Admin Panel</span>
+        <span class="font-bold text-base-content text-lg tracking-tight truncate" :title="companyProfileStore.appName">
+          {{ companyProfileStore.appName }}
+        </span>
       </div>
       <div v-else class="w-full flex justify-center">
-        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-content shadow-md">
-          <icons.Layers class="w-5 h-5" />
+        <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
+          <SecureCompanyLogo
+            :logo-filename="companyProfileStore.logoFilename"
+            :logo-path="companyProfileStore.logoPath"
+            :alt="companyProfileStore.appName"
+            img-class="w-full h-full object-contain p-0.5"
+          />
         </div>
       </div>
       
