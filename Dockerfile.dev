@@ -1,0 +1,17 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Copy package management files
+COPY package*.json ./
+
+# Install dependencies (termasuk devDependencies untuk mode dev)
+RUN npm install
+
+# Copy seluruh source code
+COPY . .
+
+EXPOSE 3000
+
+# Jalankan Nuxt dalam mode Development (Hot Reloading / HMR)
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -22,7 +22,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     // Private: hanya dipakai di server Nuxt (dinamis di runtime)
-    backendUrl: process.env.API_BASE || process.env.NUXT_BACKEND_URL || "http://host.docker.internal:4000",
+    backendUrl: process.env.NUXT_BACKEND_URL || process.env.API_BASE || "http://host.docker.internal:4000",
     public: {
       // Public: dipakai browser, arahkan ke proxy internal Nuxt
       apiBase: "/api/proxy",

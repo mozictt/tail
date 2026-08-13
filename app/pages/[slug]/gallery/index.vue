@@ -132,12 +132,17 @@ const prevMedia = () => {
 /* Keyboard Navigation */
 const handleKeyDown = (e: KeyboardEvent) => {
   if (!viewMediaItem.value) return;
+  if (e.key === "Escape") {
+    viewMediaItem.value = null;
+    return;
+  }
+  // Jika media yang aktif adalah video, serahkan kontrol panah kiri/kanan ke video player
+  if (viewMediaItem.value.type === 'video') return;
+
   if (e.key === "ArrowRight") {
     nextMedia();
   } else if (e.key === "ArrowLeft") {
     prevMedia();
-  } else if (e.key === "Escape") {
-    viewMediaItem.value = null;
   }
 };
 
@@ -591,7 +596,7 @@ onMounted(() => {
       >
         <div 
           v-if="viewMediaItem" 
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8 select-none" 
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8" 
           @click.self="viewMediaItem = null"
           @touchstart="handleTouchStart"
           @touchend="handleTouchEnd"
@@ -651,8 +656,8 @@ onMounted(() => {
           </button>
 
           <!-- Media Container -->
-          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent pointer-events-none px-8 md:px-16">
-             <div class="w-full h-full pointer-events-auto flex items-center justify-center drop-shadow-2xl">
+          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20">
+             <div class="w-full h-full flex items-center justify-center drop-shadow-2xl">
                <SecureMedia :filename="viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>
           </div>
