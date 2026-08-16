@@ -97,6 +97,56 @@ export const UserService = () => {
     });
   };
 
+  /**
+   * Mengambil data profil user yang sedang login beserta detail pegawai
+   */
+  const getProfile = async () => {
+    return await api('/users/profile', {
+      method: 'GET',
+    });
+  };
+
+  /**
+   * Memperbarui data pribadi profil pegawai
+   */
+  const updateProfile = async (payload: {
+    name?: string;
+    email?: string;
+    phoneNumber?: string;
+    bio?: string;
+    address?: string;
+  }) => {
+    return await api('/users/profile', {
+      method: 'PUT',
+      body: payload,
+    });
+  };
+
+  /**
+   * Mengubah kata sandi akun pengguna sendiri
+   */
+  const changePassword = async (payload: {
+    oldPassword?: string;
+    newPassword?: string;
+  }) => {
+    return await api('/users/profile/change-password', {
+      method: 'PUT',
+      body: payload,
+    });
+  };
+
+  /**
+   * Mengunggah foto profil (avatar) pengguna
+   */
+  const uploadAvatar = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await api('/users/profile/avatar', {
+      method: 'POST',
+      body: formData,
+    });
+  };
+
   return {
     getUsers,
     getAllUsers,
@@ -105,5 +155,9 @@ export const UserService = () => {
     toggleUserStatus,
     deleteUser,
     resetPassword,
+    getProfile,
+    updateProfile,
+    changePassword,
+    uploadAvatar,
   };
 };

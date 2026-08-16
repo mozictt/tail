@@ -4,6 +4,7 @@ import EasyDataTable from "vue3-easy-data-table";
 import "vue3-easy-data-table/dist/style.css";
 import { UserService, type UserItem } from "@/services/user.service";
 import { RoleService, type Role } from "@/services/role.service";
+import { PegawaiService, type PegawaiItem } from "@/services/pegawai.service";
 import Select2 from "@/components/ui/Select2.vue";
 import HeaderSearch from "@/components/header-master.vue";
 import Swal from "sweetalert2";
@@ -26,6 +27,7 @@ definePageMeta({
 const { showToast } = useToast();
 const userService = UserService();
 const roleService = RoleService();
+const pegawaiService = PegawaiService();
 
 /* =========================
    STATE DATA TABLE & SERVER OPTIONS
@@ -148,22 +150,40 @@ const showUserModal = ref(false);
 const isEdit = ref(false);
 const selectedUserId = ref<number | null>(null);
 const submitLoading = ref(false);
+const unassignedPegawai = ref<PegawaiItem[]>([]);
+const unassignedLoading = ref(false);
+
+const pegawaiOptions = computed(() => {
+  if (!unassignedPegawai.value || !Array.isArray(unassignedPegawai.value)) {
+    return [];
+  }
+  return unassignedPegawai.value.map(p => ({
+    id: p.id,
+    name: `${p.name} (NIP: ${p.nip})`
+  }));
+});
 
 const userForm = ref<{
   username: string;
   password: string;
   role_id: number | null;
   is_active: boolean;
+  pegawai_id: number | null;
+  pegawai_name?: string;
+  pegawai_nip?: string;
 }>({
   username: "",
   password: "",
   role_id: null,
   is_active: true,
+  pegawai_id: null,
+  pegawai_name: "",
+  pegawai_nip: "",
 });
 
-const userErrors = ref<{ username?: string; role_id?: string; password?: string }>({});
+const userErrors = ref<{ username?: string; role_id?: string; password?: string; pegawai_id?: string }>({});
 
-const openCreateModal = () => {
+const openCreateModal = async () => {
   isEdit.value = false;
   selectedUserId.value = null;
   userForm.value = {
@@ -171,12 +191,27 @@ const openCreateModal = () => {
     password: "",
     role_id: roleOptions.value.length > 0 ? roleOptions.value[0].id || null : null,
     is_active: true,
+    pegawai_id: null,
+    pegawai_name: "",
+    pegawai_nip: "",
   };
   userErrors.value = {};
+  
+  unassignedLoading.value = true;
+  try {
+    const res = await pegawaiService.getUnassignedPegawai();
+    const data = res && (res as any).data !== undefined ? (res as any).data : res;
+    unassignedPegawai.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("Gagal memuat daftar pegawai:", err);
+  } finally {
+    unassignedLoading.value = false;
+  }
+  
   showUserModal.value = true;
 };
 
-const openEditModal = (user: UserItem) => {
+const openEditModal = (user: any) => {
   isEdit.value = true;
   selectedUserId.value = user.id;
   userForm.value = {
@@ -184,6 +219,9 @@ const openEditModal = (user: UserItem) => {
     password: "",
     role_id: user.role?.id || null,
     is_active: user.is_active,
+    pegawai_id: user.pegawai?.id || null,
+    pegawai_name: user.pegawai?.name || "",
+    pegawai_nip: user.pegawai?.nip || "",
   };
   userErrors.value = {};
   showUserModal.value = true;
@@ -205,6 +243,11 @@ const validateForm = () => {
 
   if (!userForm.value.role_id) {
     userErrors.value.role_id = "Role wajib dipilih";
+    isValid = false;
+  }
+
+  if (!isEdit.value && !userForm.value.pegawai_id) {
+    userErrors.value.pegawai_id = "Pegawai wajib dipilih";
     isValid = false;
   }
 
@@ -241,6 +284,7 @@ const submitUser = async () => {
           password: userForm.value.password,
           id_role: Number(userForm.value.role_id),
           tenantId: currentTenantId,
+          pegawaiId: Number(userForm.value.pegawai_id),
         },
       });
       showToast(`Pengguna baru "${userForm.value.username}" berhasil dibuat`, "success");
@@ -467,16 +511,19 @@ onMounted(() => {
             table-class-name="customize-easy-table"
           >
             <!-- Column Username Customizer -->
-            <template #item-username="{ username, id }">
+            <template #item-username="item">
               <div class="flex items-center gap-3 py-1">
                 <div class="w-9 h-9 rounded-2xl bg-primary/10 text-primary font-black flex items-center justify-center shrink-0 uppercase text-xs border border-primary/20">
-                  {{ username ? username.substring(0, 2) : 'US' }}
+                  {{ item.username ? item.username.substring(0, 2) : 'US' }}
                 </div>
                 <div>
                   <h4 class="font-extrabold text-sm text-base-content tracking-tight">
-                    {{ username }}
+                    {{ item.username }}
                   </h4>
-                  <span class="text-[10px] font-semibold text-base-content/40">ID: #{{ id }}</span>
+                  <span class="text-[11px] font-semibold text-base-content/60 block mt-0.5" v-if="item.pegawai">
+                    {{ item.pegawai.name }} (NIP: {{ item.pegawai.nip }})
+                  </span>
+                  <span class="text-[10px] font-semibold text-base-content/40" v-else>ID: #{{ item.id }}</span>
                 </div>
               </div>
             </template>
@@ -558,25 +605,59 @@ onMounted(() => {
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showUserModal" />
       <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!submitLoading && (showUserModal = false)">
-        <div class="modal-box max-w-md bg-base-100 rounded-3xl border border-base-content/10 p-7 shadow-2xl relative text-base-content overflow-visible">
-          <button 
-            class="absolute top-5 right-5 text-base-content/40 hover:text-error transition" 
-            @click="showUserModal = false"
-            :disabled="submitLoading"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+        <div class="modal-box max-w-md bg-base-100 rounded-3xl border border-base-content/10 p-7 shadow-2xl relative text-base-content flex flex-col max-h-[calc(100vh-4rem)] overflow-hidden">
+          <!-- Header (flex-none) -->
+          <div class="flex-none pr-8">
+            <button 
+              class="absolute top-5 right-5 text-base-content/40 hover:text-error transition" 
+              @click="showUserModal = false"
+              :disabled="submitLoading"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
 
-          <h3 class="font-extrabold text-base-content text-xl tracking-tight mb-6 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-              <Users class="w-5 h-5" />
+            <h3 class="font-extrabold text-base-content text-xl tracking-tight mb-6 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <Users class="w-5 h-5" />
+              </div>
+              {{ isEdit ? "Edit Data Pengguna" : "Tambah Pengguna Baru" }}
+            </h3>
+          </div>
+
+          <!-- Body (flex-1) -->
+          <div class="flex-1 min-h-0 overflow-y-auto pr-1 pb-28 space-y-4">
+            <!-- Pegawai Selection -->
+            <div v-if="!isEdit">
+              <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Pilih Pegawai <span class="text-error">*</span></span>
+                <span v-if="unassignedLoading" class="loading loading-spinner loading-xs text-primary"></span>
+              </label>
+              <Select2
+                v-model="userForm.pegawai_id"
+                :options="pegawaiOptions"
+                label-key="name"
+                value-key="id"
+                placeholder="Pilih Pegawai untuk akun ini..."
+                :clearable="false"
+              />
+              <span v-if="userErrors.pegawai_id" class="text-xs text-error font-semibold mt-1 block">
+                {{ userErrors.pegawai_id }}
+              </span>
             </div>
-            {{ isEdit ? "Edit Data Pengguna" : "Tambah Pengguna Baru" }}
-          </h3>
+            <div v-else>
+              <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-1.5">
+                Pegawai Terkait
+              </label>
+              <input 
+                type="text"
+                readonly
+                :value="userForm.pegawai_name ? `${userForm.pegawai_name} (NIP: ${userForm.pegawai_nip})` : 'Tidak ada pegawai terkait'"
+                class="input input-bordered w-full rounded-2xl h-12 bg-base-200 text-base-content/60 font-semibold text-sm cursor-not-allowed" 
+              />
+            </div>
 
-          <div class="space-y-4">
             <!-- Username Input -->
             <div>
               <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-1.5">
@@ -650,7 +731,8 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="modal-action gap-3 mt-6">
+          <!-- Footer (flex-none) -->
+          <div class="flex-none modal-action gap-3 mt-6">
             <button class="btn btn-ghost hover:bg-base-200 rounded-2xl font-bold px-6" @click="showUserModal = false" :disabled="submitLoading">
               Batal
             </button>

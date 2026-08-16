@@ -54,7 +54,14 @@ export const BarangService = () => {
         params,
       });
 
-      return handleResponse(res).data;
+      const target = handleResponse(res).data;
+      if (target && target.items) {
+        return {
+          array: target.items,
+          totalItems: target.meta?.totalItems ?? target.items.length,
+        };
+      }
+      return target;
     } catch (err) {
       console.error("getBarang error:", err);
       throw err;

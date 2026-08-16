@@ -84,7 +84,16 @@ export const RoleService = () => {
           sortType: params?.sortType || "DESC",
         },
       });
-      return handleResponse(res);
+      const handled = handleResponse(res);
+      const target = handled.data || handled;
+      if (target && target.items) {
+        return {
+          success: true,
+          meta: target.meta,
+          data: target.items,
+        };
+      }
+      return handled;
     } catch (err) {
       console.error("getRoles error:", err);
       throw err;

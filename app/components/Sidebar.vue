@@ -8,6 +8,7 @@ import { useMenuStore } from "@/stores/menu";
 import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useHead } from "#imports";
+import { UserService } from "@/services/user.service";
 
 const router = useRouter();
 const route = useRoute();
@@ -117,6 +118,24 @@ const handleMenuClick = (item: any) => {
   }
 };
 
+// ===== PROFILE DETAILS =====
+const profile = ref<any>(null);
+const userService = UserService();
+
+const profileName = computed(() => {
+  if (profile.value?.pegawai?.name) {
+    return profile.value.pegawai.name;
+  }
+  return auth.username || "User";
+});
+
+const profileRole = computed(() => {
+  if (profile.value?.role?.name) {
+    return profile.value.role.name;
+  }
+  return auth.role || "Guest";
+});
+
 // ===== LIFECYCLE =====
 onMounted(async () => {
   if (!menuStore.hasFetched && auth.id_role) {
@@ -125,6 +144,12 @@ onMounted(async () => {
 
   if (auth.isLoggedIn) {
     await companyProfileStore.fetchProfile();
+    try {
+      const res = await userService.getProfile();
+      profile.value = res?.data || res;
+    } catch (err) {
+      console.error("Gagal memuat profil pengguna:", err);
+    }
   }
 
   checkScreen();
@@ -241,17 +266,19 @@ watch(isMobile, (val) => {
         class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-base-200 transition"
         @click="toggleProfileDropdown"
       >
-        <div class="relative">
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop"
-            class="w-10 h-10 rounded-xl object-cover ring-2 ring-base-200"
+        <div class="relative w-10 h-10">
+          <SecureAvatar
+            :avatar-path="profile?.pegawai?.avatar"
+            :name="profileName"
+            img-class="w-10 h-10 rounded-xl object-cover ring-2 ring-base-200"
+            fallback-class="w-10 h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center ring-2 ring-base-200 uppercase text-xs border border-primary/20 shrink-0"
           />
-          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100"></span>
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100 z-10"></span>
         </div>
 
         <div v-if="isOpen" class="flex flex-col flex-1 min-w-0">
-          <span class="font-semibold text-base-content text-sm truncate">John Doe</span>
-          <span class="text-xs text-base-content/50 truncate font-medium">Administrator</span>
+          <span class="font-semibold text-base-content text-sm truncate">{{ profileName }}</span>
+          <span class="text-xs text-base-content/50 truncate font-medium">{{ profileRole }}</span>
         </div>
 
         <icons.ChevronDown
@@ -268,20 +295,20 @@ watch(isMobile, (val) => {
           class="absolute bottom-16 left-4 right-4 bg-base-100 border border-base-content/10 shadow-premium rounded-xl py-2 z-20"
         >
           <NuxtLink
+            :to="slugPath('/profile')"
+            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
+            @click="closeProfileDropdown"
+          >
+            <icons.User class="w-4 h-4 text-base-content/40" />
+            Profil Saya
+          </NuxtLink>
+          <NuxtLink
             :to="slugPath('/profil-perusahaan')"
             class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
             @click="closeProfileDropdown"
           >
             <icons.Building2 class="w-4 h-4 text-base-content/40" />
             Profil Perusahaan
-          </NuxtLink>
-          <NuxtLink
-            :to="slugPath('/settings/security')"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
-            @click="closeProfileDropdown"
-          >
-            <icons.Settings class="w-4 h-4 text-base-content/40" />
-            Security
           </NuxtLink>
           <div class="border-t border-base-content/5 my-1"></div>
           <button

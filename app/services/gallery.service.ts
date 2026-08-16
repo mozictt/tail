@@ -44,6 +44,18 @@ export const GalleryService = () => {
     try {
       const res: any = await api("/gallery", { query: params, params });
       const handled = handleResponse(res);
+      
+      // Jika respons dari backend berbentuk paginated baru { success, data: { items, meta } }
+      if (handled && handled.data && handled.data.items) {
+        return {
+          success: true,
+          currentPage: handled.data.meta?.currentPage ?? 1,
+          totalItems: handled.data.meta?.totalItems ?? 0,
+          totalPages: handled.data.meta?.totalPages ?? 1,
+          array: handled.data.items ?? [],
+        };
+      }
+
       // Jika respons dari backend berbentuk paginated { success, array, ... }
       if (handled && handled.array) {
         return handled;

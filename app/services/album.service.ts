@@ -37,7 +37,17 @@ export const AlbumService = () => {
     try {
       const res = await api("/albums", { params });
       const handled = handleResponse(res);
-      return handled.data || handled;
+      const target = handled.data || handled;
+      if (target && target.items) {
+        return {
+          success: true,
+          currentPage: target.meta?.currentPage ?? 1,
+          totalItems: target.meta?.totalItems ?? 0,
+          totalPages: target.meta?.totalPages ?? 1,
+          array: target.items ?? [],
+        };
+      }
+      return target;
     } catch (err) {
       console.error("getAlbums error:", err);
       throw err;
