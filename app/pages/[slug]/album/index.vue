@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from "vue";
+import { ref, onMounted, watch } from "vue";
+import EasyDataTable from "vue3-easy-data-table";
+import "vue3-easy-data-table/dist/style.css";
 import { AlbumService, type Album } from "@/services/album.service";
 import HeaderSearch from "@/components/header-master.vue";
 import Swal from "sweetalert2";
-import { Pencil, Trash2, Image as ImageIcon, FolderOpen, Calendar, ArrowRight } from "lucide-vue-next";
+import { Pencil, Trash2, FolderOpen, Calendar, ArrowRight, Images, Plus, RefreshCw } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 
-
+definePageMeta({
+  layout: 'admin'
+});
 
 const { showToast } = useToast();
 const albumService = AlbumService();
@@ -18,8 +22,23 @@ const isEdit = ref(false);
 const selectedId = ref<string | null>(null);
 
 /* =========================
-   STATE
+   STATE & DATA TABLE OPTIONS
 ========================= */
+const headers = [
+  { text: "NAMA ALBUM", value: "name", sortable: true },
+  { text: "DESKRIPSI", value: "description", sortable: false },
+  { text: "TANGGAL KEGIATAN", value: "date", sortable: true },
+  { text: "TANGGAL DIBUAT", value: "createdAt", sortable: true },
+  { text: "AKSI", value: "aksi", sortable: false },
+];
+
+const serverOptions = ref({
+  page: 1,
+  rowsPerPage: 10,
+  sortBy: "createdAt",
+  sortType: "desc",
+});
+
 const items = ref<Album[]>([]);
 const totalItems = ref(0);
 const loading = ref(false);
@@ -35,7 +54,7 @@ const submitLoading = ref(false);
 const form = ref<Partial<Album>>({
   name: "",
   description: "",
-  date: "",
+  date: new Date().toISOString().split('T')[0],
 });
 
 const formErrors = ref({
@@ -64,35 +83,47 @@ const validateForm = () => {
 };
 
 /* =========================
-   FETCH DATA
+   FETCH DATA ALBUMS
 ========================= */
 const fetchAlbums = async () => {
   loading.value = true;
   try {
-    const data = await albumService.getAlbums();
-    items.value = data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    totalItems.value = data.length;
+    const res = await albumService.getAlbums({
+      page: serverOptions.value.page,
+      limit: serverOptions.value.rowsPerPage,
+      search: search.value.trim(),
+      sortBy: serverOptions.value.sortBy || "createdAt",
+      sortType: (serverOptions.value.sortType || "desc").toUpperCase(),
+    });
+
+    items.value = res.array || [];
+    totalItems.value = res.totalItems || 0;
   } catch (err) {
-    console.error(err);
+    console.error("Gagal mengambil data album:", err);
     showToast("Gagal mengambil data album", "error");
   } finally {
     loading.value = false;
   }
 };
 
-const filteredItems = computed(() => {
-  if (!search.value) return items.value;
-  const s = search.value.toLowerCase();
-  return items.value.filter(
-    (a) =>
-      a.name.toLowerCase().includes(s) ||
-      (a.description && a.description.toLowerCase().includes(s))
-  );
-});
-
-const doSearch = () => {
-  // handled by computed
+const updateOptions = (options: any) => {
+  serverOptions.value = options;
+  fetchAlbums();
 };
+
+const handleSearch = () => {
+  serverOptions.value.page = 1;
+  fetchAlbums();
+};
+
+let searchTimeout: any = null;
+watch(search, () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    serverOptions.value.page = 1;
+    fetchAlbums();
+  }, 400);
+});
 
 /* =========================
    RESET FORM
@@ -206,85 +237,144 @@ const openCreateModal = () => {
 const viewGallery = (id: string) => {
   router.push({ path: slugPath('/gallery'), query: { albumId: id } });
 };
+
+const formatDate = (dateStr?: string | Date) => {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
 </script>
 
 <template>
   <div class="space-y-6">
+    <!-- HEADER -->
     <HeaderSearch 
       title="Manajemen Album" 
       subtitle="Kelola dan organisasikan galeri Anda ke dalam album" 
-      :total="filteredItems.length" 
+      :total="totalItems" 
       v-model:search="search"
-      @search="doSearch" 
+      @search="handleSearch" 
       @add="openCreateModal" 
     />
 
-    <div class="bg-base-100/50 rounded-3xl min-h-[500px]">
-      
-      <!-- SKELETON LOADER -->
-      <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div v-for="i in 8" :key="i" class="h-56 bg-base-200 rounded-3xl animate-pulse"></div>
-      </div>
-
-      <!-- EMPTY STATE -->
-      <div v-else-if="filteredItems.length === 0" class="py-24 text-center bg-base-100 rounded-3xl border border-base-content/5 shadow-sm">
-        <div class="w-24 h-24 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
-          <FolderOpen class="w-12 h-12" />
+    <!-- CONTROL & SUMMARY BAR -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-base-100 p-4 rounded-3xl border border-base-content/10 shadow-xs">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+          <FolderOpen class="w-5 h-5" />
         </div>
-        <h3 class="font-bold text-base-content text-xl mb-2">Belum Ada Album</h3>
-        <p class="text-base-content/60 text-sm max-w-md mx-auto mb-6">Kelompokkan foto dan video Anda dengan membuat album baru. Sangat mudah dan praktis!</p>
-        <button class="btn btn-primary rounded-xl px-8 shadow-lg shadow-primary/25" @click="openCreateModal">
-          Buat Album Pertama
-        </button>
+        <div>
+          <h3 class="font-extrabold text-sm text-base-content">Daftar Data Album</h3>
+          <p class="text-xs text-base-content/60">Tabel data album galeri perusahaan</p>
+        </div>
       </div>
 
-      <!-- ALBUM GRID -->
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div 
-          v-for="item in filteredItems" 
-          :key="item.id"
-          class="group relative bg-base-100 rounded-3xl border border-base-content/5 p-5 shadow-sm hover:shadow-2xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1.5 flex flex-col h-[240px] overflow-hidden"
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+        <span class="text-xs font-bold text-base-content/60">
+          Total: <span class="text-base-content font-extrabold">{{ totalItems }} Album</span>
+        </span>
+
+        <button 
+          class="btn btn-ghost btn-sm btn-square rounded-xl hover:bg-base-200"
+          @click="fetchAlbums"
+          :disabled="loading"
+          title="Refresh Data"
         >
-           <!-- Decorative Background Blur -->
-           <div class="absolute -right-10 -top-10 w-32 h-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors pointer-events-none"></div>
-
-           <!-- Actions Top Right -->
-           <div class="absolute top-4 right-4 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-              <button class="w-9 h-9 rounded-full bg-white/80 backdrop-blur border border-base-content/10 shadow-sm text-base-content/70 hover:bg-info hover:text-white hover:border-transparent flex items-center justify-center transition-colors" @click.stop="editAlbum(item)" title="Edit">
-                 <Pencil class="w-4 h-4" />
-              </button>
-              <button class="w-9 h-9 rounded-full bg-white/80 backdrop-blur border border-base-content/10 shadow-sm text-base-content/70 hover:bg-error hover:text-white hover:border-transparent flex items-center justify-center transition-colors" @click.stop="deleteAlbum(item.id!)" title="Hapus">
-                 <Trash2 class="w-4 h-4" />
-              </button>
-           </div>
-
-           <!-- Icon -->
-           <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 text-primary flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
-              <FolderOpen class="w-7 h-7" />
-           </div>
-
-           <!-- Info -->
-           <div class="flex-1 z-10">
-              <h3 class="font-bold text-base-content text-[17px] mb-1.5 truncate group-hover:text-primary transition-colors" :title="item.name">{{ item.name }}</h3>
-              
-              <div class="flex items-center gap-1.5 text-xs text-base-content/50 font-medium mb-3">
-                 <Calendar class="w-3.5 h-3.5" />
-                 <span>{{ item.date ? new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }}</span>
-              </div>
-              
-              <p class="text-sm text-base-content/60 line-clamp-2 leading-relaxed" :title="item.description">{{ item.description || 'Tidak ada deskripsi.' }}</p>
-           </div>
-
-           <!-- Footer Button -->
-           <button class="mt-4 w-full py-3 rounded-xl bg-base-200/50 hover:bg-primary hover:text-white text-base-content/80 font-bold text-sm transition-all duration-300 flex items-center justify-between px-5 group/btn z-10" @click="viewGallery(item.id!)">
-              <span>Buka Galeri</span>
-              <ArrowRight class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-           </button>
-        </div>
+          <RefreshCw class="w-4 h-4 text-base-content/70" :class="{'animate-spin': loading}" />
+        </button>
       </div>
     </div>
 
-    <!-- MODAL -->
+    <!-- DATA TABLE SECTION -->
+    <div class="bg-base-100 border border-base-content/10 rounded-3xl shadow-sm p-6 overflow-hidden">
+      <div class="overflow-x-auto">
+        <ClientOnly>
+          <EasyDataTable 
+            :headers="headers" 
+            :items="items" 
+            :loading="loading" 
+            :server-items-length="totalItems"
+            v-model:server-options="serverOptions" 
+            @update:server-options="updateOptions" 
+            buttons-pagination
+            :rows-items="[10, 20, 50]"
+            table-class-name="customize-easy-table"
+          >
+            <!-- Column Nama Album Customizer -->
+            <template #item-name="{ name, id }">
+              <div class="flex items-center gap-3 py-1.5">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 text-primary font-black flex items-center justify-center shrink-0 shadow-xs">
+                  <FolderOpen class="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 class="font-extrabold text-sm text-base-content tracking-tight hover:text-primary transition-colors cursor-pointer" @click="viewGallery(id)">
+                    {{ name }}
+                  </h4>
+                  <span class="text-[10px] font-mono font-semibold text-base-content/40">ID: {{ id ? id.substring(0, 8) + '...' : '-' }}</span>
+                </div>
+              </div>
+            </template>
+
+            <!-- Column Deskripsi Customizer -->
+            <template #item-description="{ description }">
+              <span class="text-xs text-base-content/70 block max-w-xs truncate" :title="description || 'Tidak ada deskripsi'">
+                {{ description || '-' }}
+              </span>
+            </template>
+
+            <!-- Column Tanggal Kegiatan Customizer -->
+            <template #item-date="{ date }">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-base-content/80">
+                <Calendar class="w-3.5 h-3.5 text-primary/70" />
+                <span>{{ formatDate(date) }}</span>
+              </div>
+            </template>
+
+            <!-- Column Tanggal Dibuat Customizer -->
+            <template #item-createdAt="{ createdAt }">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-base-content/60">
+                <span>{{ formatDate(createdAt) }}</span>
+              </div>
+            </template>
+
+            <!-- Column Action Customizer -->
+            <template #item-aksi="item">
+              <div class="flex items-center justify-end gap-2">
+                <button 
+                  class="btn btn-sm btn-outline btn-primary rounded-xl font-bold px-3 hover:shadow-md transition-all flex items-center gap-1.5 text-xs"
+                  @click="viewGallery(item.id)"
+                  title="Buka Galeri Album"
+                >
+                  <Images class="w-3.5 h-3.5" />
+                  <span>Galeri</span>
+                </button>
+
+                <button 
+                  class="w-8 h-8 rounded-xl bg-base-200/60 border border-base-content/10 text-base-content/70 hover:bg-info hover:text-white hover:border-transparent transition flex items-center justify-center shadow-xs" 
+                  @click="editAlbum(item)" 
+                  title="Edit Album"
+                >
+                  <Pencil class="w-3.5 h-3.5" />
+                </button>
+
+                <button 
+                  class="w-8 h-8 rounded-xl bg-base-200/60 border border-base-content/10 text-base-content/70 hover:bg-error hover:text-white hover:border-transparent transition flex items-center justify-center shadow-xs" 
+                  @click="deleteAlbum(item.id)" 
+                  title="Hapus Album"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </template>
+          </EasyDataTable>
+        </ClientOnly>
+      </div>
+    </div>
+
+    <!-- MODAL CREATE / EDIT ALBUM -->
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showModal" />
       <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!submitLoading && (showModal = false)">
@@ -341,3 +431,28 @@ const viewGallery = (id: string) => {
     </Teleport>
   </div>
 </template>
+
+<style>
+.customize-easy-table {
+  --easy-table-border: 1px solid rgba(156, 163, 175, 0.15);
+  --easy-table-row-border: 1px solid rgba(156, 163, 175, 0.1);
+
+  --easy-table-header-font-size: 11px;
+  --easy-table-header-height: 48px;
+  --easy-table-header-font-color: rgba(156, 163, 175, 0.9);
+  --easy-table-header-background-color: transparent;
+
+  --easy-table-body-row-height: 64px;
+  --easy-table-body-row-font-size: 13px;
+  --easy-table-body-row-background-color: transparent;
+  --easy-table-body-row-hover-background-color: rgba(156, 163, 175, 0.05);
+
+  --easy-table-footer-background-color: transparent;
+  --easy-table-footer-font-color: rgba(156, 163, 175, 0.8);
+  --easy-table-footer-font-size: 12px;
+  --easy-table-footer-padding: 12px 16px;
+  --easy-table-footer-height: 52px;
+}
+</style>
+
+

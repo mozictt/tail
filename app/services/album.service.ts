@@ -9,6 +9,22 @@ export interface Album {
   updatedAt?: string;
 }
 
+export interface AlbumParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortType?: string;
+}
+
+export interface PaginatedAlbumsResponse {
+  success: boolean;
+  currentPage: number;
+  totalItems: number;
+  totalPages: number;
+  array: Album[];
+}
+
 export const AlbumService = () => {
   const api = useApi();
 
@@ -17,10 +33,11 @@ export const AlbumService = () => {
     return res;
   };
 
-  const getAlbums = async (): Promise<Album[]> => {
+  const getAlbums = async (params?: AlbumParams): Promise<PaginatedAlbumsResponse> => {
     try {
-      const res = await api("/albums");
-      return handleResponse(res).data;
+      const res = await api("/albums", { params });
+      const handled = handleResponse(res);
+      return handled.data || handled;
     } catch (err) {
       console.error("getAlbums error:", err);
       throw err;
@@ -30,7 +47,8 @@ export const AlbumService = () => {
   const getAlbumById = async (id: string): Promise<Album> => {
     try {
       const res = await api(`/albums/${id}`);
-      return handleResponse(res).data;
+      const handled = handleResponse(res);
+      return handled.data || handled;
     } catch (err) {
       console.error("getAlbumById error:", err);
       throw err;
@@ -83,3 +101,4 @@ export const AlbumService = () => {
     deleteAlbum,
   };
 };
+

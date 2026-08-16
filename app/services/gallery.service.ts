@@ -13,6 +13,24 @@ export interface Gallery {
   updatedAt?: string;
 }
 
+export interface GalleryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  albumId?: string;
+  type?: "photo" | "video";
+  sortBy?: string;
+  sortType?: string;
+}
+
+export interface PaginatedGalleriesResponse {
+  success: boolean;
+  currentPage: number;
+  totalItems: number;
+  totalPages: number;
+  array: Gallery[];
+}
+
 export const GalleryService = () => {
   const api = useApi();
   const config = useRuntimeConfig();
@@ -22,10 +40,26 @@ export const GalleryService = () => {
     return res;
   };
 
-  const getGalleries = async (): Promise<Gallery[]> => {
+  const getGalleries = async (params?: GalleryParams): Promise<PaginatedGalleriesResponse> => {
     try {
-      const res = await api("/gallery");
-      return handleResponse(res).data;
+      const res: any = await api("/gallery", { query: params, params });
+      const handled = handleResponse(res);
+      // Jika respons dari backend berbentuk paginated { success, array, ... }
+      if (handled && handled.array) {
+        return handled;
+      }
+      if (handled && handled.data && handled.data.array) {
+        return handled.data;
+      }
+      // Fallback jika respons langsung berupa array
+      const dataArr = handled.data || (Array.isArray(handled) ? handled : []);
+      return {
+        success: true,
+        currentPage: 1,
+        totalItems: dataArr.length,
+        totalPages: 1,
+        array: dataArr,
+      };
     } catch (err) {
       console.error("getGalleries error:", err);
       throw err;
@@ -88,14 +122,50 @@ export const GalleryService = () => {
       throw err;
     }
   };
+
+  const deleteBulk = async (ids: string[]) => {
+    try {
+      const res = await api("/gallery/bulk", {
+        method: "DELETE",
+        body: { ids },
+      });
+      return handleResponse(res);
+    } catch (err) {
+      console.error("deleteBulk error:", err);
+      throw err;
+    }
+  };
+
+  const downloadBulk = async (ids: string[], zipName: string = "galeri-terpilih.zip") => {
+    try {
+      const res = await api("/gallery/download-bulk", {
+        method: "POST",
+        body: { ids },
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(res as Blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", zipName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("downloadBulk error:", err);
+      throw err;
+    }
+  };
   
   const getMediaUrl = (fileName: string) => {
-    return `${config.public.apiBase}/gallery/media/${fileName}`;
+    const cleanPath = fileName?.replace(/^\/+/, '') || '';
+    return `${config.public.apiBase}/gallery/media/${cleanPath}`;
   };
 
   const downloadMedia = async (fileName: string, originalName: string) => {
     try {
-      const res = await api(`/gallery/media/${fileName}`, {
+      const cleanPath = fileName?.replace(/^\/+/, '') || '';
+      const res = await api(`/gallery/media/${cleanPath}`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(res as Blob);
@@ -118,6 +188,8 @@ export const GalleryService = () => {
     uploadBulk,
     updateGallery,
     deleteGallery,
+    deleteBulk,
+    downloadBulk,
     getMediaUrl,
     downloadMedia
   };

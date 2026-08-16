@@ -30,40 +30,48 @@ const loading = ref(false);
 const search = ref("");
 const selectedAlbumId = ref<string | undefined>(albumIdParam);
 
+// State Paginasi Server-side & Infinite Scroll
+const galleriesBatch = ref<Gallery[]>([]);
+const currentPage = ref(1);
+const limit = ref(24);
+const totalServerItems = ref(0);
+const totalPages = ref(1);
+const loadingMore = ref(false);
+const hasMore = ref(true);
+const sentinelRef = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
+
+// State Pilihan Massal (Bulk Actions)
+const isSelectionMode = ref(false);
+const selectedItems = ref<string[]>([]);
+const bulkActionLoading = ref(false);
+
 /* =========================
    COMPUTED VIEWS
 ========================= */
 const items = computed(() => {
-  let filtered = allGalleries.value;
-  
   if (selectedAlbumId.value) {
-    const isUncategorized = selectedAlbumId.value === 'uncategorized';
-    filtered = filtered.filter(g => isUncategorized ? !g.albumId : g.albumId === selectedAlbumId.value);
+    return galleriesBatch.value;
   }
-  
-  if (search.value && selectedAlbumId.value) {
-    // Search media by name if inside album
-    const s = search.value.toLowerCase();
-    filtered = filtered.filter(g => g.originalName.toLowerCase().includes(s));
-  }
-  
-  return filtered;
+  return allGalleries.value;
 });
 
-const totalItems = computed(() => selectedAlbumId.value ? items.value.length : albumCards.value.length);
+const totalItems = computed(() => selectedAlbumId.value ? totalServerItems.value : albumCards.value.length);
 
 const albumCards = computed(() => {
   const cards: any[] = [];
   const galleriesByAlbum = new Map<string, Gallery[]>();
   
-  allGalleries.value.forEach(g => {
+  const galleriesList = Array.isArray(allGalleries.value) ? allGalleries.value : [];
+  galleriesList.forEach(g => {
     const key = g.albumId || 'uncategorized';
     if (!galleriesByAlbum.has(key)) galleriesByAlbum.set(key, []);
     galleriesByAlbum.get(key)!.push(g);
   });
 
   // Album aseli
-  albumList.value.forEach(album => {
+  const list = Array.isArray(albumList.value) ? albumList.value : [];
+  list.forEach(album => {
     if (search.value && !selectedAlbumId.value && !album.name.toLowerCase().includes(search.value.toLowerCase())) {
       return;
     }
@@ -72,7 +80,7 @@ const albumCards = computed(() => {
       name: album.name,
       description: album.description || 'Tidak ada deskripsi',
       media: galleriesByAlbum.get(album.id!) || [],
-      count: (galleriesByAlbum.get(album.id!) || []).length
+      count: (album as any).mediaCount ?? (galleriesByAlbum.get(album.id!) || []).length
     });
   });
 
@@ -120,6 +128,9 @@ const hasPrev = computed(() => currentIndex.value > 0);
 const nextMedia = () => {
   if (hasNext.value) {
     viewMediaItem.value = items.value[currentIndex.value + 1];
+    if (selectedAlbumId.value && hasMore.value && currentIndex.value >= items.value.length - 3 && !loadingMore.value) {
+      fetchGalleriesBatch(false);
+    }
   }
 };
 
@@ -136,7 +147,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
     viewMediaItem.value = null;
     return;
   }
-  // Jika media yang aktif adalah video, serahkan kontrol panah kiri/kanan ke video player
   if (viewMediaItem.value.type === 'video') return;
 
   if (e.key === "ArrowRight") {
@@ -175,6 +185,7 @@ watch(viewMediaItem, (newItem) => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  if (observer) observer.disconnect();
 });
 
 const handleDownload = async (item: Gallery) => {
@@ -190,25 +201,79 @@ const handleDownload = async (item: Gallery) => {
 };
 
 /* =========================
-   METHODS
+   METHODS & FETCHING
 ========================= */
 const fetchAlbums = async () => {
   try {
-    albumList.value = await albumService.getAlbums();
+    const res = await albumService.getAlbums({ page: 1, limit: 100 });
+    albumList.value = res.array || [];
   } catch (err) {
     console.error("Gagal mengambil album", err);
+    albumList.value = [];
   }
 };
 
-const fetchGalleries = async () => {
-  loading.value = true;
+const fetchGalleriesBatch = async (isReset = false) => {
+  if (loadingMore.value) return;
+
+  if (isReset) {
+    currentPage.value = 1;
+    galleriesBatch.value = [];
+    hasMore.value = true;
+  }
+
+  if (!hasMore.value && !isReset) return;
+
+  if (isReset) {
+    loading.value = true;
+  } else {
+    loadingMore.value = true;
+  }
+
   try {
-    const data = await galleryService.getGalleries();
-    data.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    allGalleries.value = data;
+    const res = await galleryService.getGalleries({
+      page: currentPage.value,
+      limit: limit.value,
+      albumId: selectedAlbumId.value,
+      search: search.value.trim(),
+      sortBy: "createdAt",
+      sortType: "DESC",
+    });
+
+    const newItems = res.array || [];
+    totalServerItems.value = res.totalItems || 0;
+    totalPages.value = res.totalPages || 1;
+
+    if (isReset) {
+      galleriesBatch.value = newItems;
+    } else {
+      galleriesBatch.value = [...galleriesBatch.value, ...newItems];
+    }
+
+    if (currentPage.value >= totalPages.value || newItems.length === 0) {
+      hasMore.value = false;
+    } else {
+      currentPage.value++;
+    }
   } catch (err) {
     console.error(err);
     showToast("Gagal mengambil data galeri", "error");
+  } finally {
+    loading.value = false;
+    loadingMore.value = false;
+  }
+};
+
+const fetchGalleriesOverview = async () => {
+  loading.value = true;
+  try {
+    const res = await galleryService.getGalleries({ page: 1, limit: 100 });
+    const arr = Array.isArray(res?.array) ? res.array : (Array.isArray(res) ? res : []);
+    allGalleries.value = arr;
+  } catch (err) {
+    console.error(err);
+    allGalleries.value = [];
+    showToast("Gagal mengambil data ringkasan galeri", "error");
   } finally {
     loading.value = false;
   }
@@ -218,15 +283,40 @@ const selectAlbum = (id?: string) => {
   selectedAlbumId.value = id;
   const query = id ? { albumId: id } : {};
   router.replace({ query });
-  search.value = ""; // clear search on navigation
+  search.value = "";
+  if (id) {
+    fetchGalleriesBatch(true);
+  } else {
+    fetchGalleriesOverview();
+  }
 };
 
 watch(() => route.query.albumId, (newId) => {
-  selectedAlbumId.value = newId as string | undefined;
+  const id = newId as string | undefined;
+  if (id !== selectedAlbumId.value) {
+    selectedAlbumId.value = id;
+    if (id) {
+      fetchGalleriesBatch(true);
+    } else {
+      fetchGalleriesOverview();
+    }
+  }
+});
+
+let searchTimeout: any = null;
+watch(search, () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    if (selectedAlbumId.value) {
+      fetchGalleriesBatch(true);
+    }
+  }, 400);
 });
 
 const doSearch = () => {
-  // Handled by computed
+  if (selectedAlbumId.value) {
+    fetchGalleriesBatch(true);
+  }
 };
 
 /* =========================
@@ -257,6 +347,14 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+const refreshGalleries = () => {
+  if (selectedAlbumId.value) {
+    fetchGalleriesBatch(true);
+  } else {
+    fetchGalleriesOverview();
+  }
+};
+
 const submitUpload = async () => {
   if (selectedFiles.value.length === 0) {
     showToast("Pilih minimal satu file", "error");
@@ -268,7 +366,7 @@ const submitUpload = async () => {
     showToast(`Berhasil mengunggah ${selectedFiles.value.length} file`, "success");
     showUploadModal.value = false;
     selectedFiles.value = [];
-    fetchGalleries(); // Refresh all media
+    refreshGalleries();
   } catch (err) {
     console.error(err);
     showToast("Gagal mengunggah file. Pastikan ukuran file sesuai dan tipe file valid.", "error");
@@ -301,7 +399,7 @@ const deleteMedia = async (id: string) => {
   try {
     await galleryService.deleteGallery(id);
     showToast("Media berhasil dihapus", "success");
-    fetchGalleries();
+    refreshGalleries();
   } catch (err) {
     console.error(err);
     showToast("Gagal menghapus media", "error");
@@ -315,9 +413,99 @@ const deleteMediaFromLightbox = async (id: string) => {
   }, 300); // wait for lightbox transition
 };
 
+/* =========================
+   BULK ACTIONS (Pilihan Massal)
+========================= */
+const toggleSelectionMode = () => {
+  isSelectionMode.value = !isSelectionMode.value;
+  selectedItems.value = [];
+};
+
+const toggleSelectItem = (id: string) => {
+  const index = selectedItems.value.indexOf(id);
+  if (index >= 0) {
+    selectedItems.value.splice(index, 1);
+  } else {
+    selectedItems.value.push(id);
+  }
+};
+
+const isAllSelected = computed(() => {
+  const itemIds = items.value.map(item => item.id).filter((id): id is string => !!id);
+  if (itemIds.length === 0) return false;
+  return itemIds.every(id => selectedItems.value.includes(id));
+});
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedItems.value = [];
+  } else {
+    selectedItems.value = items.value.map(item => item.id).filter((id): id is string => !!id);
+  }
+};
+
+const handleDeleteBulk = async () => {
+  if (selectedItems.value.length === 0) return;
+  
+  const count = selectedItems.value.length;
+  const result = await Swal.fire({
+    title: `Hapus ${count} Media Terpilih?`,
+    text: `Sebanyak ${count} media terpilih beserta berkas fisiknya akan dihapus permanen.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Hapus Semua",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#ef4444",
+    cancelButtonColor: "#94a3b8",
+    reverseButtons: true,
+    customClass: {
+      popup: "rounded-2xl border border-slate-100",
+    },
+  });
+
+  if (!result.isConfirmed) return;
+
+  bulkActionLoading.value = true;
+  try {
+    await galleryService.deleteBulk(selectedItems.value);
+    showToast(`Berhasil menghapus ${count} media`, "success");
+    selectedItems.value = [];
+    isSelectionMode.value = false;
+    refreshGalleries();
+  } catch (err) {
+    console.error(err);
+    showToast("Gagal menghapus media terpilih", "error");
+  } finally {
+    bulkActionLoading.value = false;
+  }
+};
+
+const handleDownloadBulk = async () => {
+  if (selectedItems.value.length === 0) return;
+
+  const count = selectedItems.value.length;
+  bulkActionLoading.value = true;
+  showToast(`Mempersiapkan unduhan ${count} file...`, "info");
+  
+  try {
+    const albumNameClean = currentAlbumTitle.value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const zipName = `galeri-${albumNameClean || "media"}-${Date.now()}.zip`;
+    await galleryService.downloadBulk(selectedItems.value, zipName);
+    showToast("Berkas ZIP berhasil diunduh", "success");
+    selectedItems.value = [];
+    isSelectionMode.value = false;
+  } catch (err) {
+    console.error(err);
+    showToast("Gagal mengunduh berkas massal", "error");
+  } finally {
+    bulkActionLoading.value = false;
+  }
+};
+
 const currentAlbumTitle = computed(() => {
   if (selectedAlbumId.value === 'uncategorized') return 'Tanpa Album (Uncategorized)';
-  const found = albumList.value.find(a => a.id === selectedAlbumId.value);
+  const list = Array.isArray(albumList.value) ? albumList.value : [];
+  const found = list.find(a => a.id === selectedAlbumId.value);
   return found ? found.name : 'Galeri Media';
 });
 
@@ -330,9 +518,35 @@ const getStackStyle = (index: number) => {
   return styles[index] || { display: 'none' };
 };
 
+const initObserver = () => {
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && hasMore.value && !loadingMore.value && selectedAlbumId.value) {
+        fetchGalleriesBatch(false);
+      }
+    },
+    { rootMargin: "300px", threshold: 0.05 }
+  );
+
+  if (sentinelRef.value) {
+    observer.observe(sentinelRef.value);
+  }
+};
+
+watch(sentinelRef, (newEl) => {
+  if (newEl && selectedAlbumId.value) {
+    initObserver();
+  }
+});
+
 onMounted(() => {
   fetchAlbums();
-  fetchGalleries();
+  if (selectedAlbumId.value) {
+    fetchGalleriesBatch(true);
+  } else {
+    fetchGalleriesOverview();
+  }
 });
 </script>
 
@@ -440,6 +654,25 @@ onMounted(() => {
 
       <!-- VIEW: MEDIA GRID -->
       <template v-else>
+        <!-- Selection Controls & Info Bar -->
+        <div v-if="items.length > 0" class="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-base-content/5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-base-content">
+              Daftar Media ({{ totalItems }} Item)
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button 
+              @click="toggleSelectionMode" 
+              class="btn btn-sm rounded-xl transition animate-fade-in"
+              :class="isSelectionMode ? 'btn-active btn-neutral' : 'btn-outline btn-ghost'"
+            >
+              <LayoutGrid class="w-4 h-4 mr-1.5" />
+              <span>{{ isSelectionMode ? 'Batal Pilih' : 'Pilih Massal' }}</span>
+            </button>
+          </div>
+        </div>
+
         <div v-if="items.length === 0" class="py-16 text-center">
           <div class="w-20 h-20 bg-base-200 rounded-full flex items-center justify-center mx-auto mb-4 text-base-content/30">
             <ImageIcon class="w-10 h-10" />
@@ -451,22 +684,39 @@ onMounted(() => {
           </button>
         </div>
 
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">
           <div 
             v-for="item in items" 
             :key="item.id" 
-            class="group relative aspect-square rounded-xl overflow-hidden bg-base-200 border border-base-content/5 shadow-sm hover:shadow-md transition-all duration-300"
+            class="group relative aspect-square rounded-xl overflow-hidden bg-base-200 border transition-all duration-300"
+            :class="[
+              isSelectionMode && selectedItems.includes(item.id!) ? 'ring-4 ring-primary border-primary' : 'border-base-content/5',
+              isSelectionMode ? 'cursor-pointer select-none hover:scale-[0.98]' : ''
+            ]"
           >
+            <!-- Checkbox Overlay for Selection Mode -->
+            <div 
+              v-if="isSelectionMode" 
+              class="absolute top-2 right-2 z-20"
+              @click.stop="toggleSelectItem(item.id!)"
+            >
+              <input 
+                type="checkbox" 
+                :checked="selectedItems.includes(item.id!)" 
+                class="checkbox checkbox-primary checkbox-sm bg-base-100/90 border-slate-300 shadow-sm pointer-events-none"
+              />
+            </div>
+
             <!-- Media Preview (Secure Fetch) -->
             <SecureMedia :filename="item.fileName" :type="item.type" />
             
             <!-- Gradient Overlay (Always visible on mobile, hover on desktop) -->
             <div 
               class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 z-10 cursor-pointer"
-              @click="viewMediaItem = item"
+              @click="isSelectionMode ? toggleSelectItem(item.id!) : (viewMediaItem = item)"
             >
               
-              <div class="flex justify-between items-end">
+              <div v-if="!isSelectionMode" class="flex justify-between items-end">
                 <div class="overflow-hidden">
                   <p class="text-white text-xs font-medium truncate" :title="item.originalName">{{ item.originalName }}</p>
                   <div class="flex items-center gap-1.5 mt-1 text-white/70 text-[10px]">
@@ -494,6 +744,10 @@ onMounted(() => {
                   </button>
                 </div>
               </div>
+              <div v-else class="flex justify-between items-center text-white">
+                <span class="text-xs truncate font-medium max-w-[70%]">{{ item.originalName }}</span>
+                <span class="text-[10px] bg-primary text-white font-bold px-2 py-0.5 rounded-md" v-if="selectedItems.includes(item.id!)">Terpilih</span>
+              </div>
             </div>
             
             <!-- Badge Video -->
@@ -501,6 +755,25 @@ onMounted(() => {
               <Film class="w-4 h-4" />
             </div>
           </div>
+        </div>
+
+        <!-- Sentinel Infinite Scroll & Fallback Button -->
+        <div v-if="selectedAlbumId" ref="sentinelRef" class="py-6 text-center space-y-3">
+          <div v-if="loadingMore" class="flex items-center justify-center gap-2 text-primary font-semibold text-xs">
+            <span class="loading loading-spinner loading-md"></span>
+            <span>Memuat media berikutnya...</span>
+          </div>
+          <template v-else-if="hasMore">
+            <button 
+              @click="fetchGalleriesBatch(false)" 
+              class="btn btn-outline btn-primary btn-sm rounded-xl px-6 hover:shadow-md transition"
+            >
+              Muat Lebih Banyak Media (Tersisa {{ totalServerItems - galleriesBatch.length }})
+            </button>
+          </template>
+          <p v-else-if="!hasMore && galleriesBatch.length > 0" class="text-xs text-base-content/40 font-semibold">
+            Semua {{ totalServerItems }} media telah ditampilkan.
+          </p>
         </div>
       </template>
     </div>
@@ -660,6 +933,66 @@ onMounted(() => {
              <div class="w-full h-full flex items-center justify-center drop-shadow-2xl">
                <SecureMedia :filename="viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Sticky Floating Action Bar for Bulk Selection -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="translate-y-20 opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-20 opacity-0"
+      >
+        <div 
+          v-if="isSelectionMode && selectedAlbumId" 
+          class="fixed bottom-6 inset-x-4 md:left-auto md:right-6 md:w-[480px] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl z-[80] text-white flex flex-col gap-3"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                :checked="isAllSelected" 
+                @change="toggleSelectAll"
+                class="checkbox checkbox-primary checkbox-sm border-white/30 bg-slate-850"
+                id="select-all-bulk"
+              />
+              <label for="select-all-bulk" class="text-sm font-semibold cursor-pointer select-none">
+                Pilih Semua ({{ items.length }} Media)
+              </label>
+            </div>
+            <span class="text-xs bg-primary/20 text-primary border border-primary/30 px-2.5 py-1 rounded-full font-bold">
+              {{ selectedItems.length }} Terpilih
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 mt-1">
+            <button 
+              @click="handleDownloadBulk" 
+              class="btn btn-primary btn-sm rounded-xl font-bold flex items-center justify-center gap-2"
+              :disabled="selectedItems.length === 0 || bulkActionLoading"
+            >
+              <span v-if="bulkActionLoading" class="loading loading-spinner loading-xs"></span>
+              <Download v-else class="w-4 h-4" />
+              <span>Unduh Terpilih</span>
+            </button>
+            <button 
+              @click="handleDeleteBulk" 
+              class="btn btn-error btn-sm rounded-xl font-bold flex items-center justify-center gap-2"
+              :disabled="selectedItems.length === 0 || bulkActionLoading"
+            >
+              <span v-if="bulkActionLoading" class="loading loading-spinner loading-xs"></span>
+              <Trash2 v-else class="w-4 h-4" />
+              <span>Hapus Terpilih</span>
+            </button>
+          </div>
+          
+          <div class="text-[10px] text-white/50 text-center">
+            Pilih foto/video lalu pilih tindakan massal di atas.
           </div>
         </div>
       </Transition>

@@ -82,10 +82,14 @@ const loadSecureLogo = async () => {
 
   try {
     const token = authStore.token;
-    const filename = props.logoFilename || props.logoPath?.split("/").pop();
+    let filename = props.logoFilename;
+    if (!filename && props.logoPath) {
+      filename = props.logoPath.replace(/^\/?company-profile\/logo\//, "");
+    }
     if (!filename) throw new Error("Nama file logo tidak valid");
 
-    const url = `${config.public.apiBase}/company-profile/logo/${filename}`;
+    const cleanFilename = filename.replace(/^\/+/, "");
+    const url = `${config.public.apiBase}/company-profile/logo/${cleanFilename}`;
 
     const response = await $fetch(url, {
       headers: {
