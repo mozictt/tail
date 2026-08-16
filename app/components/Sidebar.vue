@@ -24,7 +24,6 @@ const isOpen = ref(true); // desktop
 const isMobile = ref(false);
 
 const menu = computed(() => menuStore.menus);
-const openSubmenu = ref<string | null>(null);
 const activeMenuName = ref("Menu");
 
 // 👉 FIX: pakai store langsung
@@ -52,56 +51,7 @@ const checkScreen = () => {
   isMobile.value = window.innerWidth < 768;
 };
 
-// Helper normalizer icon untuk Sidebar (Case-insensitive & Aliases)
-const getMenuIcon = (iconName?: string | null, fallbackIcon: any = icons.Circle) => {
-  if (!iconName || !iconName.trim()) return fallbackIcon;
 
-  const raw = iconName.trim();
-  const cleanName = raw.replace(/[-_]/g, "").toLowerCase();
-
-  const aliases: Record<string, string> = {
-    dashboard: "LayoutDashboard",
-    layoutdashboard: "LayoutDashboard",
-    users: "Users",
-    user: "User",
-    settings: "Settings",
-    setting: "Settings",
-    picture: "Image",
-    gallery: "Images",
-    image: "Image",
-    photo: "Image",
-    role: "ShieldCheck",
-    roles: "ShieldCheck",
-    menus: "Menu",
-    menu: "Menu",
-    boxicon: "Package",
-    box: "Package",
-    barang: "Package",
-    plus: "Plus",
-    folder: "Folder",
-    layers: "Layers",
-    company: "Building2",
-    perusahaan: "Building2",
-  };
-
-  if (aliases[cleanName] && (icons as any)[aliases[cleanName]]) {
-    return (icons as any)[aliases[cleanName]];
-  }
-
-  if ((icons as any)[raw]) {
-    return (icons as any)[raw];
-  }
-
-  const foundKey = Object.keys(icons).find(
-    (k) => k.toLowerCase() === cleanName || k.replace(/[-_]/g, "").toLowerCase() === cleanName
-  );
-
-  if (foundKey) {
-    return (icons as any)[foundKey];
-  }
-
-  return fallbackIcon;
-};
 
 // ===== SIDEBAR CONTROL =====
 const toggleSidebar = () => {
@@ -155,14 +105,10 @@ const updateActiveMenu = () => {
   }
 };
 
-const toggleSubmenu = (name: string) => {
-  openSubmenu.value = openSubmenu.value === name ? null : name;
-};
-
 const handleMenuClick = (item: any) => {
-  if (item.children && item.children.length > 0) {
-     isOpen.value = true;
-    toggleSubmenu(item.name);
+  const hasChildren = item.children && item.children.length > 0;
+  if (hasChildren) {
+    isOpen.value = true;
   } else {
     // 👉 AUTO CLOSE MOBILE SIDEBAR
     if (isMobile.value) {
@@ -183,13 +129,6 @@ onMounted(async () => {
 
   checkScreen();
   window.addEventListener("resize", checkScreen);
-
-  menu.value.forEach((item: any) => {
-    if (item.children?.some((c: any) => isActive(c.url || c.path))) {
-      openSubmenu.value = item.name;
-    }
-  });
-
   updateActiveMenu();
 });
 
@@ -198,9 +137,6 @@ onUnmounted(() => {
 });
 
 // ===== WATCH =====
-watch(isOpen, (val) => {
-  if (!val) openSubmenu.value = null;
-});
 
 watch(
   () => route.path,
@@ -289,65 +225,14 @@ watch(isMobile, (val) => {
 
     <!-- MENU LIST -->
     <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0">
-      <div v-for="(item, idx) in menu" :key="idx">
-        <!-- SINGLE MENU -->
-        <NuxtLink
-          v-if="!item.children || item.children.length === 0"
-          :to="slugPath(item.url || item.path)"
-          @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
-          :class="
-            isActive(item.url || item.path)
-              ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary shadow-sm'
-              : ''
-          "
-        >
-          <component :is="getMenuIcon(item.icon, icons.Circle)" class="w-5 h-5" :class="isActive(item.url || item.path) ? 'text-primary' : 'text-base-content/40'" />
-          <span v-if="isOpen">{{ item.name }}</span>
-        </NuxtLink>
-
-        <!-- PARENT MENU (WITH SUBMENU) -->
-        <div
-          v-else
-          @click="handleMenuClick(item)"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
-          :class="
-            isParentActive(item.children)
-              ? 'bg-base-200/50 text-base-content'
-              : ''
-          "
-        >
-          <component :is="getMenuIcon(item.icon, icons.Folder)" class="w-5 h-5" :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'" />
-          <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
-
-          <icons.ChevronDown
-            v-if="isOpen"
-            :class="{ 'rotate-180 text-primary': openSubmenu === item.name }"
-            class="w-4 h-4 transition-transform text-base-content/40"
-          />
-        </div>
-
-        <!-- SUBMENU SECTION -->
-        <div
-          v-if="item.children && item.children.length > 0 && openSubmenu === item.name && isOpen"
-          class="pl-9 mt-1 space-y-1 relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-0.5 before:bg-base-200"
-        >
-          <NuxtLink
-            v-for="(child, i) in item.children"
-            :key="i"
-            :to="slugPath(child.url || child.path)"
-            @click="handleMenuClick(child)"
-            class="block py-2 text-sm rounded-lg px-3 transition-all font-medium text-base-content/60 hover:text-base-content hover:bg-base-200"
-            :class="
-              isActive(child.url || child.path)
-                ? 'text-primary bg-primary/5 hover:text-primary hover:bg-primary/10'
-                : ''
-            "
-          >
-            {{ child.name }}
-          </NuxtLink>
-        </div>
-      </div>
+      <SidebarItem
+        v-for="(item, idx) in menu"
+        :key="idx"
+        :item="item"
+        :depth="0"
+        :isOpenSidebar="isOpen"
+        @menu-click="handleMenuClick"
+      />
     </nav>
 
     <!-- FOOTER PROFILE -->

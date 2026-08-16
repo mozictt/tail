@@ -1,0 +1,4 @@
+Laporan Bulanan Keuangan dan Operasional Unit Kerja D'LINZI.
+Tanggal: 16 Agustus 2026
+Status: Draft Final
+Keterangan: Dokumen uji coba untuk validasi modul manajemen dokumen.

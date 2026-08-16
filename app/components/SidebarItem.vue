@@ -1,185 +1,183 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import * as icons from "lucide-vue-next";
 import { useRoute } from "vue-router";
+import { useSlugRoute } from "@/composables/useSlugRoute";
 
-const emit = defineEmits(["update-active"]);
+const props = defineProps<{
+  item: any;
+  depth: number;
+  isOpenSidebar: boolean;
+}>();
 
-const isOpen = ref(true);
-const menu = ref<any[]>([]);
-const openSubmenu = ref<string | null>(null);
+const emit = defineEmits(["menu-click"]);
+
 const route = useRoute();
+const { slugPath, currentSlug } = useSlugRoute();
 
-// ===== Fungsi utilitas =====
-const isActive = (path: string) => {
-  return route.path === path || route.path.startsWith(path + "/");
-};
+const isExpanded = ref(false);
+const hasChildren = computed(() => props.item.children && props.item.children.length > 0);
 
-const isParentActive = (children: any[]) => {
-  return children.some((c) => isActive(c.path));
-};
+// Helper normalizer icon untuk Sidebar (Case-insensitive & Aliases)
+const getMenuIcon = (iconName?: string | null, fallbackIcon: any = icons.Circle) => {
+  if (!iconName || !iconName.trim()) return fallbackIcon;
 
-// Cari nama menu/submenu aktif dan kirim ke layout
-const updateActiveMenuName = () => {
-  const findMenu = (items: any[]): string | null => {
-    for (const item of items) {
-      if (item.path && isActive(item.path)) return item.name;
-      if (item.children) {
-        const child = findMenu(item.children);
-        if (child) return child;
-      }
-    }
-    return null;
+  const raw = iconName.trim();
+  const cleanName = raw.replace(/[-_]/g, "").toLowerCase();
+
+  const aliases: Record<string, string> = {
+    dashboard: "LayoutDashboard",
+    layoutdashboard: "LayoutDashboard",
+    users: "Users",
+    user: "User",
+    settings: "Settings",
+    setting: "Settings",
+    picture: "Image",
+    gallery: "Images",
+    image: "Image",
+    photo: "Image",
+    role: "ShieldCheck",
+    roles: "ShieldCheck",
+    menus: "Menu",
+    menu: "Menu",
+    boxicon: "Package",
+    box: "Package",
+    barang: "Package",
+    plus: "Plus",
+    folder: "Folder",
+    layers: "Layers",
+    company: "Building2",
+    perusahaan: "Building2",
+    document: "FileText",
+    documents: "FileText",
+    dokumen: "FileText",
+    file: "FileText",
+    track: "Route",
+    roda: "Bike",
+    motor: "Bike",
   };
 
-  emit("update-active", findMenu(menu.value) || "Menu");
+  if (aliases[cleanName] && (icons as any)[aliases[cleanName]]) {
+    return (icons as any)[aliases[cleanName]];
+  }
+
+  if ((icons as any)[raw]) {
+    return (icons as any)[raw];
+  }
+
+  const foundKey = Object.keys(icons).find(
+    (k) => k.toLowerCase() === cleanName || k.replace(/[-_]/g, "").toLowerCase() === cleanName
+  );
+
+  if (foundKey) {
+    return (icons as any)[foundKey];
+  }
+
+  return fallbackIcon;
 };
 
-// ===== Lifecycle =====
-onMounted(async () => {
-  menu.value = await $fetch("/api/menu");
+const isActive = (path: string) => {
+  if (!path) return false;
+  const currentPath = route.path.replace(`/${currentSlug.value}`, '') || '/';
+  return currentPath === path || currentPath.startsWith(path + "/");
+};
 
-  // Auto buka submenu kalau path aktif ada di dalamnya
-  menu.value.forEach((item) => {
-    if (item.children?.some((c) => isActive(c.path))) {
-      openSubmenu.value = item.name;
-    }
-  });
+const isParentActive = (children: any[]): boolean =>
+  children && children.some((c) => isActive(c.url || c.path) || (c.children && isParentActive(c.children)));
 
-  updateActiveMenuName(); // ✅ sekarang fungsi ini sudah didefinisikan
-});
-
-// Tutup semua submenu kalau sidebar di-collapse
-watch(isOpen, (newVal) => {
-  if (!newVal) {
-    openSubmenu.value = null;
+const handleItemClick = () => {
+  if (hasChildren.value) {
+    isExpanded.value = !isExpanded.value;
   }
-});
+  emit("menu-click", props.item);
+};
 
-// Update setiap kali route berubah
+// Auto expand when parent is active
 watch(
-  () => route.path,
+  () => props.item,
   () => {
-    updateActiveMenuName();
+    if (hasChildren.value && isParentActive(props.item.children)) {
+      isExpanded.value = true;
+    }
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
 
-// ===== Actions =====
-const toggleSidebar = () => {
-  isOpen.value = !isOpen.value;
-};
-
-const toggleSubmenu = (name: string) => {
-  openSubmenu.value = openSubmenu.value === name ? null : name;
-};
+// Close when sidebar is collapsed
+watch(
+  () => props.isOpenSidebar,
+  (val) => {
+    if (!val) {
+      isExpanded.value = false;
+    } else if (hasChildren.value && isParentActive(props.item.children)) {
+      isExpanded.value = true;
+    }
+  }
+);
 </script>
 
 <template>
-  <aside
-    :class="[
-      'bg-base-200 h-screen p-4 transition-all duration-300 shadow-md flex flex-col overflow-y-auto',
-      isOpen ? 'w-64' : 'w-20'
-    ]"
-  >
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <span v-if="isOpen" class="text-lg font-bold text-primary">
-        Admin Panel
-      </span>
-      <button class="btn btn-ghost btn-sm" @click="toggleSidebar">
-        <icons.Menu class="w-5 h-5" />
-      </button>
-    </div>
+  <div class="w-full">
+    <!-- SINGLE MENU (NO CHILDREN) -->
+    <NuxtLink
+      v-if="!hasChildren"
+      :to="slugPath(item.url || item.path)"
+      @click="handleItemClick"
+      class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
+      :class="[
+        isActive(item.url || item.path) ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary shadow-sm font-semibold' : '',
+      ]"
+      :style="{ paddingLeft: isOpenSidebar ? `${depth * 12 + 12}px` : '12px' }"
+    >
+      <component
+        :is="getMenuIcon(item.icon, icons.Circle)"
+        class="w-5 h-5 shrink-0"
+        :class="isActive(item.url || item.path) ? 'text-primary' : 'text-base-content/40'"
+      />
+      <span v-if="isOpenSidebar" class="truncate">{{ item.name }}</span>
+    </NuxtLink>
 
-    <!-- Menu -->
-    <nav class="flex flex-col gap-1">
-      <div v-for="(item, idx) in menu" :key="idx">
-        <!-- Menu tanpa submenu -->
-        <NuxtLink
-          v-if="!item.children"
-          :to="item.path"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-300 transition-colors"
-          :class="isActive(item.path) ? 'bg-primary text-white' : ''"
-        >
-          <component :is="icons[item.icon]" class="w-5 h-5" />
-          <span v-if="isOpen">{{ item.name }}</span>
-        </NuxtLink>
-
-        <!-- Menu dengan submenu -->
-        <div
-          v-else
-          class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-300 cursor-pointer transition-colors"
-          @click="toggleSubmenu(item.name)"
-          :class="isParentActive(item.children) ? 'bg-primary text-white' : ''"
-        >
-          <component :is="icons[item.icon]" class="w-5 h-5" />
-          <span v-if="isOpen" class="flex-1">{{ item.name }}</span>
-          <icons.ChevronDown
-            v-if="isOpen"
-            class="w-4 h-4 transition-transform"
-            :class="{ 'rotate-180': openSubmenu === item.name }"
-          />
-        </div>
-
-        <!-- Submenu -->
-        <Transition name="submenu">
-          <div
-            v-if="item.children && openSubmenu === item.name && isOpen"
-            class="flex flex-col gap-1 mt-1 pl-10 overflow-hidden"
-          >
-            <NuxtLink
-              v-for="(child, cidx) in item.children"
-              :key="cidx"
-              :to="child.path"
-              class="px-3 py-1 rounded-md hover:bg-base-300 text-sm transition-colors"
-              :class="isActive(child.path) ? 'bg-primary text-white' : ''"
-            >
-              {{ child.name }}
-            </NuxtLink>
-          </div>
-        </Transition>
-      </div>
-    </nav>
-
-    <!-- Profil -->
-    <div class="mt-auto pt-4 border-t border-base-300">
-      <div class="flex items-center gap-3 p-2 hover:bg-base-300 rounded-lg cursor-pointer">
-        <img
-          src="https://i.pravatar.cc/100?img=3"
-          alt="Avatar"
-          class="w-10 h-10 rounded-full object-cover"
+    <!-- PARENT MENU (WITH CHILDREN) -->
+    <div v-else class="w-full">
+      <div
+        @click="handleItemClick"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 font-medium text-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
+        :class="[
+          isParentActive(item.children) ? 'bg-base-200/50 text-base-content font-semibold' : '',
+        ]"
+        :style="{ paddingLeft: isOpenSidebar ? `${depth * 12 + 12}px` : '12px' }"
+      >
+        <component
+          :is="getMenuIcon(item.icon, icons.Folder)"
+          class="w-5 h-5 shrink-0"
+          :class="isParentActive(item.children) ? 'text-primary' : 'text-base-content/40'"
         />
-        <div v-if="isOpen" class="flex flex-col">
-          <span class="font-semibold">John Doe</span>
-          <span class="text-xs opacity-70">Administrator</span>
-        </div>
-      </div>
-      <button
-        v-if="isOpen"
-        class="btn btn-sm btn-error w-full mt-2"
-      >
-        Logout
-      </button>
-      <button
-        v-else
-        class="btn btn-sm btn-error w-full mt-2 flex justify-center"
-      >
-        <icons.LogOut class="w-4 h-4" />
-      </button>
-    </div>
-  </aside>
-</template>
+        <span v-if="isOpenSidebar" class="flex-1 truncate">{{ item.name }}</span>
 
-<style scoped>
-.submenu-enter-active,
-.submenu-leave-active {
-  transition: all 0.3s ease;
-  max-height: 500px;
-}
-.submenu-enter-from,
-.submenu-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-</style>
+        <icons.ChevronDown
+          v-if="isOpenSidebar"
+          :class="{ 'rotate-180 text-primary': isExpanded }"
+          class="w-4 h-4 transition-transform text-base-content/40 shrink-0"
+        />
+      </div>
+
+      <!-- CHILD SUBMENU LIST (RECURSIVE CALL) -->
+      <div
+        v-if="isOpenSidebar && isExpanded"
+        class="mt-1 space-y-1 relative"
+        :class="[
+          depth === 0 ? 'pl-4 border-l border-base-content/10 ml-5' : 'pl-2'
+        ]"
+      >
+        <SidebarItem
+          v-for="(child, i) in item.children"
+          :key="i"
+          :item="child"
+          :depth="depth + 1"
+          :isOpenSidebar="isOpenSidebar"
+          @menu-click="(clickedItem) => emit('menu-click', clickedItem)"
+        />
+      </div>
+    </div>
+  </div>
+</template>
