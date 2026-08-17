@@ -64,17 +64,30 @@ export const WhatsappService = () => {
   };
 
   /**
-   * Mengirim pesan teks WhatsApp
+   * Mengirim pesan teks dan/atau media WhatsApp
    */
   const sendMessage = async (
     deviceId: string,
     to: string,
-    text: string
+    text: string,
+    file?: File | null
   ): Promise<WhatsappSendResponse> => {
     try {
+      let body: any;
+      if (file) {
+        const formData = new FormData();
+        formData.append("deviceId", deviceId);
+        formData.append("to", to);
+        formData.append("text", text || "");
+        formData.append("file", file);
+        body = formData;
+      } else {
+        body = { deviceId, to, text };
+      }
+
       const res: any = await api("/whatsapp/send", {
         method: "POST",
-        body: { deviceId, to, text },
+        body,
       });
       return res.data || res;
     } catch (err: any) {
@@ -105,12 +118,24 @@ export const WhatsappService = () => {
     deviceId: string,
     recipients: string[],
     text: string,
-    delay = 3000
+    file?: File | null
   ): Promise<{ success: boolean; message: string; totalRecipients: number }> => {
     try {
+      let body: any;
+      if (file) {
+        const formData = new FormData();
+        formData.append("deviceId", deviceId);
+        recipients.forEach((r) => formData.append("recipients", r));
+        formData.append("text", text || "");
+        formData.append("file", file);
+        body = formData;
+      } else {
+        body = { deviceId, recipients, text };
+      }
+
       const res: any = await api("/whatsapp/broadcast", {
         method: "POST",
-        body: { deviceId, recipients, text, delay },
+        body,
       });
       return res.data || res;
     } catch (err: any) {

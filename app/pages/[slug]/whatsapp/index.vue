@@ -239,24 +239,52 @@
                   />
                 </div>
                 <div class="sm:col-span-2">
-                  <label class="block text-[11px] font-bold text-base-content/60 mb-1">Isi Pesan Tes</label>
+                  <label class="block text-[11px] font-bold text-base-content/60 mb-1">Isi Pesan Teks (Opsional jika melampirkan file)</label>
                   <input
                     v-model="testForm.text"
                     type="text"
-                    placeholder="Ketik pesan tes..."
+                    placeholder="Ketik pesan / caption media..."
                     class="input input-bordered w-full rounded-xl text-xs focus:border-emerald-500"
                   />
                 </div>
               </div>
 
+              <!-- FILE ATTACHMENT SECTION SINGLE -->
+              <div>
+                <label class="block text-[11px] font-bold text-base-content/60 mb-1">
+                  Lampiran Media (Opsional: Foto, Video, atau Dokumen PDF)
+                </label>
+                <div class="flex items-center gap-3">
+                  <input
+                    type="file"
+                    ref="singleFileInput"
+                    @change="handleSingleFileChange"
+                    accept="image/*,video/*,application/pdf"
+                    class="file-input file-input-bordered file-input-xs file-input-emerald w-full max-w-xs text-xs rounded-xl"
+                  />
+                  <button
+                    v-if="testForm.file"
+                    @click="clearSingleFile"
+                    type="button"
+                    class="btn btn-ghost btn-xs text-error gap-1 hover:bg-error/10"
+                  >
+                    <icons.X class="w-3.5 h-3.5" />
+                    <span>Hapus File</span>
+                  </button>
+                </div>
+                <p v-if="testForm.file" class="text-[10px] text-emerald-600 font-semibold mt-1">
+                  File terpilih: {{ testForm.file.name }} ({{ (testForm.file.size / 1024 / 1024).toFixed(2) }} MB)
+                </p>
+              </div>
+
               <div class="flex justify-end">
                 <button
                   @click="sendTestMessage"
-                  :disabled="!testForm.to || !testForm.text || sendingMessage"
+                  :disabled="!testForm.to || (!testForm.text && !testForm.file) || sendingMessage"
                   class="btn btn-emerald text-white text-xs px-6 rounded-xl shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20"
                 >
                   <span v-if="sendingMessage" class="loading loading-spinner loading-xs"></span>
-                  <span v-else>Kirim Pesan Tes</span>
+                  <span v-else>Kirim Pesan {{ testForm.file ? 'Media' : '' }}</span>
                 </button>
               </div>
             </div>
@@ -276,13 +304,41 @@
               </div>
 
               <div>
-                <label class="block text-[11px] font-bold text-base-content/60 mb-1">Isi Pesan Broadcast</label>
+                <label class="block text-[11px] font-bold text-base-content/60 mb-1">Isi Pesan Broadcast (Opsional jika melampirkan file)</label>
                 <textarea
                   v-model="broadcastForm.text"
                   rows="3"
-                  placeholder="Ketik isi pesan broadcast..."
+                  placeholder="Ketik isi pesan broadcast / caption media..."
                   class="textarea textarea-bordered w-full rounded-xl text-xs focus:border-emerald-500 p-3 leading-normal"
                 ></textarea>
+              </div>
+
+              <!-- FILE ATTACHMENT SECTION BROADCAST -->
+              <div>
+                <label class="block text-[11px] font-bold text-base-content/60 mb-1">
+                  Lampiran Media Broadcast (Opsional: Foto, Video, atau Dokumen PDF)
+                </label>
+                <div class="flex items-center gap-3">
+                  <input
+                    type="file"
+                    ref="broadcastFileInput"
+                    @change="handleBroadcastFileChange"
+                    accept="image/*,video/*,application/pdf"
+                    class="file-input file-input-bordered file-input-xs file-input-emerald w-full max-w-xs text-xs rounded-xl"
+                  />
+                  <button
+                    v-if="broadcastForm.file"
+                    @click="clearBroadcastFile"
+                    type="button"
+                    class="btn btn-ghost btn-xs text-error gap-1 hover:bg-error/10"
+                  >
+                    <icons.X class="w-3.5 h-3.5" />
+                    <span>Hapus File</span>
+                  </button>
+                </div>
+                <p v-if="broadcastForm.file" class="text-[10px] text-emerald-600 font-semibold mt-1">
+                  File terpilih: {{ broadcastForm.file.name }} ({{ (broadcastForm.file.size / 1024 / 1024).toFixed(2) }} MB)
+                </p>
               </div>
 
               <div class="alert bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 border border-emerald-500/10 rounded-2xl p-4 text-xs flex items-start gap-2.5 leading-relaxed">
@@ -296,11 +352,11 @@
               <div class="flex justify-end">
                 <button
                   @click="sendBroadcastMessage"
-                  :disabled="!broadcastForm.recipientsRaw || !broadcastForm.text || sendingBroadcast"
+                  :disabled="!broadcastForm.recipientsRaw || (!broadcastForm.text && !broadcastForm.file) || sendingBroadcast"
                   class="btn btn-emerald text-white text-xs px-6 rounded-xl shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20"
                 >
                   <span v-if="sendingBroadcast" class="loading loading-spinner loading-xs"></span>
-                  <span v-else>Mulai Kirim Broadcast</span>
+                  <span v-else>Mulai Kirim Broadcast {{ broadcastForm.file ? 'Media' : '' }}</span>
                 </button>
               </div>
             </div>
@@ -453,16 +509,45 @@ const sendingMessage = ref(false);
 const sendingBroadcast = ref(false);
 const activeTab = ref("single");
 
+const singleFileInput = ref<HTMLInputElement | null>(null);
+const broadcastFileInput = ref<HTMLInputElement | null>(null);
+
 const testForm = reactive({
   to: "",
   text: "Halo! Ini adalah pesan uji coba dari sistem Whatsapp Gateway D'Inzi Corp.",
+  file: null as File | null,
 });
 
 const broadcastForm = reactive({
   recipientsRaw: "",
   text: "",
   delay: 3,
+  file: null as File | null,
 });
+
+const handleSingleFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    testForm.file = target.files[0];
+  }
+};
+
+const clearSingleFile = () => {
+  testForm.file = null;
+  if (singleFileInput.value) singleFileInput.value.value = "";
+};
+
+const handleBroadcastFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    broadcastForm.file = target.files[0];
+  }
+};
+
+const clearBroadcastFile = () => {
+  broadcastForm.file = null;
+  if (broadcastFileInput.value) broadcastFileInput.value.value = "";
+};
 
 // Polling interval reference
 let qrInterval: any = null;
@@ -569,23 +654,24 @@ const fetchQrCode = async () => {
 };
 
 const sendTestMessage = async () => {
-  if (!testForm.to || !testForm.text) return;
+  if (!testForm.to || (!testForm.text && !testForm.file)) return;
   sendingMessage.value = true;
   try {
-    await waService.sendMessage(deviceId.value, testForm.to, testForm.text);
+    await waService.sendMessage(deviceId.value, testForm.to, testForm.text, testForm.file);
     Swal.fire({
       icon: "success",
       title: "Pesan Terkirim",
-      text: `Pesan berhasil dikirimkan ke ${testForm.to} melalui device ${deviceId.value}.`,
+      text: `Pesan ${testForm.file ? 'media' : 'teks'} berhasil dikirimkan ke ${testForm.to} melalui device ${deviceId.value}.`,
       confirmButtonColor: "#10b981",
     });
     testForm.to = "";
+    clearSingleFile();
     fetchLogs(); // Refresh log pesan secara instan setelah kirim sukses
   } catch (err: any) {
     Swal.fire({
       icon: "error",
       title: "Gagal Kirim",
-      text: err?.data?.message || "Gagal mengirimkan pesan tes WhatsApp.",
+      text: err?.data?.message || "Gagal mengirimkan pesan WhatsApp.",
     });
   } finally {
     sendingMessage.value = false;
@@ -593,7 +679,7 @@ const sendTestMessage = async () => {
 };
 
 const sendBroadcastMessage = async () => {
-  if (!broadcastForm.recipientsRaw || !broadcastForm.text) return;
+  if (!broadcastForm.recipientsRaw || (!broadcastForm.text && !broadcastForm.file)) return;
 
   const recipients = broadcastForm.recipientsRaw
     .split(/[\n,;]/)
@@ -614,7 +700,8 @@ const sendBroadcastMessage = async () => {
     const res = await waService.sendBroadcast(
       deviceId.value,
       recipients,
-      broadcastForm.text
+      broadcastForm.text,
+      broadcastForm.file
     );
 
     Swal.fire({
@@ -626,6 +713,7 @@ const sendBroadcastMessage = async () => {
 
     broadcastForm.recipientsRaw = "";
     broadcastForm.text = "";
+    clearBroadcastFile();
 
     setTimeout(fetchLogs, 2000);
   } catch (err: any) {

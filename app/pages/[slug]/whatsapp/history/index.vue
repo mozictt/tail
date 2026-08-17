@@ -130,8 +130,7 @@
               <th class="py-3 pl-5 font-bold">WAKTU</th>
               <th class="py-3 font-bold">ARAH</th>
               <th class="py-3 font-bold">NOMOR WA</th>
-              <th class="py-3 font-bold">ISI PESAN</th>
-              <th class="py-3 font-bold">DEVICE</th>
+              <th class="py-3 font-bold">ISI PESAN</th> 
               <th class="py-3 pr-5 font-bold text-right">AKSI</th>
             </tr>
           </thead>
@@ -173,12 +172,7 @@
                 <div v-if="log.messageId && log.messageId.startsWith('INVALID')" class="text-[10px] text-red-400 font-semibold mt-0.5">
                   ✕ Nomor tidak terdaftar di WhatsApp
                 </div>
-              </td>
-
-              <!-- Device -->
-              <td class="py-3.5 font-mono text-[10px] text-base-content/40">
-                {{ log.deviceId }}
-              </td>
+              </td> 
 
               <!-- Aksi -->
               <td class="py-3.5 pr-5 text-right">
@@ -377,7 +371,7 @@
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
                   <label class="block text-[11px] font-bold uppercase tracking-wider text-base-content/50">
-                    {{ modalType === 'reply' ? 'Pesan Balasan' : modalType === 'broadcast' ? 'Isi Pesan Broadcast' : 'Isi Pesan WhatsApp' }}
+                    {{ modalType === 'reply' ? 'Pesan Balasan' : modalType === 'broadcast' ? 'Isi Pesan Broadcast' : 'Isi Pesan WhatsApp' }} (Opsional jika melampirkan media)
                   </label>
                   <span class="text-[10px] font-mono text-base-content/40">
                     {{ modalMessage.length }} Karakter
@@ -385,10 +379,38 @@
                 </div>
                 <textarea
                   v-model="modalMessage"
-                  :rows="4"
+                  :rows="3"
                   :placeholder="modalType === 'reply' ? 'Ketik pesan balasan Anda di sini...' : 'Tuliskan isi pesan yang ingin dikirimkan...'"
                   class="textarea textarea-bordered w-full rounded-2xl text-xs focus:border-emerald-500 focus:outline-none p-3.5 leading-relaxed bg-base-100"
                 ></textarea>
+              </div>
+
+              <!-- Field Lampiran Media (Opsional) -->
+              <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-base-content/50">
+                  Lampiran Media (Opsional: Foto, Video, atau PDF)
+                </label>
+                <div class="flex items-center gap-3">
+                  <input
+                    type="file"
+                    ref="modalFileInput"
+                    @change="handleModalFileChange"
+                    accept="image/*,video/*,application/pdf"
+                    class="file-input file-input-bordered file-input-xs file-input-emerald w-full text-xs rounded-xl"
+                  />
+                  <button
+                    v-if="modalFile"
+                    @click="clearModalFile"
+                    type="button"
+                    class="btn btn-ghost btn-xs text-error gap-1 hover:bg-error/10 shrink-0"
+                  >
+                    <icons.X class="w-3.5 h-3.5" />
+                    <span>Hapus File</span>
+                  </button>
+                </div>
+                <p v-if="modalFile" class="text-[10px] text-emerald-600 font-semibold mt-1">
+                  File terpilih: {{ modalFile.name }} ({{ (modalFile.size / 1024 / 1024).toFixed(2) }} MB)
+                </p>
               </div>
 
             </div>
@@ -400,7 +422,7 @@
               </button>
               <button
                 @click="submitModal"
-                :disabled="!modalMessage.trim() || sendingModal"
+                :disabled="(!modalMessage.trim() && !modalFile) || sendingModal"
                 :style="{
                   backgroundColor: modalSubmitStyle.color,
                   color: '#ffffff',
@@ -410,7 +432,7 @@
                 <span v-if="sendingModal" class="loading loading-spinner loading-xs text-white"></span>
                 <component v-else :is="modalSubmitStyle.icon" class="w-4 h-4 text-white shrink-0" />
                 <span class="text-white font-extrabold tracking-wide text-xs" style="color: #ffffff !important;">
-                  {{ modalSubmitStyle.label }}
+                  {{ modalSubmitStyle.label }} {{ modalFile ? 'Media' : '' }}
                 </span>
               </button>
             </div>
@@ -463,6 +485,22 @@ const broadcastRecipients = ref("");
 const broadcastDelay = ref(3000);
 const modalMessage = ref("");
 const sendingModal = ref(false);
+
+// File Attachment Modal State
+const modalFile = ref<File | null>(null);
+const modalFileInput = ref<HTMLInputElement | null>(null);
+
+const handleModalFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    modalFile.value = target.files[0];
+  }
+};
+
+const clearModalFile = () => {
+  modalFile.value = null;
+  if (modalFileInput.value) modalFileInput.value.value = "";
+};
 
 // ===== OPTIONS =====
 const directionOptions = [
@@ -616,6 +654,7 @@ const openReplyModal = (log: any) => {
   selectedLog.value = log;
   modalType.value = "reply";
   modalMessage.value = "";
+  clearModalFile();
   showModal.value = true;
 };
 
@@ -625,6 +664,7 @@ const openResendModal = (log: any) => {
   modalMessage.value = log.message?.startsWith("[GAGAL")
     ? log.message.replace(/\[GAGAL[^\]]+\] /, "")
     : log.message;
+  clearModalFile();
   showModal.value = true;
 };
 
@@ -633,6 +673,7 @@ const openNewMessageModal = () => {
   modalType.value = "new_message";
   modalPhone.value = "";
   modalMessage.value = "";
+  clearModalFile();
   showModal.value = true;
 };
 
@@ -642,6 +683,7 @@ const openBroadcastModal = () => {
   broadcastRecipients.value = "";
   broadcastDelay.value = 3000;
   modalMessage.value = "";
+  clearModalFile();
   showModal.value = true;
 };
 
@@ -651,10 +693,11 @@ const closeModal = () => {
   modalPhone.value = "";
   broadcastRecipients.value = "";
   modalMessage.value = "";
+  clearModalFile();
 };
 
 const submitModal = async () => {
-  if (!modalMessage.value.trim()) return;
+  if (!modalMessage.value.trim() && !modalFile.value) return;
   sendingModal.value = true;
 
   try {
@@ -662,12 +705,17 @@ const submitModal = async () => {
       if (!modalPhone.value.trim()) {
         throw new Error("Nomor WhatsApp tujuan wajib diisi.");
       }
-      await waService.sendMessage(deviceId.value, modalPhone.value.trim(), modalMessage.value.trim());
+      await waService.sendMessage(
+        deviceId.value,
+        modalPhone.value.trim(),
+        modalMessage.value.trim(),
+        modalFile.value
+      );
 
       Swal.fire({
         icon: "success",
         title: "Pesan Terkirim",
-        text: `Pesan berhasil dikirim ke ${formatPhoneNumber(modalPhone.value.trim())}.`,
+        text: `Pesan ${modalFile.value ? 'media' : 'teks'} berhasil dikirim ke ${formatPhoneNumber(modalPhone.value.trim())}.`,
         confirmButtonColor: "#059669",
         timer: 2500,
         showConfirmButton: false,
@@ -682,7 +730,12 @@ const submitModal = async () => {
         throw new Error("Minimal masukkan 1 nomor tujuan broadcast.");
       }
 
-      await waService.sendBroadcast(deviceId.value, recipientsList, modalMessage.value.trim(), broadcastDelay.value);
+      await waService.sendBroadcast(
+        deviceId.value,
+        recipientsList,
+        modalMessage.value.trim(),
+        modalFile.value
+      );
 
       Swal.fire({
         icon: "success",
@@ -695,12 +748,17 @@ const submitModal = async () => {
     } else {
       // reply atau resend
       if (!selectedLog.value) return;
-      await waService.sendMessage(deviceId.value, selectedLog.value.phoneNumber, modalMessage.value.trim());
+      await waService.sendMessage(
+        deviceId.value,
+        selectedLog.value.phoneNumber,
+        modalMessage.value.trim(),
+        modalFile.value
+      );
 
       Swal.fire({
         icon: "success",
         title: modalType.value === "reply" ? "Balasan Terkirim" : "Pesan Dikirim Ulang",
-        text: `Pesan berhasil dikirimkan ke ${formatPhoneNumber(selectedLog.value.phoneNumber)}.`,
+        text: `Pesan ${modalFile.value ? 'media' : 'teks'} berhasil dikirimkan ke ${formatPhoneNumber(selectedLog.value.phoneNumber)}.`,
         confirmButtonColor: "#10b981",
         timer: 2500,
         showConfirmButton: false,
