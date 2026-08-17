@@ -49,13 +49,10 @@
             <div>
               <label class="block text-xs font-bold text-base-content/75 mb-1.5 uppercase tracking-wider">Device ID Sesi</label>
               <div class="join w-full">
-                <input
-                  v-model="deviceId"
-                  type="text"
-                  placeholder="Contoh: device-1"
-                  :disabled="isConnected || isConnecting"
-                  class="input input-bordered w-full rounded-l-xl focus:border-emerald-500 text-sm join-item font-mono"
-                />
+                <div class="input input-bordered w-full rounded-l-xl text-sm join-item font-mono flex items-center gap-2 bg-base-200/60 cursor-not-allowed overflow-hidden">
+                  <icons.Lock class="w-3.5 h-3.5 text-base-content/30 shrink-0" />
+                  <span class="truncate text-base-content/60 select-none">{{ deviceId }}</span>
+                </div>
                 <button
                   v-if="!isConnected && !isConnecting"
                   @click="startConnection"
@@ -433,6 +430,7 @@ import * as icons from "lucide-vue-next";
 import Swal from "sweetalert2";
 import { WhatsappService } from "@/services/whatsapp.service";
 import { useSlugRoute } from "@/composables/useSlugRoute";
+import { useAuthStore } from "@/stores/auth";
 
 definePageMeta({
   layout: "admin",
@@ -440,10 +438,12 @@ definePageMeta({
 
 const { slugPath } = useSlugRoute();
 const waService = WhatsappService();
+const authStore = useAuthStore();
 
+// Gunakan tenant_id (UUID permanen) sebagai Device ID sesi WhatsApp.
+// Tenant ID tidak berubah meski slug/nama perusahaan diubah oleh admin.
 const route = useRoute();
-const slug = route.params.slug as string;
-const deviceId = ref(slug || "main-session");
+const deviceId = ref(authStore.tenant_id || route.params.slug as string || "main-session");
 const isConnected = ref(false);
 const isConnecting = ref(false);
 const qrText = ref<string | null>(null);

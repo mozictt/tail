@@ -60,4 +60,10 @@ details[open] > ul {
   outline: none !important;
 }
 
+/* Ensure SweetAlert2 is always on the top-most layer across all pages & modals */
+.swal2-container {
+  z-index: 999999 !important;
+}
+
+
 

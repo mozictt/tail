@@ -121,12 +121,23 @@ export const WhatsappService = () => {
 
   /**
    * Mengambil riwayat log pesan WhatsApp tenant saat ini
+   * dengan dukungan filter opsional: direction, search, deviceId
    */
-  const getMessageLogs = async (page = 1, limit = 20): Promise<any> => {
+  const getMessageLogs = async (
+    page = 1,
+    limit = 20,
+    filters: { direction?: 'IN' | 'OUT'; search?: string; deviceId?: string } = {}
+  ): Promise<any> => {
     try {
       const res: any = await api("/whatsapp/logs", {
         method: "GET",
-        params: { page, limit },
+        params: {
+          page,
+          limit,
+          ...(filters.direction && { direction: filters.direction }),
+          ...(filters.search && { search: filters.search }),
+          ...(filters.deviceId && { deviceId: filters.deviceId }),
+        },
       });
       return res.data || res;
     } catch (err: any) {

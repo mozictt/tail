@@ -10,6 +10,7 @@ export const useAuthStore = defineStore("auth", {
     role: useCookie<string | null>("role").value || null,
     username: useCookie<string | null>("username").value || null,
     slug: useCookie<string | null>("slug").value || null,
+    tenant_id: useCookie<string | null>("tenant_id").value || null,
     refreshing: null as Promise<any> | null,
   }),
 
@@ -28,6 +29,7 @@ export const useAuthStore = defineStore("auth", {
       this.role = useCookie("role").value || null;
       this.username = useCookie("username").value || null;
       this.slug = useCookie("slug").value || null;
+      this.tenant_id = useCookie("tenant_id").value || null;
     },
 
     saveCookies() {
@@ -38,6 +40,7 @@ export const useAuthStore = defineStore("auth", {
       useCookie("role").value = this.role;
       useCookie("username").value = this.username;
       useCookie("slug").value = this.slug;
+      useCookie("tenant_id").value = this.tenant_id;
     },
 
     isTokenExpired(token: string | null) {
@@ -77,6 +80,7 @@ export const useAuthStore = defineStore("auth", {
         this.username = user.username || "";
         this.id_user = user.id || "";
         this.slug = user.tenant?.slug || null;
+        this.tenant_id = user.tenantId || user.tenant?.id || null;
 
         // ✅ PENTING: sync ke cookie (FIX refresh issue)
         this.saveCookies();
@@ -128,6 +132,7 @@ export const useAuthStore = defineStore("auth", {
       this.username = null;
       this.id_user = null;
       this.slug = null;
+      this.tenant_id = null;
 
       this.saveCookies();
 
