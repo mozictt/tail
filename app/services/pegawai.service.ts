@@ -10,6 +10,24 @@ export interface PegawaiItem {
   avatar?: string;
   bio?: string;
   address?: string;
+  idKelurahan?: string | null;
+  kelurahan?: {
+    id: string;
+    nama: string;
+    kodePos?: string | null;
+    kecamatan?: {
+      id: string;
+      nama: string;
+      kabupaten?: {
+        id: string;
+        nama: string;
+        provinsi?: {
+          id: string;
+          nama: string;
+        };
+      };
+    };
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +92,7 @@ export const PegawaiService = () => {
     position?: string;
     bio?: string;
     address?: string;
+    idKelurahan?: string;
   }): Promise<PegawaiItem> => {
     return await api("/pegawai", {
       method: "POST",
@@ -94,6 +113,7 @@ export const PegawaiService = () => {
       position?: string;
       bio?: string;
       address?: string;
+      idKelurahan?: string;
     },
   ): Promise<PegawaiItem> => {
     return await api(`/pegawai/${id}`, {

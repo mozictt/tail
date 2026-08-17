@@ -30,6 +30,24 @@ export interface CompanyProfile {
   facebook?: string | null;
   twitter?: string | null;
   linkedin?: string | null;
+  idKelurahan?: string | null;
+  kelurahan?: {
+    id: string;
+    nama: string;
+    kodePos?: string | null;
+    kecamatan?: {
+      id: string;
+      nama: string;
+      kabupaten?: {
+        id: string;
+        nama: string;
+        provinsi?: {
+          id: string;
+          nama: string;
+        };
+      };
+    };
+  } | null;
   tenantId?: string;
   createdAt?: string;
   updatedAt?: string;

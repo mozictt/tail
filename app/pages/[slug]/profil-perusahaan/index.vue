@@ -278,6 +278,16 @@
           </div>
 
           <div class="space-y-3.5 text-sm">
+            <div v-if="profile.kelurahan" class="p-3.5 rounded-2xl bg-primary/5 border border-primary/10 space-y-1">
+              <span class="text-xs text-primary font-bold uppercase tracking-wider block">Wilayah Administratif Resmi</span>
+              <p class="text-sm font-bold text-base-content">
+                Kel. {{ profile.kelurahan.nama }}, Kec. {{ profile.kelurahan.kecamatan?.nama || '-' }}
+              </p>
+              <p class="text-xs text-base-content/60">
+                {{ profile.kelurahan.kecamatan?.kabupaten?.nama || '-' }}, Provinsi {{ profile.kelurahan.kecamatan?.kabupaten?.provinsi?.nama || '-' }}
+              </p>
+            </div>
+
             <div>
               <span class="text-xs text-base-content/50 uppercase tracking-wider font-semibold block mb-1">Alamat Jalan</span>
               <p class="font-medium text-base-content leading-relaxed bg-base-200/40 p-3 rounded-xl border border-base-content/5">
@@ -731,14 +741,25 @@
               </div>
 
               <div>
+                <UiAutocompleteWilayah
+                  v-model="form.idKelurahan"
+                  :initial-label="initialWilayahLabel"
+                  label="Pencarian Wilayah Administratif (Kelurahan/Kecamatan/Kota)"
+                  placeholder="Ketik nama kelurahan untuk mencari..."
+                  @select="handleWilayahSelect"
+                  @clear="handleWilayahClear"
+                />
+              </div>
+
+              <div>
                 <label class="block text-xs font-semibold text-base-content mb-1">
-                  Alamat Lengkap <span class="text-red-500">*</span>
+                  Alamat Lengkap (Jalan, RT/RW, No. Rumah) <span class="text-red-500">*</span>
                 </label>
                 <textarea
                   v-model="form.address"
                   rows="2"
                   required
-                  placeholder="Jl. Jendral Sudirman No. 99..."
+                  placeholder="Contoh: Jl. Sudirman No. 99, Blok B-1"
                   class="textarea textarea-bordered w-full rounded-xl focus:border-primary text-sm"
                 ></textarea>
               </div>
@@ -930,6 +951,7 @@ import Swal from "sweetalert2";
 import { CompanyProfileService, type CompanyProfile } from "@/services/company-profile.service";
 import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useSlugRoute } from "@/composables/useSlugRoute";
+import UiAutocompleteWilayah from "@/components/ui/AutocompleteWilayah.vue";
 
 definePageMeta({
   layout: "admin",
@@ -980,6 +1002,7 @@ const form = reactive({
   province: "",
   postalCode: "",
   country: "Indonesia",
+  idKelurahan: "",
   npwp: "",
   nib: "",
   foundedAt: "",
@@ -988,6 +1011,8 @@ const form = reactive({
   twitter: "",
   linkedin: "",
 });
+
+const initialWilayahLabel = ref("");
 
 // ===== COMPUTED PROPERTIES =====
 const logoUrl = computed(() => {
@@ -1069,6 +1094,7 @@ const openEditModal = () => {
   form.province = profile.value.province || "";
   form.postalCode = profile.value.postalCode || "";
   form.country = profile.value.country || "Indonesia";
+  form.idKelurahan = profile.value.idKelurahan || "";
   form.npwp = profile.value.npwp || "";
   form.nib = profile.value.nib || "";
   form.foundedAt = profile.value.foundedAt ? profile.value.foundedAt.substring(0, 10) : "";
@@ -1076,6 +1102,13 @@ const openEditModal = () => {
   form.facebook = profile.value.facebook || "";
   form.twitter = profile.value.twitter || "";
   form.linkedin = profile.value.linkedin || "";
+
+  if (profile.value.kelurahan) {
+    const k = profile.value.kelurahan;
+    initialWilayahLabel.value = `${k.nama}, ${k.kecamatan?.nama || ""}, ${k.kecamatan?.kabupaten?.nama || ""}, ${k.kecamatan?.kabupaten?.provinsi?.nama || ""}`;
+  } else {
+    initialWilayahLabel.value = "";
+  }
 
   showModal.value = true;
 };
@@ -1098,6 +1131,7 @@ const resetForm = () => {
   form.province = "";
   form.postalCode = "";
   form.country = "Indonesia";
+  form.idKelurahan = "";
   form.npwp = "";
   form.nib = "";
   form.foundedAt = "";
@@ -1105,7 +1139,22 @@ const resetForm = () => {
   form.facebook = "";
   form.twitter = "";
   form.linkedin = "";
+  initialWilayahLabel.value = "";
   clearLogoSelection();
+};
+
+const handleWilayahSelect = (item: any) => {
+  form.idKelurahan = item.id;
+  form.city = item.kabupaten;
+  form.province = item.provinsi;
+  form.postalCode = item.kodePos;
+};
+
+const handleWilayahClear = () => {
+  form.idKelurahan = "";
+  form.city = "";
+  form.province = "";
+  form.postalCode = "";
 };
 
 const handleLogoSelect = (e: Event) => {

@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Info
 } from "lucide-vue-next";
+import UiAutocompleteWilayah from "@/components/ui/AutocompleteWilayah.vue";
 
 definePageMeta({
   layout: 'admin'
@@ -132,6 +133,7 @@ const form = ref<{
   position: string;
   bio: string;
   address: string;
+  idKelurahan: string;
 }>({
   nip: "",
   name: "",
@@ -140,7 +142,10 @@ const form = ref<{
   position: "",
   bio: "",
   address: "",
+  idKelurahan: "",
 });
+
+const initialWilayahLabel = ref("");
 
 const errors = ref<{
   nip?: string;
@@ -163,6 +168,7 @@ const resetForm = () => {
   errors.value = {};
   selectedId.value = null;
   isEdit.value = false;
+  initialWilayahLabel.value = "";
 };
 
 const openCreateModal = () => {
@@ -182,8 +188,23 @@ const openEditModal = (pegawai: PegawaiItem) => {
     position: pegawai.position || "",
     bio: pegawai.bio || "",
     address: pegawai.address || "",
+    idKelurahan: pegawai.idKelurahan || "",
   };
+  if (pegawai.kelurahan) {
+    const k = pegawai.kelurahan;
+    initialWilayahLabel.value = `${k.nama}, ${k.kecamatan?.nama || ""}, ${k.kecamatan?.kabupaten?.nama || ""}, ${k.kecamatan?.kabupaten?.provinsi?.nama || ""}`;
+  } else {
+    initialWilayahLabel.value = "";
+  }
   showModal.value = true;
+};
+
+const handleWilayahSelect = (item: any) => {
+  form.value.idKelurahan = item.id;
+};
+
+const handleWilayahClear = () => {
+  form.value.idKelurahan = "";
 };
 
 const validateForm = () => {
@@ -232,6 +253,7 @@ const submitForm = async () => {
       position: form.value.position.trim() || undefined,
       bio: form.value.bio.trim() || undefined,
       address: form.value.address.trim() || undefined,
+      idKelurahan: form.value.idKelurahan || undefined,
     };
 
     if (isEdit.value && selectedId.value) {
@@ -370,21 +392,27 @@ onMounted(() => {
             table-class-name="customize-easy-table"
           >
             <!-- Column Nama & NIP Customizer -->
-            <template #item-name="{ name, nip, avatar }">
+            <template #item-name="item">
               <div class="flex items-center gap-3 py-1">
                 <div class="w-9 h-9 rounded-2xl overflow-hidden shrink-0 border border-primary/20">
                   <SecureAvatar
-                    :avatar-path="avatar"
-                    :name="name"
+                    :avatar-path="item.avatar"
+                    :name="item.name"
                     img-class="w-full h-full object-cover"
                     fallback-class="w-full h-full bg-primary/10 text-primary font-black flex items-center justify-center uppercase text-xs"
                   />
                 </div>
                 <div>
                   <h4 class="font-extrabold text-sm text-base-content tracking-tight">
-                    {{ name }}
+                    {{ item.name }}
                   </h4>
-                  <span class="text-[10px] font-semibold text-base-content/50">NIP: {{ nip }}</span>
+                  <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                    <span class="text-[10px] font-semibold text-base-content/50">NIP: {{ item.nip }}</span>
+                    <span v-if="item.kelurahan" class="text-[10px] text-primary/80 font-bold flex items-center gap-0.5">
+                      <MapPin class="w-3 h-3" />
+                      {{ item.kelurahan.nama }}, {{ item.kelurahan.kecamatan?.nama || '' }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </template>
@@ -561,6 +589,18 @@ onMounted(() => {
                 v-model="form.bio" 
                 class="textarea textarea-bordered w-full rounded-2xl p-3 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all h-24 bg-base-100 resize-none font-medium text-sm" 
                 placeholder="Deskripsi singkat mengenai keahlian atau latar belakang pegawai..." 
+              />
+            </div>
+
+            <!-- Wilayah Input -->
+            <div>
+              <UiAutocompleteWilayah
+                v-model="form.idKelurahan"
+                :initial-label="initialWilayahLabel"
+                label="Wilayah Administratif (Kelurahan/Kecamatan/Kota)"
+                placeholder="Cari kelurahan tempat tinggal..."
+                @select="handleWilayahSelect"
+                @clear="handleWilayahClear"
               />
             </div>
 
