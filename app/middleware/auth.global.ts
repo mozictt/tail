@@ -22,9 +22,13 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return navigateTo("/login");
   }
 
-  // 🔐 Validasi slug di URL harus cocok dengan slug tenant user
+  // 🔐 Validasi slug di URL harus cocok dengan slug tenant user atau target tenant saat switch
+  const masterStore = useTenantMasterStore();
   const urlSlug = to.params.slug as string | undefined;
-  if (urlSlug && auth.slug && urlSlug !== auth.slug) {
+  const targetSlug = masterStore.targetTenantSlug;
+  const isMasterAdmin = auth.isMasterTenant && auth.role === 'Super Admin';
+
+  if (urlSlug && auth.slug && urlSlug !== auth.slug && urlSlug !== targetSlug && !isMasterAdmin) {
     // Slug di URL tidak cocok → redirect ke forbidden
     return navigateTo("/forbidden");
   }

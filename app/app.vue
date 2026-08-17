@@ -1,7 +1,10 @@
 
 <template>
   <!-- Wrapper utama -->
-  <div class="min-h-screen bg-base-100">
+  <div class="min-h-screen bg-base-100 flex flex-col">
+    <!-- Master Tenant Global Switcher Bar -->
+    <TenantMasterBar />
+    
     <!-- Layout yang dipilih per halaman -->
     <NuxtLayout>
       <!-- Isi halaman -->
@@ -12,6 +15,7 @@
   </div>
 </template>
 <script setup lang="ts"> 
+import TenantMasterBar from "@/components/TenantMasterBar.vue";
 import LoadingOverlay from "@/components/LoadingOverlay.vue";
 import { useUIStore } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";

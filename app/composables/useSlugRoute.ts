@@ -1,22 +1,24 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useTenantMasterStore } from '@/stores/tenantMaster';
 
 /**
  * Composable reusable untuk navigasi berbasis slug tenant.
  * 
  * Menyediakan helper untuk:
- * - Mendapatkan slug aktif dari URL atau auth store
+ * - Mendapatkan slug aktif dari URL, target tenant store, atau auth store
  * - Membuat path URL yang sudah di-prefix dengan slug
  * - Mengecek apakah URL saat ini berada di konteks slug yang benar
  */
 export const useSlugRoute = () => {
   const route = useRoute();
   const auth = useAuthStore();
+  const masterStore = useTenantMasterStore();
 
-  /** Slug tenant aktif, prioritas dari URL param lalu fallback ke auth store */
+  /** Slug tenant aktif, prioritas dari URL param, lalu target tenant store, lalu auth store */
   const currentSlug = computed(() => {
-    return (route.params.slug as string) || auth.slug || '';
+    return (route.params.slug as string) || masterStore.targetTenantSlug || auth.slug || '';
   });
 
   /**

@@ -1,5 +1,7 @@
 import { defineStore } from "pinia";
 import { useRuntimeConfig, navigateTo, useCookie } from "#app";
+import { useTenantMasterStore } from "@/stores/tenantMaster";
+import { useMenuStore } from "@/stores/menu";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -11,6 +13,7 @@ export const useAuthStore = defineStore("auth", {
     username: useCookie<string | null>("username").value || null,
     slug: useCookie<string | null>("slug").value || null,
     tenant_id: useCookie<string | null>("tenant_id").value || null,
+    isMasterTenant: useCookie<boolean>("is_master_tenant").value || false,
     refreshing: null as Promise<any> | null,
   }),
 
@@ -30,6 +33,7 @@ export const useAuthStore = defineStore("auth", {
       this.username = useCookie("username").value || null;
       this.slug = useCookie("slug").value || null;
       this.tenant_id = useCookie("tenant_id").value || null;
+      this.isMasterTenant = Boolean(useCookie("is_master_tenant").value);
     },
 
     saveCookies() {
@@ -41,6 +45,42 @@ export const useAuthStore = defineStore("auth", {
       useCookie("username").value = this.username;
       useCookie("slug").value = this.slug;
       useCookie("tenant_id").value = this.tenant_id;
+      useCookie("is_master_tenant").value = String(this.isMasterTenant);
+    },
+
+    clearAllCookies() {
+      const cookieKeys = [
+        "token",
+        "refreshToken",
+        "id_user",
+        "id_role",
+        "role",
+        "username",
+        "slug",
+        "tenant_id",
+        "is_master_tenant",
+        "target_tenant_id",
+        "target_tenant_name",
+        "target_tenant_slug",
+      ];
+
+      for (const key of cookieKeys) {
+        const cookie = useCookie(key);
+        cookie.value = null;
+      }
+
+      if (process.client) {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i];
+          const eqPos = cookie.indexOf("=");
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+          if (name) {
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname};`;
+          }
+        }
+      }
     },
 
     isTokenExpired(token: string | null) {
@@ -81,9 +121,17 @@ export const useAuthStore = defineStore("auth", {
         this.id_user = user.id || "";
         this.slug = user.tenant?.slug || null;
         this.tenant_id = user.tenantId || user.tenant?.id || null;
+        this.isMasterTenant = Boolean(user.isMaster || user.tenant?.isMaster || user.tenantId === '00000000-0000-0000-0000-000000000000');
 
         // ✅ PENTING: sync ke cookie (FIX refresh issue)
         this.saveCookies();
+
+        // ✅ Reset target tenant cookies jika pengguna baru adalah non-master
+        if (!this.isMasterTenant) {
+          useCookie("target_tenant_id").value = null;
+          useCookie("target_tenant_name").value = null;
+          useCookie("target_tenant_slug").value = null;
+        }
 
         return true;
       } catch (error) {
@@ -133,8 +181,23 @@ export const useAuthStore = defineStore("auth", {
       this.id_user = null;
       this.slug = null;
       this.tenant_id = null;
+      this.isMasterTenant = false;
 
-      this.saveCookies();
+      // ✅ Reset Pinia Stores
+      try {
+        const masterStore = useTenantMasterStore();
+        masterStore.clearTargetTenant();
+
+        const menuStore = useMenuStore();
+        if (typeof menuStore.$reset === 'function') {
+          menuStore.$reset();
+        }
+      } catch (e) {
+        console.error("Error resetting stores on logout:", e);
+      }
+
+      // ✅ Hapus SEMUA cookie secara total
+      this.clearAllCookies();
 
       return navigateTo("/login");
     },

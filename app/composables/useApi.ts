@@ -35,6 +35,15 @@ export const useApi = () => {
           Authorization: `Bearer ${auth.token}`,
         };
       }
+
+      // pasang target tenant header hanya jika pengguna adalah Master Tenant yang meng-override target tenant
+      const targetTenantId = useCookie<string | null>("target_tenant_id").value;
+      if (targetTenantId && auth.isMasterTenant) {
+        options.headers = {
+          ...options.headers,
+          "X-Target-Tenant-Id": targetTenantId,
+        };
+      }
     },
 
     // async onResponseError({ request, response }) {
