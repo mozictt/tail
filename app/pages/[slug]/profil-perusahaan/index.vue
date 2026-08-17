@@ -568,8 +568,9 @@
     </div>
 
     <!-- MODAL FORM CREATE / EDIT PROFIL PERUSAHAAN -->
-    <Transition name="fade">
-      <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm overflow-y-auto">
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm overflow-y-auto">
         <div class="bg-base-100 border border-base-content/10 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto animate-scale-up">
           <!-- Modal Header -->
           <div class="p-6 border-b border-base-content/10 flex items-center justify-between bg-base-200/30 shrink-0">
@@ -867,12 +868,14 @@
             </button>
           </div>
         </div>
-      </div>
-    </Transition>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- MODAL QUICK UPLOAD LOGO -->
-    <Transition name="fade">
-      <div v-if="showLogoModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm">
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showLogoModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm">
         <div class="bg-base-100 border border-base-content/10 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-6">
           <div class="flex items-center justify-between border-b border-base-content/10 pb-4">
             <h3 class="font-bold text-lg text-base-content flex items-center gap-2">
@@ -937,10 +940,11 @@
                 <span v-else>Unggah Logo</span>
               </button>
             </div>
-          </div>
         </div>
       </div>
-    </Transition>
+    </div>
+  </Transition>
+</Teleport>
   </div>
 </template>
 
