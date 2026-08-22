@@ -24,7 +24,7 @@ const emit = defineEmits(["update-active"]);
 const isOpen = ref(true); // desktop
 const isMobile = ref(false);
 
-const menu = computed(() => menuStore.menus);
+const menu = computed(() => menuStore.authorizedMenus);
 const activeMenuName = ref("Menu");
 
 // 👉 FIX: pakai store langsung

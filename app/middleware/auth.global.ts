@@ -45,7 +45,9 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     let urls: string[] = [];
     for (const m of menus) {
       const path = m.url || m.path;
-      if (path) urls.push(path);
+      if (path && typeof path === 'string' && path.trim() !== '') {
+        urls.push(path.trim());
+      }
       if (m.children && m.children.length > 0) {
         urls = urls.concat(extractUrls(m.children));
       }
@@ -53,33 +55,36 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return urls;
   };
 
-  const allowedMenus = extractUrls(menuStore.menus);
+  const allowedMenus = extractUrls(menuStore.authorizedMenus);
+  const allSystemMenus = extractUrls(menuStore.menus);
 
   // Ambil path tanpa prefix slug untuk dicocokkan dengan menu backend
-  // Contoh: /klinik-sehat/dashboard → /dashboard
+  // Contoh: /pos/whatsapp/history → /whatsapp/history
   const pathWithoutSlug = urlSlug 
     ? to.path.replace(`/${urlSlug}`, '') || '/'
     : to.path;
 
-  // Dashboard dan Roles diizinkan untuk user yang terotentikasi
-  // if (pathWithoutSlug === '/dashboard' || pathWithoutSlug === '/' || pathWithoutSlug === '/roles' || pathWithoutSlug.startsWith('/roles/')) {
-  //   return;
-  // }
+  // 1. Jika path eksak ada di daftar menu yang diizinkan → IZINKAN
+  if (allowedMenus.includes(pathWithoutSlug)) {
+    return;
+  }
 
-  const isAllowed = allowedMenus.some((menuPath) => {
-    // 1. Exact match
-    if (pathWithoutSlug === menuPath) return true;
-    
-    // 2. Prefix match untuk path yang cukup spesifik (misal /barang/edit → /barang/edit/1)
+  // 2. Jika path eksak terdaftar di master menu sistem tetapi TIDAK ada di allowedMenus (misal accessLevel-nya null) → BLOKIR (Forbidden)
+  if (allSystemMenus.includes(pathWithoutSlug)) {
+    return navigateTo("/forbidden");
+  }
+
+  // 3. Untuk sub-path dinamis (misal /barang/listtable/edit/1):
+  // Cek apakah berawalan dari salah satu allowedMenus
+  const isAllowedSubPath = allowedMenus.some((menuPath) => {
     const segments = menuPath.split("/").filter(Boolean);
-    if (segments.length >= 2 && pathWithoutSlug.startsWith(menuPath + "/")) {
+    if (segments.length >= 1 && pathWithoutSlug.startsWith(menuPath + "/")) {
       return true;
     }
-
     return false;
   });
 
-  if (!isAllowed) {
+  if (!isAllowedSubPath) {
     return navigateTo("/forbidden");
   }
 });

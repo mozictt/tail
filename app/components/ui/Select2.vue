@@ -95,11 +95,15 @@
             v-for="item in normalizedFilteredOptions"
             :key="item.value"
             @click="selectItem(item.value)"
-            class="px-3 py-2.5 rounded-lg text-sm cursor-pointer transition flex items-center justify-between"
+            class="px-3 py-2.5 rounded-lg text-sm cursor-pointer transition flex items-center justify-between gap-2"
             :class="modelValue === item.value ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-base-200 text-base-content'"
           >
-            <span>{{ item.label }}</span>
-            <svg v-if="modelValue === item.value" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <div class="flex-1 min-w-0">
+              <slot name="option" :option="item.rawItem">
+                <span class="truncate block">{{ item.label }}</span>
+              </slot>
+            </div>
+            <svg v-if="modelValue === item.value" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </li>
@@ -175,11 +179,11 @@ const searchInput = ref<HTMLInputElement | null>(null);
 const normalizedOptions = computed(() => {
   return props.options.map(opt => {
     if (typeof opt === 'string' || typeof opt === 'number') {
-      return { label: String(opt), value: opt };
+      return { label: String(opt), value: opt, rawItem: opt };
     }
     const label = opt[props.labelKey] ?? opt.name ?? opt.label ?? String(opt[props.valueKey]);
     const value = opt[props.valueKey] ?? opt.id ?? opt.value;
-    return { label: String(label), value };
+    return { label: String(label), value, rawItem: opt };
   });
 });
 

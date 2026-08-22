@@ -23,6 +23,7 @@ import {
 } from "lucide-vue-next";
 import { useToast } from "@/composables/useToast";
 import { useMenuStore } from "@/stores/menu";
+import Select2 from "@/components/ui/Select2.vue";
 
 definePageMeta({ layout: "admin" });
 
@@ -165,11 +166,38 @@ const rootMenus = computed(() => {
 });
 
 const parentMenuOptions = computed(() => {
-  // Flat list of menus that can act as parent (top-level or non-nested)
-  return items.value.map((m) => ({
-    id: m.id,
-    name: m.name,
-  }));
+  const options: {
+    id: number;
+    name: string;
+    icon?: string;
+    depth: number;
+    path: string;
+    treePrefix: string;
+  }[] = [];
+
+  const flatten = (nodes: MenuItem[], depth = 0, parentPaths: string[] = []) => {
+    for (const node of nodes) {
+      if (node.id && node.id !== selectedId.value) {
+        const currentPath = [...parentPaths, node.name];
+        const treePrefix = depth > 0 ? `${"   ".repeat(depth - 1)}└─ ` : "";
+        options.push({
+          id: node.id,
+          name: node.name,
+          icon: node.icon,
+          depth,
+          path: currentPath.join(" > "),
+          treePrefix,
+        });
+
+        if (node.children && node.children.length > 0) {
+          flatten(node.children, depth + 1, currentPath);
+        }
+      }
+    }
+  };
+
+  flatten(items.value);
+  return options;
 });
 
 const filteredItems = computed(() => {
@@ -197,6 +225,34 @@ const filteredItems = computed(() => {
   };
 
   return filterTree(items.value);
+});
+
+// Computed flattened tree rows untuk me-render multi-level submenu tanpa batas kedalaman (Level 1, 2, 3, dst.)
+const flattenedTreeRows = computed(() => {
+  const rows: { item: MenuItem; depth: number; hasChildren: boolean; isExpanded: boolean }[] = [];
+
+  const traverse = (nodes: MenuItem[], depth = 0, isParentExpanded = true) => {
+    if (!isParentExpanded) return;
+
+    for (const node of nodes) {
+      const hasChildren = Boolean(node.children && node.children.length > 0);
+      const expanded = node.id ? expandedParentIds.value.includes(node.id) : false;
+
+      rows.push({
+        item: node,
+        depth,
+        hasChildren,
+        isExpanded: expanded,
+      });
+
+      if (hasChildren && node.children) {
+        traverse(node.children, depth + 1, expanded);
+      }
+    }
+  };
+
+  traverse(filteredItems.value, 0, true);
+  return rows;
 });
 
 const totalMenuCount = computed(() => {
@@ -286,8 +342,19 @@ const fetchMenus = async () => {
   try {
     const data = await menuService.getMenus();
     items.value = data;
-    // Auto expand all parent menus by default for convenient viewing
-    expandedParentIds.value = data.map((m) => m.id!).filter(Boolean);
+    
+    // Auto expand semua parent & submenu berjenjang
+    const allParentIds: number[] = [];
+    const collectParentIds = (nodes: MenuItem[]) => {
+      for (const node of nodes) {
+        if (node.id && node.children && node.children.length > 0) {
+          allParentIds.push(node.id);
+          collectParentIds(node.children);
+        }
+      }
+    };
+    collectParentIds(data);
+    expandedParentIds.value = allParentIds;
   } catch (err) {
     console.error(err);
     showToast("Gagal mengambil data menu", "error");
@@ -495,187 +562,145 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <!-- LOOP PARENT MENU -->
-            <template v-for="menu in filteredItems" :key="menu.id">
-              <!-- PARENT ROW -->
-              <tr class="bg-base-200/40 hover:bg-base-200/80 transition-all rounded-2xl group border border-base-content/5">
-                <!-- Name & Icon -->
-                <td class="py-4 px-4 rounded-l-2xl">
-                  <div class="flex items-center gap-3">
-                    <button
-                      v-if="menu.children && menu.children.length > 0"
-                      @click="toggleExpand(menu.id!)"
-                      class="w-7 h-7 rounded-lg bg-base-100 border border-base-content/10 flex items-center justify-center text-base-content/60 hover:text-primary transition"
-                    >
-                      <component
-                        :is="isExpanded(menu.id!) ? ChevronDown : ChevronRight"
-                        class="w-4 h-4"
-                      />
-                    </button>
-                    <div v-else class="w-7 h-7"></div>
+            <!-- RECURSIVE FLATTENED MULTI-LEVEL ROW LOOP (Level 1, 2, 3, dst.) -->
+            <tr
+              v-for="{ item, depth, hasChildren, isExpanded } in flattenedTreeRows"
+              :key="item.id"
+              class="transition-all rounded-2xl border border-base-content/5 group hover:bg-base-200/60"
+              :class="[
+                depth === 0 ? 'bg-base-200/40 font-bold' : 'bg-base-100/90'
+              ]"
+            >
+              <!-- Name & Icon with Dynamic Depth Indentation -->
+              <td class="py-3.5 px-4 rounded-l-2xl" :style="{ paddingLeft: `${depth * 28 + 16}px` }">
+                <div class="flex items-center gap-3">
+                  <!-- Expand/Collapse Button (If item has children) -->
+                  <button
+                    v-if="hasChildren"
+                    @click="toggleExpand(item.id!)"
+                    class="w-7 h-7 rounded-lg bg-base-100 border border-base-content/10 flex items-center justify-center text-base-content/60 hover:text-primary transition shrink-0 shadow-xs"
+                    :title="isExpanded ? 'Sembunyikan Submenu' : 'Tampilkan Submenu'"
+                  >
+                    <component
+                      :is="isExpanded ? ChevronDown : ChevronRight"
+                      class="w-4 h-4"
+                    />
+                  </button>
+                  <div v-else class="w-7 h-7 shrink-0"></div>
 
-                    <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner">
-                      <component :is="getIconComponent(menu.icon)" class="w-5 h-5" />
-                    </div>
-
-                    <div>
-                      <div class="flex items-center gap-2">
-                        <span class="font-bold text-base-content text-base">{{ menu.name }}</span>
-                        <span class="badge badge-primary badge-outline text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          Parent
-                        </span>
-                        <span v-if="menu.children && menu.children.length > 0" class="text-xs text-base-content/50 font-medium">
-                          ({{ menu.children.length }} Submenu)
-                        </span>
-                      </div>
-                    </div>
+                  <!-- Icon -->
+                  <div
+                    class="rounded-xl flex items-center justify-center font-bold shrink-0 shadow-inner"
+                    :class="[
+                      depth === 0 ? 'w-10 h-10 bg-primary/10 text-primary' : 'w-8 h-8 bg-base-200 text-base-content/70'
+                    ]"
+                  >
+                    <component :is="getIconComponent(item.icon)" :class="depth === 0 ? 'w-5 h-5' : 'w-4 h-4'" />
                   </div>
-                </td>
 
-                <!-- URL -->
-                <td class="py-4 px-4">
-                  <span v-if="menu.url" class="font-mono text-xs bg-base-100 text-primary font-semibold px-2.5 py-1 rounded-lg border border-base-content/10 inline-flex items-center gap-1.5">
-                    <LinkIcon class="w-3.5 h-3.5 text-primary/60" />
-                    {{ menu.url }}
-                  </span>
-                  <span v-else class="text-xs text-base-content/40 italic">Tidak Ada (Header Group)</span>
-                </td>
-
-                <!-- Required Resource -->
-                <td class="py-4 px-4">
-                  <span v-if="menu.requiredResource" class="badge badge-secondary badge-soft text-xs font-semibold px-2.5 py-1 rounded-lg">
-                    <ShieldAlert class="w-3 h-3 mr-1" />
-                    {{ menu.requiredResource }}
-                  </span>
-                  <span v-else class="text-xs text-base-content/40">Public / General</span>
-                </td>
-
-                <!-- Order No -->
-                <td class="py-4 px-4 text-center">
-                  <span class="bg-base-100 border border-base-content/10 px-2.5 py-1 rounded-lg text-xs font-bold text-base-content">
-                    #{{ menu.order_no ?? 1 }}
-                  </span>
-                </td>
-
-                <!-- Status -->
-                <td class="py-4 px-4 text-center">
-                  <div class="flex items-center justify-center gap-1.5">
+                  <!-- Name & Depth Level Badges -->
+                  <div class="flex items-center gap-2 flex-wrap">
                     <span
-                      class="px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1"
-                      :class="menu.is_active ? 'bg-success/15 text-success' : 'bg-error/15 text-error'"
+                      :class="[
+                        depth === 0 ? 'font-bold text-base-content text-base' : 'font-semibold text-base-content text-sm'
+                      ]"
                     >
-                      <component :is="menu.is_active ? CheckCircle : XCircle" class="w-3.5 h-3.5" />
-                      {{ menu.is_active ? 'Aktif' : 'Nonaktif' }}
+                      {{ item.name }}
                     </span>
-                  </div>
-                </td>
 
-                <!-- Actions -->
-                <td class="py-4 px-4 text-right rounded-r-2xl">
-                  <div class="flex items-center justify-end gap-1.5">
-                    <button
-                      class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 rounded-lg font-bold gap-1"
-                      @click="openCreateModal(menu.id)"
-                      title="Tambah Submenu"
-                    >
-                      <Plus class="w-3.5 h-3.5" />
-                      Submenu
-                    </button>
-                    <button
-                      class="w-8 h-8 rounded-lg bg-base-100 border border-base-content/10 text-base-content/70 hover:bg-info hover:text-white transition flex items-center justify-center shadow-xs"
-                      @click="openEditModal(menu)"
-                      title="Edit Menu"
-                    >
-                      <Pencil class="w-4 h-4" />
-                    </button>
-                    <button
-                      class="w-8 h-8 rounded-lg bg-base-100 border border-base-content/10 text-base-content/70 hover:bg-error hover:text-white transition flex items-center justify-center shadow-xs"
-                      @click="deleteMenu(menu)"
-                      title="Hapus Menu"
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <!-- LOOP CHILDREN SUBMENUS -->
-              <template v-if="menu.children && menu.children.length > 0 && isExpanded(menu.id!)">
-                <tr
-                  v-for="child in menu.children"
-                  :key="child.id"
-                  class="bg-base-100 hover:bg-base-200/50 transition-all rounded-xl border-l-4 border-l-primary/40"
-                >
-                  <!-- Name & Icon Submenu -->
-                  <td class="py-3 px-4 pl-12">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center text-xs">
-                        <component :is="getIconComponent(child.icon)" class="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <span class="font-semibold text-base-content text-sm">{{ child.name }}</span>
-                          <span class="badge badge-neutral text-[10px] font-medium px-2 py-0.5 rounded-md">
-                            Submenu
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  <!-- URL -->
-                  <td class="py-3 px-4">
-                    <span v-if="child.url" class="font-mono text-xs text-base-content/80 font-medium">
-                      {{ child.url }}
-                    </span>
-                    <span v-else class="text-xs text-base-content/40 italic">-</span>
-                  </td>
-
-                  <!-- Required Resource -->
-                  <td class="py-3 px-4">
-                    <span v-if="child.requiredResource" class="badge badge-outline badge-secondary text-xs font-medium px-2 py-0.5 rounded-md">
-                      {{ child.requiredResource }}
-                    </span>
-                    <span v-else class="text-xs text-base-content/40">-</span>
-                  </td>
-
-                  <!-- Order No -->
-                  <td class="py-3 px-4 text-center text-xs font-medium text-base-content/70">
-                    #{{ child.order_no ?? 1 }}
-                  </td>
-
-                  <!-- Status -->
-                  <td class="py-3 px-4 text-center">
+                    <!-- Level Badge -->
                     <span
-                      class="px-2 py-0.5 rounded-md text-[10px] font-semibold"
-                      :class="child.is_active ? 'bg-success/10 text-success' : 'bg-error/10 text-error'"
+                      v-if="depth === 0"
+                      class="badge badge-primary badge-outline text-[10px] font-bold px-2 py-0.5 rounded-md"
                     >
-                      {{ child.is_active ? 'Aktif' : 'Nonaktif' }}
+                      Parent
                     </span>
-                  </td>
+                    <span
+                      v-else-if="depth === 1"
+                      class="badge badge-neutral text-[10px] font-medium px-2 py-0.5 rounded-md"
+                    >
+                      Submenu L1
+                    </span>
+                    <span
+                      v-else
+                      class="badge badge-secondary badge-outline text-[10px] font-medium px-2 py-0.5 rounded-md"
+                    >
+                      Submenu L{{ depth }}
+                    </span>
 
-                  <!-- Actions -->
-                  <td class="py-3 px-4 text-right">
-                    <div class="flex items-center justify-end gap-1.5">
-                      <button
-                        class="w-7 h-7 rounded-lg bg-base-200 text-base-content/70 hover:bg-info hover:text-white transition flex items-center justify-center"
-                        @click="openEditModal(child)"
-                        title="Edit Submenu"
-                      >
-                        <Pencil class="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        class="w-7 h-7 rounded-lg bg-base-200 text-base-content/70 hover:bg-error hover:text-white transition flex items-center justify-center"
-                        @click="deleteMenu(child)"
-                        title="Hapus Submenu"
-                      >
-                        <Trash2 class="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </template>
-            </template>
+                    <span v-if="hasChildren" class="text-xs text-base-content/50 font-medium">
+                      ({{ item.children!.length }} Submenu)
+                    </span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- URL Route -->
+              <td class="py-3.5 px-4">
+                <span v-if="item.url" class="font-mono text-xs bg-base-100 text-primary font-semibold px-2.5 py-1 rounded-lg border border-base-content/10 inline-flex items-center gap-1.5">
+                  <LinkIcon class="w-3.5 h-3.5 text-primary/60" />
+                  {{ item.url }}
+                </span>
+                <span v-else class="text-xs text-base-content/40 italic">Tidak Ada (Header Group)</span>
+              </td>
+
+              <!-- Required Resource -->
+              <td class="py-3.5 px-4">
+                <span v-if="item.requiredResource" class="badge badge-secondary badge-soft text-xs font-semibold px-2.5 py-1 rounded-lg">
+                  <ShieldAlert class="w-3 h-3 mr-1" />
+                  {{ item.requiredResource }}
+                </span>
+                <span v-else class="text-xs text-base-content/40">Public / General</span>
+              </td>
+
+              <!-- Order No -->
+              <td class="py-3.5 px-4 text-center">
+                <span class="bg-base-100 border border-base-content/10 px-2.5 py-1 rounded-lg text-xs font-bold text-base-content">
+                  #{{ item.order_no ?? 1 }}
+                </span>
+              </td>
+
+              <!-- Status -->
+              <td class="py-3.5 px-4 text-center">
+                <div class="flex items-center justify-center gap-1.5">
+                  <span
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1"
+                    :class="item.is_active ? 'bg-success/15 text-success' : 'bg-error/15 text-error'"
+                  >
+                    <component :is="item.is_active ? CheckCircle : XCircle" class="w-3.5 h-3.5" />
+                    {{ item.is_active ? 'Aktif' : 'Nonaktif' }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Actions -->
+              <td class="py-3.5 px-4 text-right rounded-r-2xl">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button
+                    class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 rounded-lg font-bold gap-1 text-[11px]"
+                    @click="openCreateModal(item.id)"
+                    title="Tambah Submenu Berjenjang"
+                  >
+                    <Plus class="w-3.5 h-3.5" />
+                    Submenu
+                  </button>
+                  <button
+                    class="w-8 h-8 rounded-lg bg-base-100 border border-base-content/10 text-base-content/70 hover:bg-info hover:text-white transition flex items-center justify-center shadow-xs"
+                    @click="openEditModal(item)"
+                    title="Edit Menu"
+                  >
+                    <Pencil class="w-4 h-4" />
+                  </button>
+                  <button
+                    class="w-8 h-8 rounded-lg bg-base-100 border border-base-content/10 text-base-content/70 hover:bg-error hover:text-white transition flex items-center justify-center shadow-xs"
+                    @click="deleteMenu(item)"
+                    title="Hapus Menu"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -685,7 +710,7 @@ onMounted(() => {
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showModal" />
       <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!submitLoading && (showModal = false)">
-        <div class="modal-box max-w-xl bg-base-100 rounded-3xl border border-base-content/10 p-8 shadow-2xl relative text-base-content">
+        <div class="modal-box max-w-3xl w-full bg-base-100 rounded-3xl border border-base-content/10 p-6 sm:p-8 shadow-2xl relative text-base-content">
           <!-- CLOSE BUTTON -->
           <button
             class="absolute top-6 right-6 text-base-content/40 hover:text-error hover:rotate-90 transition-all duration-300"
@@ -750,15 +775,53 @@ onMounted(() => {
                 <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-2">
                   Parent Menu
                 </label>
-                <select
+                <Select2
                   v-model="form.parent_id"
-                  class="select select-bordered w-full rounded-2xl h-12 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 bg-base-100 text-sm font-medium"
+                  :options="parentMenuOptions"
+                  labelKey="name"
+                  valueKey="id"
+                  placeholder="Pilih Parent Menu (Opsional)..."
+                  searchPlaceholder="Ketik nama atau rute menu..."
+                  :showDefaultOption="true"
+                  defaultOptionText="Tanpa Parent (Top Level)"
                 >
-                  <option :value="undefined">Tanpa Parent (Top Level)</option>
-                  <option v-for="opt in parentMenuOptions" :key="opt.id" :value="opt.id">
-                    {{ opt.name }}
-                  </option>
-                </select>
+                  <template #option="{ option }">
+                    <div class="flex items-center justify-between w-full py-0.5">
+                      <div class="flex items-center gap-2 min-w-0" :style="{ paddingLeft: `${(option.depth || 0) * 12}px` }">
+                        <!-- Tree Connector Symbol -->
+                        <span v-if="option.depth > 0" class="text-primary/60 font-mono text-xs font-bold shrink-0">
+                          └─
+                        </span>
+                        
+                        <!-- Icon -->
+                        <div class="w-6 h-6 rounded-md bg-base-200 text-base-content/70 flex items-center justify-center text-xs shrink-0">
+                          <component :is="getIconComponent(option.icon)" class="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        
+                        <!-- Menu Name -->
+                        <span class="font-semibold text-xs sm:text-sm text-base-content truncate">
+                          {{ option.name }}
+                        </span>
+                      </div>
+
+                      <!-- Breadcrumb Path & Level Badge -->
+                      <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                        <span v-if="option.path && option.depth > 0" class="text-[10px] text-base-content/40 font-mono hidden md:inline">
+                          {{ option.path }}
+                        </span>
+                        <span
+                          class="badge text-[9px] font-bold px-1.5 py-0.5 rounded"
+                          :class="[
+                            option.depth === 0 ? 'badge-primary badge-outline' :
+                            option.depth === 1 ? 'badge-neutral' : 'badge-secondary badge-outline'
+                          ]"
+                        >
+                          {{ option.depth === 0 ? 'Root' : `L${option.depth}` }}
+                        </span>
+                      </div>
+                    </div>
+                  </template>
+                </Select2>
               </div>
 
               <div>
@@ -822,8 +885,8 @@ onMounted(() => {
               </div>
 
               <!-- Dynamic Interactive Icon Grid -->
-              <div class="p-3 bg-base-200/40 border border-base-content/10 rounded-2xl max-h-52 overflow-y-auto space-y-3">
-                <div v-if="filteredDynamicIconList.length > 0" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+              <div class="p-3 bg-base-200/40 border border-base-content/10 rounded-2xl max-h-56 overflow-y-auto space-y-3">
+                <div v-if="filteredDynamicIconList.length > 0" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
                   <button
                     v-for="iconName in filteredDynamicIconList"
                     :key="iconName"
