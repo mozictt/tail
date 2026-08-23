@@ -647,247 +647,6 @@
       </Transition>
     </Teleport>
 
-    <!-- MODAL / DRAWER RIWAYAT CHAT PER KONTAK -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showHistoryModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
-          <div class="bg-base-100 border border-base-content/10 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
-            
-            <!-- Chat Modal Header -->
-            <div class="px-6 py-4 border-b border-base-content/10 flex items-center justify-between bg-base-200/50">
-              <div class="flex items-center gap-3">
-                <div
-                  class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border"
-                  :class="(activeContactHistory?.chatType === 'GROUP' || activeContactHistory?.isGroup || activeContactHistory?.phoneNumber?.endsWith('@g.us'))
-                    ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                    : 'bg-purple-500/10 text-purple-600 border-purple-500/30'"
-                >
-                  <icons.Users v-if="activeContactHistory?.chatType === 'GROUP' || activeContactHistory?.isGroup || activeContactHistory?.phoneNumber?.endsWith('@g.us')" class="w-5 h-5" />
-                  <icons.User v-else class="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 class="font-bold text-base text-base-content leading-tight flex items-center gap-2">
-                    <span>{{ activeContactHistory?.name || activeContactHistory?.pushName || 'Tanpa Nama' }}</span>
-                    <span
-                      class="badge badge-xs font-bold text-[10px] px-2 uppercase"
-                      :class="(activeContactHistory?.chatType === 'GROUP' || activeContactHistory?.isGroup || activeContactHistory?.phoneNumber?.endsWith('@g.us'))
-                        ? 'bg-amber-500/20 text-amber-600 border-amber-500/30 dark:text-amber-300'
-                        : 'bg-purple-500/20 text-purple-600 border-purple-500/30 dark:text-purple-300'"
-                    >
-                      {{ (activeContactHistory?.chatType === 'GROUP' || activeContactHistory?.isGroup || activeContactHistory?.phoneNumber?.endsWith('@g.us')) ? '👥 GRUP WHATSAPP' : '👤 PESAN PRIBADI' }}
-                    </span>
-                  </h3>
-                  <p class="text-[11px] text-base-content/50 mt-0.5 flex items-center gap-1.5 font-mono">
-                    <span>{{ formatPhoneNumber(activeContactHistory?.phoneNumber) }}</span>
-                    <span>•</span>
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Live Chat Sync</span>
-                  </p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <button
-                  @click="fetchContactChatLogs(false)"
-                  :disabled="chatLogsLoading"
-                  class="btn btn-ghost btn-xs gap-1 border border-base-content/10 hover:bg-base-200 rounded-lg"
-                  title="Segarkan Chat"
-                >
-                  <icons.RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': chatLogsLoading }" />
-                  <span>Refresh</span>
-                </button>
-                <button @click="closeHistoryModal" class="btn btn-ghost btn-xs btn-square text-base-content/50 hover:text-base-content hover:bg-base-200 rounded-xl">
-                  <icons.X class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Chat Messages Container (Thread View) -->
-            <div ref="chatContainerRef" class="flex-1 p-6 overflow-y-auto space-y-4 bg-base-200/20">
-              <!-- Loading -->
-              <div v-if="chatLogsLoading && chatLogs.length === 0" class="flex flex-col items-center justify-center py-12 text-base-content/40">
-                <span class="loading loading-spinner loading-md text-emerald-500 mb-2"></span>
-                <span class="text-xs font-semibold">Memuat riwayat chat...</span>
-              </div>
-
-              <!-- Empty State Chat -->
-              <div v-else-if="!chatLogsLoading && chatLogs.length === 0" class="flex flex-col items-center justify-center py-12 text-base-content/40 text-center space-y-2">
-                <icons.MessageSquareOff class="w-10 h-10 text-base-content/20" />
-                <p class="text-xs font-bold">Belum ada riwayat percakapan dengan kontak ini</p>
-                <p class="text-[10px] text-base-content/50 max-w-xs">Pesan yang Anda kirim atau pesan masuk darinya akan muncul otomatis di thread ini.</p>
-              </div>
-
-              <!-- Message Bubbles Thread (Sorted Chronologically: Oldest -> Newest) -->
-              <template v-else>
-                <div
-                  v-for="msg in sortedChatLogs"
-                  :key="msg.id"
-                  :id="`wa-msg-${msg.messageId}`"
-                  class="flex flex-col scroll-mt-4"
-                  :class="msg.direction === 'OUT' ? 'items-end' : 'items-start'"
-                >
-                  <div
-                    class="max-w-[80%] rounded-2xl p-3.5 shadow-xs text-xs space-y-1 relative group transition-all"
-                    :class="msg.direction === 'OUT'
-                      ? 'bg-emerald-600 text-white rounded-br-none'
-                      : 'bg-base-100 border border-base-content/15 text-base-content rounded-bl-none shadow-sm'"
-                  >
-                    <!-- Header/Direction label -->
-                    <div class="flex items-center justify-between text-[10px] opacity-80 gap-4 mb-1">
-                      <span class="font-bold uppercase tracking-wider flex items-center gap-1">
-                        <component :is="msg.direction === 'OUT' ? icons.ArrowUpRight : icons.ArrowDownLeft" class="w-3 h-3" />
-                        {{ getMessageSenderLabel(msg) }}
-                      </span>
-                      <div class="flex items-center gap-2">
-                        <span>{{ formatDateTime(msg.createdAt) }}</span>
-                        <button
-                          @click="setReplyTarget(msg)"
-                          class="hover:underline flex items-center gap-0.5 opacity-90 hover:opacity-100 font-semibold cursor-pointer text-emerald-500 dark:text-emerald-300"
-                          title="Kutip & Balas Pesan Ini"
-                        >
-                          <icons.Reply class="w-3 h-3" />
-                          <span>Balas</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Quoted Reply Preview (pesan yang di-reply) -->
-                    <div
-                      v-if="msg.quotedMessageId && getQuotedMessage(msg.quotedMessageId)"
-                      @click="scrollToQuotedMessage(msg.quotedMessageId)"
-                      class="rounded-xl p-2.5 cursor-pointer border-l-[3px] transition-all hover:opacity-80 mb-1"
-                      :class="msg.direction === 'OUT'
-                        ? 'bg-emerald-700/50 border-white/50 hover:bg-emerald-700/70'
-                        : 'bg-base-200/80 border-emerald-500 hover:bg-base-200'"
-                    >
-                      <div
-                        class="text-[10px] font-bold flex items-center gap-1 mb-0.5"
-                        :class="msg.direction === 'OUT' ? 'text-emerald-200' : 'text-emerald-600'"
-                      >
-                        <icons.Reply class="w-3 h-3" />
-                        <span v-if="getQuotedMessage(msg.quotedMessageId)?.direction === 'OUT'">Anda</span>
-                        <span v-else>{{ parseGroupSender(getQuotedMessage(msg.quotedMessageId)?.message || '').sender || activeContactHistory?.name || 'Pelanggan' }}</span>
-                      </div>
-                      <p
-                        class="text-[11px] line-clamp-2 leading-snug"
-                        :class="msg.direction === 'OUT' ? 'text-white/80' : 'text-base-content/70'"
-                      >
-                        {{ parseGroupSender(getQuotedMessage(msg.quotedMessageId)?.message || '').cleanText }}
-                      </p>
-                    </div>
-
-                    <!-- Pratinjau Media Gambar/Video (Secure Fetch) -->
-                    <div v-if="msg.mediaUrl" class="my-1.5 overflow-hidden rounded-xl border border-base-content/10 bg-black/5">
-                      <div v-if="isImageOrVideo(msg.mediaUrl)" class="max-h-56 h-48 w-full relative">
-                        <SecureMedia :filename="msg.mediaUrl" :type="getMediaType(msg.mediaUrl)" />
-                      </div>
-                      <div v-else class="p-3 inline-flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
-                        <icons.FileText class="w-4 h-4" />
-                        <span>Dokumen Terlampir</span>
-                      </div>
-                    </div>
-
-                    <!-- Message Body -->
-                    <div>
-                      <div
-                        v-if="parseGroupSender(msg.message).sender"
-                        class="text-[11px] font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 mb-1.5 border"
-                        :class="msg.direction === 'OUT'
-                          ? 'bg-white/20 text-white border-white/20'
-                          : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'"
-                      >
-                        <icons.User class="w-3 h-3" />
-                        <span>{{ parseGroupSender(msg.message).sender }}</span>
-                      </div>
-                      <p class="whitespace-pre-wrap leading-relaxed break-words font-sans">
-                        {{ parseGroupSender(msg.message).cleanText }}
-                      </p>
-                    </div>
-
-                    <!-- Status Footer for Outgoing -->
-                    <div v-if="msg.direction === 'OUT'" class="flex items-center justify-end text-[9px] opacity-80 gap-1 pt-0.5">
-                      <span v-if="msg.messageId && !msg.messageId.startsWith('INVALID')" class="font-mono">Terkirim ✓</span>
-                      <span v-else-if="msg.messageId && msg.messageId.startsWith('INVALID')" class="text-red-200 font-bold">Gagal</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </div>
-
-            <!-- Quick Reply Footer Inside Chat Modal -->
-            <div class="p-4 border-t border-base-content/10 bg-base-100 space-y-3">
-              <!-- Notice Banner khusus Grup WhatsApp -->
-              <div
-                v-if="activeContactHistory?.phoneNumber?.endsWith('@g.us') || activeContactHistory?.phoneNumber?.includes('-')"
-                class="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 px-3 py-1.5 rounded-xl text-[11px] font-semibold flex items-center gap-1.5"
-              >
-                <icons.Users class="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                <span>Percakapan Grup WhatsApp. Balasan yang Anda kirim di sini akan terkirim ke seluruh anggota grup.</span>
-              </div>
-
-              <!-- Quoted / Reply Preview Banner -->
-              <div v-if="replyingToMessage" class="flex items-center justify-between bg-emerald-500/10 border-l-4 border-emerald-500 p-2.5 rounded-r-xl text-xs">
-                <div class="truncate space-y-0.5">
-                  <div class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
-                    <icons.Reply class="w-3.5 h-3.5" />
-                    <span>Membalas Pesan {{ replyingToMessage.direction === 'OUT' ? 'Anda' : (parseGroupSender(replyingToMessage.message).sender || 'Pelanggan') }}</span>
-                  </div>
-                  <div class="text-xs text-base-content/80 truncate font-mono">
-                    "{{ parseGroupSender(replyingToMessage.message).cleanText || replyingToMessage.message }}"
-                  </div>
-                </div>
-                <button @click="cancelReplyTarget" class="text-base-content/40 hover:text-base-content p-1 rounded-lg">
-                  <icons.X class="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <!-- File Attachment indicator -->
-              <div v-if="chatReplyFile" class="flex items-center justify-between bg-emerald-500/10 text-emerald-600 p-2 rounded-xl text-xs font-semibold">
-                <span class="truncate">File: {{ chatReplyFile.name }} ({{ (chatReplyFile.size / 1024 / 1024).toFixed(2) }} MB)</span>
-                <button @click="clearChatReplyFile" class="text-error hover:bg-error/10 p-1 rounded">
-                  <icons.X class="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <!-- File Input Trigger Button -->
-                <label class="btn btn-ghost btn-circle btn-sm text-base-content/60 hover:text-emerald-500 cursor-pointer" title="Lampirkan File Media (Foto/PDF)">
-                  <icons.Paperclip class="w-4 h-4" />
-                  <input
-                    type="file"
-                    ref="chatFileInput"
-                    @change="handleChatFileChange"
-                    accept="image/*,video/*,application/pdf"
-                    class="hidden"
-                  />
-                </label>
-
-                <!-- Input Textarea -->
-                <input
-                  v-model="chatReplyText"
-                  @keyup.enter="submitChatReply"
-                  type="text"
-                  :placeholder="(activeContactHistory?.phoneNumber?.endsWith('@g.us') || activeContactHistory?.phoneNumber?.includes('-'))
-                    ? 'Ketik balasan ke GRUP WhatsApp ini (Tekan Enter untuk kirim)...'
-                    : 'Ketik balasan pesan pribadi ke kontak ini (Tekan Enter untuk kirim)...'"
-                  class="input input-bordered input-sm flex-1 rounded-xl text-xs focus:border-emerald-500"
-                />
-
-                <!-- Send Button -->
-                <button
-                  @click="submitChatReply"
-                  :disabled="(!chatReplyText.trim() && !chatReplyFile) || sendingChatReply"
-                  class="btn btn-emerald btn-sm text-white rounded-xl gap-1 px-4 border-none shadow-md"
-                >
-                  <span v-if="sendingChatReply" class="loading loading-spinner loading-xs"></span>
-                  <icons.Send v-else class="w-4 h-4" />
-                  <span class="hidden sm:inline font-bold">Kirim</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- MODAL RINCIAN & METADATA GRUP WHATSAPP -->
     <Teleport to="body">
@@ -1031,6 +790,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useGlobalWhatsappChat } from "@/composables/useGlobalWhatsappChat";
 import * as icons from "lucide-vue-next";
 import Swal from "sweetalert2";
 import SecureMedia from "@/components/SecureMedia.vue";
@@ -1040,15 +801,6 @@ import { useAuthStore } from "@/stores/auth";
 
 definePageMeta({ layout: "admin" });
 
-const isImageOrVideo = (url?: string) => {
-  if (!url) return false;
-  return Boolean(url.match(/\.(png|jpg|jpeg|webp|gif|mp4|webm|mov)$/i));
-};
-
-const getMediaType = (url?: string): 'photo' | 'video' => {
-  if (!url) return 'photo';
-  return url.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'photo';
-};
 
 const { slugPath } = useSlugRoute();
 const authStore = useAuthStore();
@@ -1086,19 +838,6 @@ const sendForm = reactive({
   text: "",
   file: null as File | null,
 });
-
-// STATE MODAL RIWAYAT CHAT PER KONTAK
-const showHistoryModal = ref(false);
-const activeContactHistory = ref<any>(null);
-const chatLogs = ref<any[]>([]);
-const chatLogsLoading = ref(false);
-const chatReplyText = ref("");
-const chatReplyFile = ref<File | null>(null);
-const chatFileInput = ref<HTMLInputElement | null>(null);
-const sendingChatReply = ref(false);
-const replyingToMessage = ref<any>(null);
-const chatContainerRef = ref<HTMLElement | null>(null);
-let chatPollTimer: any = null;
 
 // STATE & POLLING NOTIFIKASI PESAN MASUK
 const toastNotification = ref<{
@@ -1154,42 +893,6 @@ const pageNumbers = computed(() => {
 });
 
 // Sorted Chat Logs (Oldest -> Newest) untuk Thread View
-const sortedChatLogs = computed(() => {
-  return [...chatLogs.value].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
-});
-
-// Helper parsing pengirim pesan grup (Nama Pengguna & Nomor Telepon)
-const parseGroupSender = (text: string) => {
-  if (!text) return { sender: null, cleanText: '' };
-  const match = text.match(/^\[([^\]]+)\]:\s*(.*)/s) || text.match(/^\[~([^\]]+)\]\s*(.*)/s);
-  if (match) {
-    return { sender: match[1], cleanText: match[2] };
-  }
-  return { sender: null, cleanText: text };
-};
-
-const getMessageSenderLabel = (msg: any) => {
-  if (!msg) return '-';
-  if (msg.direction === 'OUT') return 'Anda / Sistem';
-
-  const parsed = parseGroupSender(msg.message || '');
-  if (parsed.sender) return parsed.sender;
-
-  if (msg.participantJid) {
-    const rawNum = msg.participantJid.split('@')[0];
-    const contact = findContactInCache(rawNum);
-    return contact?.name || formatPhoneNumber(rawNum);
-  }
-
-  const isGroup = activeContactHistory.value?.phoneNumber?.endsWith('@g.us') || activeContactHistory.value?.phoneNumber?.includes('-');
-  if (isGroup) {
-    return 'Anggota Grup';
-  }
-
-  return activeContactHistory.value?.name || activeContactHistory.value?.pushName || formatPhoneNumber(activeContactHistory.value?.phoneNumber);
-};
 
 // FETCH DATA
 const fetchContacts = async () => {
@@ -1434,137 +1137,10 @@ const submitSendMessage = async () => {
 };
 
 // CHAT HISTORY MODAL FOR A SPECIFIC CONTACT (WITH LIVE POLLING & AUTO-SCROLL)
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (chatContainerRef.value) {
-      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight;
-    }
-  });
-};
-
+const { openChat } = useGlobalWhatsappChat();
 const openContactHistoryModal = (contact: any) => {
-  activeContactHistory.value = contact;
-  chatLogs.value = [];
-  chatReplyText.value = "";
-  clearChatReplyFile();
-  showHistoryModal.value = true;
-  fetchContactChatLogs(false);
-
-  // Auto polling setiap 3 detik ketika modal chat sedang terbuka
-  clearInterval(chatPollTimer);
-  chatPollTimer = setInterval(() => {
-    if (showHistoryModal.value && activeContactHistory.value) {
-      fetchContactChatLogs(true);
-    }
-  }, 3000);
+  openChat(contact);
 };
-
-const closeHistoryModal = () => {
-  clearInterval(chatPollTimer);
-  showHistoryModal.value = false;
-  activeContactHistory.value = null;
-  chatLogs.value = [];
-  chatReplyText.value = "";
-  clearChatReplyFile();
-  cancelReplyTarget();
-};
-
-const fetchContactChatLogs = async (isSilent = false) => {
-  if (!activeContactHistory.value) return;
-  if (!isSilent) chatLogsLoading.value = true;
-  try {
-    const rawPhone = activeContactHistory.value.phoneNumber || '';
-    const cleanPhone = rawPhone.trim().replace(/^[\s+]+/, '');
-    const chatType = activeContactHistory.value.chatType || (
-      (rawPhone.endsWith('@g.us') || rawPhone.includes('@g.us') || activeContactHistory.value.isGroup) ? 'GROUP' : 'PERSONAL'
-    );
-    const res = await waService.getMessageLogs(1, 100, {
-      phoneNumber: cleanPhone,
-      chatType,
-    });
-    const newItems = res?.items || [];
-    const prevCount = chatLogs.value.length;
-    chatLogs.value = newItems;
-
-    // Scroll ke bawah jika ada pesan baru atau saat pertama kali dibuka
-    if (!isSilent || newItems.length !== prevCount) {
-      scrollToBottom();
-    }
-  } catch (err) {
-    console.error("Gagal mengambil riwayat pesan kontak:", err);
-  } finally {
-    if (!isSilent) chatLogsLoading.value = false;
-  }
-};
-
-const handleChatFileChange = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  if (target.files && target.files[0]) {
-    chatReplyFile.value = target.files[0];
-  }
-};
-
-const clearChatReplyFile = () => {
-  chatReplyFile.value = null;
-  if (chatFileInput.value) chatFileInput.value.value = "";
-};
-
-const setReplyTarget = (msg: any) => {
-  replyingToMessage.value = msg;
-};
-
-/**
- * Mencari pesan yang dikutip berdasarkan messageId dari daftar chat logs
- */
-const getQuotedMessage = (quotedMsgId: string) => {
-  if (!quotedMsgId || !sortedChatLogs.value.length) return null;
-  return sortedChatLogs.value.find((m: any) => m.messageId === quotedMsgId) || null;
-};
-
-/**
- * Scroll dan highlight pesan yang dikutip saat kotak kutipan di-klik
- */
-const scrollToQuotedMessage = (quotedMsgId: string) => {
-  const el = document.getElementById(`wa-msg-${quotedMsgId}`);
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('wa-highlight-flash');
-    setTimeout(() => el.classList.remove('wa-highlight-flash'), 2000);
-  }
-};
-
-const cancelReplyTarget = () => {
-  replyingToMessage.value = null;
-};
-
-const submitChatReply = async () => {
-  if (!activeContactHistory.value || (!chatReplyText.value.trim() && !chatReplyFile.value)) return;
-  sendingChatReply.value = true;
-  try {
-    await waService.sendMessage(
-      deviceId.value,
-      activeContactHistory.value.phoneNumber,
-      chatReplyText.value.trim(),
-      chatReplyFile.value,
-      replyingToMessage.value?.messageId || undefined
-    );
-
-    chatReplyText.value = "";
-    clearChatReplyFile();
-    cancelReplyTarget();
-    await fetchContactChatLogs(false);
-    scrollToBottom();
-  } catch (err: any) {
-    Swal.fire({
-      icon: "error",
-      title: "Gagal Mengirim Balasan",
-      text: err?.data?.message || "Gagal mengirimkan pesan balasan.",
-    });
-  } finally {
-    sendingChatReply.value = false;
-  }
-};
-
 // UTILS
 const getAvatarInitial = (name?: string) => {
   if (!name) return "K";
@@ -1628,22 +1204,60 @@ const requestNotificationPermission = () => {
   }
 };
 
+
+const route = useRoute();
+const router = useRouter();
+
+const handleQueryNavigation = async () => {
+  const phoneQuery = route.query.phone as string;
+  const typeQuery = route.query.type as string;
+  const nameQuery = route.query.name as string;
+  
+  if (phoneQuery) {
+    if (typeQuery === 'GROUP' || phoneQuery.endsWith('@g.us')) {
+      activeTab.value = 'groups';
+      if (groups.value.length === 0) {
+        await fetchGroups();
+      }
+      const targetGroup = groups.value.find((g: any) => g.id === phoneQuery) || {
+        id: phoneQuery,
+        subject: nameQuery || 'Grup WhatsApp'
+      };
+      
+      openContactHistoryModal({ 
+        phoneNumber: targetGroup.id, 
+        name: targetGroup.subject || targetGroup.name || targetGroup.id,
+        isGroup: true,
+        chatType: 'GROUP'
+      });
+    } else {
+      activeTab.value = 'contacts';
+      const targetContact = contacts.value.find((c: any) => c.phoneNumber === phoneQuery) || {
+        phoneNumber: phoneQuery,
+        name: nameQuery || phoneQuery,
+      };
+      
+      openContactHistoryModal({
+        ...targetContact,
+        isGroup: false,
+        chatType: 'PERSONAL'
+      });
+    }
+    
+    router.replace({ path: slugPath('/whatsapp/contacts'), query: {} });
+  }
+};
+
 onMounted(async () => {
   await fetchContacts();
+  handleQueryNavigation();
 
   // Jika diakses dari tombol notifikasi global (dengan query parameter phone)
-  const phoneQuery = route.query.phone as string;
-  if (phoneQuery) {
-    const targetContact = contacts.value.find((c: any) => c.phoneNumber === phoneQuery) || {
-      phoneNumber: phoneQuery,
-      name: phoneQuery.endsWith('@g.us') ? 'Grup WhatsApp' : phoneQuery,
-    };
-    openContactHistoryModal(targetContact);
-  }
+  clearInterval(chatPollTimer);
 });
 
-onUnmounted(() => {
-  clearInterval(chatPollTimer);
+watch(() => route.query, () => {
+  handleQueryNavigation();
 });
 </script>
 

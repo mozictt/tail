@@ -5,8 +5,10 @@ import { WhatsappService } from '@/services/whatsapp.service';
 import { useWhatsappNotif } from '@/composables/useWhatsappNotif';
 import { useRouter, useRoute } from 'vue-router';
 import { useSlugRoute } from '@/composables/useSlugRoute';
+import { useGlobalWhatsappChat } from '@/composables/useGlobalWhatsappChat';
 
 const { unreadCount, startPolling, stopPolling, clearUnread } = useWhatsappNotif();
+const { openChat } = useGlobalWhatsappChat();
 const waService = WhatsappService();
 const router = useRouter();
 const route = useRoute();
@@ -43,10 +45,14 @@ const markAllAsRead = () => {
 
 const openMessage = (msg: any) => {
   markAllAsRead();
-  router.push({ path: slugPath('/whatsapp/contacts'), query: { phone: msg.phoneNumber } });
+  openChat({
+    phoneNumber: msg.phoneNumber,
+    name: getDisplayName(msg),
+    isGroup: msg.chatType === 'GROUP',
+    chatType: msg.chatType
+  });
 };
 
-// Click outside directive logic to close dropdown
 const dropdownRef = ref<HTMLElement | null>(null);
 const handleClickOutside = (event: MouseEvent) => {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
@@ -54,8 +60,60 @@ const handleClickOutside = (event: MouseEvent) => {
   }
 };
 
+const contactCache = ref<Map<string, any>>(new Map());
+
+const fetchContactsCache = async () => {
+  try {
+    const res = await waService.getContacts(1, 200);
+    const items = res?.items || [];
+    const map = new Map<string, any>();
+    items.forEach((c: any) => {
+      if (c.phoneNumber) map.set(c.phoneNumber, c);
+    });
+    contactCache.value = map;
+  } catch (err) {}
+};
+
+const findContactInCache = (rawPhone: string) => {
+  if (!rawPhone) return null;
+  if (contactCache.value.has(rawPhone)) return contactCache.value.get(rawPhone);
+
+  const cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+  if (!cleanDigits) return null;
+
+  for (const [phone, contact] of contactCache.value.entries()) {
+    const cDigits = phone.replace(/[^0-9]/g, '');
+    if (cDigits && (cDigits === cleanDigits || (cleanDigits.length >= 8 && cDigits.endsWith(cleanDigits.slice(-8))))) {
+      return contact;
+    }
+  }
+  return null;
+};
+
+const formatPhoneNumber = (phone?: string) => {
+  if (!phone) return "-";
+  const clean = phone.replace(/@.*$/, '');
+  return clean.startsWith("62") ? `+${clean}` : clean;
+};
+
+const getDisplayName = (msg: any) => {
+  if (msg.senderName) return msg.senderName;
+  
+  const isGroup = msg.chatType === 'GROUP';
+  const rawNum = msg.phoneNumber || '';
+  
+  if (isGroup) {
+     const c = findContactInCache(rawNum.split('@')[0]);
+     return c?.name || c?.pushName || 'Grup WhatsApp';
+  }
+  
+  const c = findContactInCache(rawNum);
+  return c?.name || c?.pushName || formatPhoneNumber(rawNum);
+};
+
 onMounted(() => {
   startPolling();
+  fetchContactsCache();
   document.addEventListener('click', handleClickOutside);
 });
 
@@ -111,7 +169,7 @@ onUnmounted(() => {
              </div>
              <div class="flex-1 min-w-0">
                <div class="flex justify-between items-center mb-0.5">
-                 <span class="font-bold text-xs text-base-content truncate group-hover:text-emerald-600 transition-colors">{{ msg.phoneNumber }}</span>
+                 <span class="font-bold text-xs text-base-content truncate group-hover:text-emerald-600 transition-colors">{{ getDisplayName(msg) }}</span>
                  <span class="text-[9px] text-base-content/40 font-medium ml-2 shrink-0">{{ new Date(msg.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }}</span>
                </div>
                <p class="text-[11px] text-base-content/70 line-clamp-2 leading-snug">

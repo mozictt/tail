@@ -611,7 +611,7 @@ onMounted(() => {
                   >
                     <!-- Inner Image Container -->
                     <div class="relative w-full h-full rounded-xl overflow-hidden bg-slate-100">
-                      <SecureMedia :filename="media.fileName" :type="media.type" class="pointer-events-none opacity-100 transition duration-500 w-full h-full object-cover" />
+                      <SecureMedia :filename="media.path || media.fileName" :type="media.type" class="pointer-events-none opacity-100 transition duration-500 w-full h-full object-cover" />
                       <!-- Icon Overlay if it's a video -->
                       <div v-if="media.type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/20">
                          <Film class="w-6 h-6 text-white/80 drop-shadow-md" />
@@ -708,7 +708,7 @@ onMounted(() => {
             </div>
 
             <!-- Media Preview (Secure Fetch) -->
-            <SecureMedia :filename="item.fileName" :type="item.type" />
+            <SecureMedia :filename="item.path || item.fileName" :type="item.type" />
             
             <!-- Gradient Overlay (Always visible on mobile, hover on desktop) -->
             <div 

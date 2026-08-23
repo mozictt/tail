@@ -4,6 +4,7 @@ import { useRuntimeConfig } from "#imports";
 export interface Gallery {
   id?: string;
   fileName: string;
+  path?: string;
   originalName: string;
   mimeType: string;
   size: number;

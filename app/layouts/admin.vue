@@ -64,8 +64,9 @@ const toggleMobileSidebar = () => {
       </main>
     </div>
 
-    <!-- Global WhatsApp Incoming Message Listener -->
+    <!-- Global WhatsApp Components -->
     <WhatsappNotificationListener />
+    <GlobalWhatsappChatModal />
   </div>
 </template>
 

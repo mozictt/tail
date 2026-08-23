@@ -213,9 +213,14 @@
                   <div v-if="isImageOrVideo(log.mediaUrl)" class="w-24 h-24 rounded-xl overflow-hidden border border-base-content/15 shadow-xs relative bg-base-200">
                     <SecureMedia :filename="log.mediaUrl" :type="getMediaType(log.mediaUrl)" />
                   </div>
-                  <div v-else class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                    <icons.FileText class="w-3.5 h-3.5" />
-                    <span>Dokumen Terlampir</span>
+                  <div v-else class="flex items-center justify-between gap-2 text-xs text-emerald-600 font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 rounded-xl border border-emerald-500/20 transition-colors">
+                    <div class="flex items-center gap-1.5 truncate">
+                      <icons.FileText class="w-4 h-4 shrink-0" />
+                      <span class="truncate font-mono" :title="log.mediaUrl.split('/').pop()">{{ log.mediaUrl.split('/').pop() }}</span>
+                    </div>
+                    <a :href="`${$config.public.apiBase}${log.mediaUrl.startsWith('/') ? '' : '/'}${log.mediaUrl}?token=${authStore.token}`" target="_blank" class="btn btn-xs btn-circle btn-ghost text-emerald-600 shrink-0" title="Unduh File">
+                      <icons.Download class="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
                 <div class="truncate font-medium text-base-content/90" :title="log.message">{{ log.message }}</div>
