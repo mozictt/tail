@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useGlobalWhatsappChat } from "@/composables/useGlobalWhatsappChat";
 import Swal from "sweetalert2";
 
-const { showGlobalChat, activeChatContact, closeChat } = useGlobalWhatsappChat();
+const { showGlobalChat, activeChatContact, closeChat, pendingShareFile, pendingShareUrl } = useGlobalWhatsappChat();
 const waService = WhatsappService();
 const authStore = useAuthStore();
 const deviceId = computed(() => authStore.tenant_id || "main-session");
@@ -17,6 +17,7 @@ const chatLogs = ref<any[]>([]);
 const chatLogsLoading = ref(false);
 const chatReplyText = ref("");
 const chatReplyFile = ref<File | null>(null);
+const chatReplyUrl = ref<string | null>(null);
 const sendingChatReply = ref(false);
 const replyingToMessage = ref<any>(null);
 const chatContainerRef = ref<HTMLElement | null>(null);
@@ -125,6 +126,7 @@ const handleChatFileChange = (e: Event) => {
 
 const clearChatReplyFile = () => {
   chatReplyFile.value = null;
+  chatReplyUrl.value = null;
   if (chatFileInput.value) chatFileInput.value.value = "";
 };
 
@@ -156,32 +158,21 @@ const fetchContactChatLogs = async (isSilent = false) => {
 
 const submitChatReply = async () => {
   if (!activeChatContact.value) return;
-  if (!chatReplyText.value.trim() && !chatReplyFile.value) return;
+  if (!chatReplyText.value.trim() && !chatReplyFile.value && !chatReplyUrl.value) return;
 
   sendingChatReply.value = true;
   try {
-    const isGroup = activeChatContact.value.chatType === 'GROUP' || activeChatContact.value.isGroup || activeChatContact.value.phoneNumber?.endsWith('@g.us');
     const targetPhone = activeChatContact.value.phoneNumber;
     
-    if (chatReplyFile.value) {
-      const type = chatReplyFile.value.type.startsWith("video") ? "video" : chatReplyFile.value.type === "application/pdf" ? "document" : "image";
-      await waService.sendMediaMessage(
-        deviceId.value,
-        targetPhone,
-        type,
-        chatReplyFile.value,
-        chatReplyText.value.trim(),
-        isGroup
-      );
-    } else {
-      await waService.sendMessage(
-        deviceId.value,
-        targetPhone,
-        chatReplyText.value.trim(),
-        isGroup,
-        replyingToMessage.value?.messageId
-      );
-    }
+    await waService.sendMessage(
+      deviceId.value,
+      targetPhone,
+      chatReplyText.value.trim(),
+      chatReplyFile.value,
+      replyingToMessage.value?.messageId,
+      chatReplyUrl.value
+    );
+    
     chatReplyText.value = "";
     clearChatReplyFile();
     cancelReplyTarget();
@@ -198,7 +189,16 @@ watch(showGlobalChat, (val) => {
   if (val) {
     chatLogs.value = [];
     chatReplyText.value = "";
-    clearChatReplyFile();
+    
+    // Gunakan file pending jika ada (dari share fitur), jika tidak reset
+    if (pendingShareFile.value) {
+      chatReplyFile.value = pendingShareFile.value;
+    } else if (pendingShareUrl.value) {
+      chatReplyUrl.value = pendingShareUrl.value;
+    } else {
+      clearChatReplyFile();
+    }
+    
     cancelReplyTarget();
     fetchContactChatLogs();
     chatPollTimer = setInterval(() => fetchContactChatLogs(true), 3000);
@@ -284,12 +284,17 @@ watch(showGlobalChat, (val) => {
                     <div v-if="isImageOrVideo(msg.mediaUrl)" class="max-h-56 h-48 w-full relative">
                       <SecureMedia :filename="msg.mediaUrl" :type="getMediaType(msg.mediaUrl)" />
                     </div>
-                    <div v-else class="p-3 flex items-center justify-between gap-2 text-xs text-emerald-600 font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors">
+                    <div v-else 
+                      class="p-3 flex items-center justify-between gap-2 text-xs font-semibold transition-colors"
+                      :class="msg.direction === 'OUT' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600'"
+                    >
                       <div class="flex items-center gap-1.5 truncate">
                         <icons.FileText class="w-4 h-4 shrink-0" /> 
                         <span class="truncate font-mono" :title="msg.mediaUrl.split('/').pop()">{{ msg.mediaUrl.split('/').pop() }}</span>
                       </div>
-                      <a :href="`${$config.public.apiBase}${msg.mediaUrl.startsWith('/') ? '' : '/'}${msg.mediaUrl}?token=${authStore.token}`" target="_blank" class="btn btn-xs btn-circle btn-ghost text-emerald-600 shrink-0 border border-emerald-500/20" title="Unduh File">
+                      <a :href="`${$config.public.apiBase}${msg.mediaUrl.startsWith('/') ? '' : '/'}${msg.mediaUrl}?token=${authStore.token}`" target="_blank" class="btn btn-xs btn-circle btn-ghost shrink-0 border" 
+                        :class="msg.direction === 'OUT' ? 'text-white border-white/30 hover:bg-white/20' : 'text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10'" 
+                        title="Unduh File">
                         <icons.Download class="w-3.5 h-3.5" />
                       </a>
                     </div>
@@ -326,8 +331,9 @@ watch(showGlobalChat, (val) => {
                 <icons.X class="w-3.5 h-3.5" />
               </button>
             </div>
-            <div v-if="chatReplyFile" class="flex items-center justify-between bg-emerald-500/10 text-emerald-600 p-2 rounded-xl text-xs font-semibold">
-              <span class="truncate">File: {{ chatReplyFile.name }} ({{ (chatReplyFile.size / 1024 / 1024).toFixed(2) }} MB)</span>
+            <div v-if="chatReplyFile || chatReplyUrl" class="flex items-center justify-between bg-emerald-500/10 text-emerald-600 p-2 rounded-xl text-xs font-semibold">
+              <span v-if="chatReplyFile" class="truncate">File: {{ chatReplyFile.name }} ({{ (chatReplyFile.size / 1024 / 1024).toFixed(2) }} MB)</span>
+              <span v-else class="truncate">Membagikan File: {{ chatReplyUrl?.split('/').pop() }}</span>
               <button @click="clearChatReplyFile" class="text-error hover:bg-error/10 p-1 rounded">
                 <icons.X class="w-3.5 h-3.5" />
               </button>
@@ -338,7 +344,7 @@ watch(showGlobalChat, (val) => {
                 <input type="file" ref="chatFileInput" @change="handleChatFileChange" accept="image/*,video/*,application/pdf" class="hidden" />
               </label>
               <input v-model="chatReplyText" @keyup.enter="submitChatReply" type="text" :placeholder="(activeChatContact?.phoneNumber?.endsWith('@g.us') || activeChatContact?.phoneNumber?.includes('-')) ? 'Ketik balasan ke GRUP WhatsApp ini...' : 'Ketik balasan pesan pribadi...'" class="input input-bordered input-sm flex-1 rounded-xl text-xs focus:border-emerald-500" />
-              <button @click="submitChatReply" :disabled="(!chatReplyText.trim() && !chatReplyFile) || sendingChatReply" class="btn btn-emerald btn-sm text-white rounded-xl gap-1 px-4 border-none shadow-md" style="background-color: #059669">
+              <button @click="submitChatReply" :disabled="(!chatReplyText.trim() && !chatReplyFile && !chatReplyUrl) || sendingChatReply" class="btn btn-emerald btn-sm text-white rounded-xl gap-1 px-4 border-none shadow-md" style="background-color: #059669">
                 <span v-if="sendingChatReply" class="loading loading-spinner loading-xs"></span>
                 <icons.Send v-else class="w-4 h-4" />
                 <span class="hidden sm:inline font-bold">Kirim</span>

@@ -71,7 +71,8 @@ export const WhatsappService = () => {
     to: string,
     text: string,
     file?: File | null,
-    quotedMessageId?: string
+    quotedMessageId?: string,
+    mediaUrl?: string | null
   ): Promise<WhatsappSendResponse> => {
     try {
       let body: any;
@@ -82,9 +83,10 @@ export const WhatsappService = () => {
         formData.append("text", text || "");
         formData.append("file", file);
         if (quotedMessageId) formData.append("quotedMessageId", quotedMessageId);
+        if (mediaUrl) formData.append("mediaUrl", mediaUrl);
         body = formData;
       } else {
-        body = { deviceId, to, text, quotedMessageId };
+        body = { deviceId, to, text, quotedMessageId, mediaUrl };
       }
 
       const res: any = await api("/whatsapp/send", {

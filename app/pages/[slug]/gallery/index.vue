@@ -7,13 +7,17 @@ import HeaderSearch from "@/components/header-master.vue";
 import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
-import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2 } from "lucide-vue-next";
 import { useSlugRoute } from "@/composables/useSlugRoute";
+import { useWhatsappShare } from "@/composables/useWhatsappShare";
 
-
+definePageMeta({
+  layout: "admin",
+});
 
 const route = useRoute();
 const router = useRouter();
+const { shareFile } = useWhatsappShare();
 const albumIdParam = route.query.albumId as string | undefined;
 
 const { showToast } = useToast();
@@ -413,6 +417,15 @@ const deleteMediaFromLightbox = async (id: string) => {
   }, 300); // wait for lightbox transition
 };
 
+const handleShareMedia = (item: Gallery) => {
+  const fileUrl = item.path || item.fileName;
+  if (fileUrl && item.originalName) {
+    shareFile(fileUrl, item.originalName, 'gallery');
+  } else {
+    showToast("File tidak valid untuk dibagikan", "error");
+  }
+};
+
 /* =========================
    BULK ACTIONS (Pilihan Massal)
 ========================= */
@@ -728,6 +741,13 @@ onMounted(() => {
                 
                 <div class="flex items-center gap-1.5 md:gap-2">
                   <button 
+                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    @click.stop="handleShareMedia(item)"
+                    title="Bagikan ke WhatsApp"
+                  >
+                    <Share2 class="w-4 h-4 md:w-4 md:h-4" />
+                  </button>
+                  <button 
                     class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-base-100/20 hover:bg-base-100 text-white hover:text-base-content flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="handleDownload(item)"
                     title="Unduh Asli"
@@ -889,6 +909,13 @@ onMounted(() => {
              
              <div class="flex items-center gap-1.5 md:gap-3 pointer-events-auto">
                <button 
+                  class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-emerald-500 hover:text-white"
+                  @click="handleShareMedia(viewMediaItem)"
+                  title="Bagikan ke WhatsApp"
+                >
+                  <Share2 class="w-5 h-5" />
+               </button>
+               <button 
                   class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-error hover:text-white"
                   @click="deleteMediaFromLightbox(viewMediaItem.id!)"
                   title="Hapus"
@@ -931,7 +958,7 @@ onMounted(() => {
           <!-- Media Container -->
           <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20">
              <div class="w-full h-full flex items-center justify-center drop-shadow-2xl">
-               <SecureMedia :filename="viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
+               <SecureMedia :filename="viewMediaItem.path || viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>
           </div>
         </div>

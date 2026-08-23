@@ -18,10 +18,12 @@ import {
   RefreshCw, 
   Calendar, 
   User, 
-  FolderOpen 
+  FolderOpen,
+  Share2 
 } from "lucide-vue-next";
 import { useToast } from "@/composables/useToast";
 import { useSlugRoute } from "@/composables/useSlugRoute";
+import { useWhatsappShare } from "@/composables/useWhatsappShare";
 
 definePageMeta({
   layout: 'admin'
@@ -30,6 +32,7 @@ definePageMeta({
 const { showToast } = useToast();
 const documentService = DocumentService();
 const { slugPath } = useSlugRoute();
+const { shareFile } = useWhatsappShare();
 
 /* =========================
    STATE & DATA TABLE OPTIONS
@@ -307,6 +310,14 @@ const downloadDoc = async (item: Document) => {
   }
 };
 
+const handleShareMedia = (item: Document) => {
+  if (item.path && item.originalName) {
+    shareFile(item.path, item.originalName, 'document');
+  } else {
+    showToast("File tidak valid untuk dibagikan", "error");
+  }
+};
+
 const deleteDoc = async (id: string) => {
   const result = await Swal.fire({
     title: "Hapus Dokumen?",
@@ -500,6 +511,15 @@ onMounted(() => {
                 >
                   <Download class="w-3.5 h-3.5" />
                   <span>Unduh</span>
+                </button>
+
+                <button 
+                  class="btn btn-sm btn-ghost hover:bg-emerald-500/10 text-emerald-500 border border-emerald-500/15 hover:border-emerald-500/25 rounded-2xl font-bold px-3 transition-all duration-300 flex items-center gap-1.5 text-xs shadow-xs"
+                  @click="handleShareMedia(item)"
+                  title="Bagikan ke WhatsApp"
+                >
+                  <Share2 class="w-3.5 h-3.5" />
+                  <span class="hidden sm:inline">Kirim WA</span>
                 </button>
 
                 <button 
