@@ -70,7 +70,8 @@ export const WhatsappService = () => {
     deviceId: string,
     to: string,
     text: string,
-    file?: File | null
+    file?: File | null,
+    quotedMessageId?: string
   ): Promise<WhatsappSendResponse> => {
     try {
       let body: any;
@@ -80,9 +81,10 @@ export const WhatsappService = () => {
         formData.append("to", to);
         formData.append("text", text || "");
         formData.append("file", file);
+        if (quotedMessageId) formData.append("quotedMessageId", quotedMessageId);
         body = formData;
       } else {
-        body = { deviceId, to, text };
+        body = { deviceId, to, text, quotedMessageId };
       }
 
       const res: any = await api("/whatsapp/send", {
@@ -151,7 +153,7 @@ export const WhatsappService = () => {
   const getMessageLogs = async (
     page = 1,
     limit = 20,
-    filters: { direction?: 'IN' | 'OUT'; search?: string; deviceId?: string } = {}
+    filters: { direction?: 'IN' | 'OUT'; search?: string; deviceId?: string; phoneNumber?: string; chatType?: 'GROUP' | 'PERSONAL' } = {}
   ): Promise<any> => {
     try {
       const res: any = await api("/whatsapp/logs", {
@@ -162,12 +164,135 @@ export const WhatsappService = () => {
           ...(filters.direction && { direction: filters.direction }),
           ...(filters.search && { search: filters.search }),
           ...(filters.deviceId && { deviceId: filters.deviceId }),
+          ...(filters.phoneNumber && { phoneNumber: filters.phoneNumber }),
+          ...(filters.chatType && { chatType: filters.chatType }),
         },
       });
       return res.data || res;
     } catch (err: any) {
       console.error("Gagal mengambil log pesan WhatsApp:", err);
       throw err;
+    }
+  };
+
+  /**
+   * Mengambil daftar Master Kontak Pengguna per tenant
+   */
+  const getContacts = async (
+    page = 1,
+    limit = 20,
+    search?: string
+  ): Promise<any> => {
+    try {
+      const res: any = await api("/whatsapp/contacts", {
+        method: "GET",
+        params: {
+          page,
+          limit,
+          ...(search && { search: search.trim() }),
+        },
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal mengambil daftar kontak WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Menambah atau memperbarui data Kontak Pengguna
+   */
+  const saveContact = async (data: {
+    phoneNumber: string;
+    name?: string;
+    pushName?: string;
+  }): Promise<any> => {
+    try {
+      const res: any = await api("/whatsapp/contacts", {
+        method: "POST",
+        body: data,
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal menyimpan kontak WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Menghapus kontak dari Master Kontak
+   */
+  const deleteContact = async (id: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res: any = await api(`/whatsapp/contacts/${id}`, {
+        method: "DELETE",
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal menghapus kontak WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Mengambil daftar semua grup WhatsApp yang diikuti oleh perangkat
+   */
+  const getGroups = async (deviceId: string): Promise<any[]> => {
+    try {
+      const res: any = await api("/whatsapp/groups", {
+        method: "GET",
+        params: { deviceId },
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal mengambil daftar grup WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Mengambil rincian metadata grup WhatsApp
+   */
+  const getGroupMetadata = async (deviceId: string, groupId: string): Promise<any> => {
+    try {
+      const res: any = await api(`/whatsapp/groups/${groupId}`, {
+        method: "GET",
+        params: { deviceId },
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal mengambil metadata grup WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Mereset notifikasi pesan WhatsApp yang belum terbaca
+   */
+  const markAsRead = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res: any = await api("/whatsapp/read-notifications", {
+        method: "PUT",
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal mereset notifikasi WhatsApp:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * Mengambil jumlah notifikasi pesan WhatsApp yang belum terbaca
+   */
+  const getUnreadCount = async (): Promise<{ count: number }> => {
+    try {
+      const res: any = await api("/whatsapp/read-notifications", {
+        method: "GET",
+      });
+      return res.data || res;
+    } catch (err: any) {
+      console.error("Gagal mengambil jumlah notifikasi WhatsApp:", err);
+      return { count: 0 };
     }
   };
 
@@ -179,5 +304,12 @@ export const WhatsappService = () => {
     sendBroadcast,
     logoutSession,
     getMessageLogs,
+    getContacts,
+    saveContact,
+    deleteContact,
+    getGroups,
+    getGroupMetadata,
+    markAsRead,
+    getUnreadCount,
   };
 };

@@ -65,7 +65,7 @@ const hasError = ref(false);
 // URL Streaming langsung untuk video menggunakan Query Token
 const videoStreamingUrl = computed(() => {
   if (!props.filename || props.type !== 'video') return '';
-  const cleanPath = props.filename.replace(/^\/+/, '');
+  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '');
   const baseUrl = `${config.public.apiBase}/gallery/media/${cleanPath}`;
   const token = authStore.token;
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
@@ -80,7 +80,7 @@ const loadSecurePhoto = async () => {
 
   try {
     const token = authStore.token;
-    const cleanPath = props.filename.replace(/^\/+/, '');
+    const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '');
     const url = `${config.public.apiBase}/gallery/media/${cleanPath}`;
 
     const response = await $fetch(url, {

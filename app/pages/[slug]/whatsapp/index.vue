@@ -34,6 +34,33 @@
       </div>
     </div>
 
+    <!-- NAVIGATION TABS -->
+    <div class="flex items-center gap-2 border-b border-base-content/10 pb-3 overflow-x-auto">
+      <NuxtLink
+        :to="slugPath('/whatsapp')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0"
+      >
+        <icons.Smartphone class="w-4 h-4" />
+        Perangkat & Sesi
+      </NuxtLink>
+
+      <NuxtLink
+        :to="slugPath('/whatsapp/contacts')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-base-content/60 hover:text-base-content hover:bg-base-200/50 shrink-0"
+      >
+        <icons.Users class="w-4 h-4" />
+        Master Kontak WA
+      </NuxtLink>
+
+      <NuxtLink
+        :to="slugPath('/whatsapp/history')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-base-content/60 hover:text-base-content hover:bg-base-200/50 shrink-0"
+      >
+        <icons.History class="w-4 h-4" />
+        Riwayat Log Pesan
+      </NuxtLink>
+    </div>
+
     <!-- MAIN GRID LAYOUT -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       

@@ -51,8 +51,9 @@ const toggleMobileSidebar = () => {
           </div>
         </div>
 
-        <!-- Kanan: theme switcher -->
+        <!-- Kanan: whatsapp notif & theme switcher -->
         <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
+          <WhatsappNavbarNotification />
           <ThemeSwitcher />
         </div>
       </header>
@@ -62,6 +63,9 @@ const toggleMobileSidebar = () => {
         <slot />
       </main>
     </div>
+
+    <!-- Global WhatsApp Incoming Message Listener -->
+    <WhatsappNotificationListener />
   </div>
 </template>
 

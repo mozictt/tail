@@ -51,6 +51,33 @@
       </div>
     </div>
 
+    <!-- NAVIGATION TABS -->
+    <div class="flex items-center gap-2 border-b border-base-content/10 pb-3 overflow-x-auto">
+      <NuxtLink
+        :to="slugPath('/whatsapp')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-base-content/60 hover:text-base-content hover:bg-base-200/50 shrink-0"
+      >
+        <icons.Smartphone class="w-4 h-4" />
+        Perangkat & Sesi
+      </NuxtLink>
+
+      <NuxtLink
+        :to="slugPath('/whatsapp/contacts')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-base-content/60 hover:text-base-content hover:bg-base-200/50 shrink-0"
+      >
+        <icons.Users class="w-4 h-4" />
+        Master Kontak WA
+      </NuxtLink>
+
+      <NuxtLink
+        :to="slugPath('/whatsapp/history')"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0"
+      >
+        <icons.History class="w-4 h-4" />
+        Riwayat Log Pesan
+      </NuxtLink>
+    </div>
+
     <!-- FILTER BAR -->
     <div class="bg-base-100 border border-base-content/10 rounded-2xl p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
@@ -129,7 +156,7 @@
             <tr class="bg-base-200/50 border-b border-base-content/10 text-base-content/70">
               <th class="py-3 pl-5 font-bold">WAKTU</th>
               <th class="py-3 font-bold">ARAH</th>
-              <th class="py-3 font-bold">NOMOR WA</th>
+              <th class="py-3 font-bold">TIPE & TUJUAN (GRUP / PRIBADI)</th>
               <th class="py-3 font-bold">ISI PESAN</th> 
               <th class="py-3 pr-5 font-bold text-right">AKSI</th>
             </tr>
@@ -158,14 +185,40 @@
                 </span>
               </td>
 
-              <!-- Nomor WA -->
-              <td class="py-3.5 font-semibold text-base-content">
-                {{ formatPhoneNumber(log.phoneNumber) }}
+              <!-- Tipe & Tujuan (Grup / Pribadi) -->
+              <td class="py-3.5">
+                <div class="space-y-1">
+                  <span
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase border tracking-wider"
+                    :class="getLogSourceInfo(log).badgeClass"
+                  >
+                    {{ getLogSourceInfo(log).badgeText }}
+                  </span>
+                  <div class="font-bold text-xs text-base-content flex items-center gap-1.5">
+                    <icons.Users v-if="getLogSourceInfo(log).isGroup" class="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <icons.User v-else class="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span class="truncate max-w-[190px]" :title="getLogSourceInfo(log).targetLabel">
+                      {{ getLogSourceInfo(log).targetLabel }}
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-base-content/50 font-mono">
+                    {{ getLogSourceInfo(log).targetDetail }}
+                  </div>
+                </div>
               </td>
 
               <!-- Isi Pesan -->
               <td class="py-3.5 text-base-content/70 max-w-xs">
-                <div class="truncate" :title="log.message">{{ log.message }}</div>
+                <div v-if="log.mediaUrl" class="mb-2">
+                  <div v-if="isImageOrVideo(log.mediaUrl)" class="w-24 h-24 rounded-xl overflow-hidden border border-base-content/15 shadow-xs relative bg-base-200">
+                    <SecureMedia :filename="log.mediaUrl" :type="getMediaType(log.mediaUrl)" />
+                  </div>
+                  <div v-else class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                    <icons.FileText class="w-3.5 h-3.5" />
+                    <span>Dokumen Terlampir</span>
+                  </div>
+                </div>
+                <div class="truncate font-medium text-base-content/90" :title="log.message">{{ log.message }}</div>
                 <div v-if="log.messageId && !log.messageId.startsWith('INVALID')" class="text-[10px] text-base-content/35 font-mono mt-0.5">
                   ID: {{ log.messageId }}
                 </div>
@@ -448,11 +501,22 @@
 import { ref, computed, onMounted } from "vue";
 import * as icons from "lucide-vue-next";
 import Swal from "sweetalert2";
+import SecureMedia from "@/components/SecureMedia.vue";
 import { WhatsappService } from "@/services/whatsapp.service";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useAuthStore } from "@/stores/auth";
 
 definePageMeta({ layout: "admin" });
+
+const isImageOrVideo = (url?: string) => {
+  if (!url) return false;
+  return Boolean(url.match(/\.(png|jpg|jpeg|webp|gif|mp4|webm|mov)$/i));
+};
+
+const getMediaType = (url?: string): 'photo' | 'video' => {
+  if (!url) return 'photo';
+  return url.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'photo';
+};
 
 const { slugPath } = useSlugRoute();
 const authStore = useAuthStore();
@@ -463,6 +527,8 @@ const deviceId = computed(() => authStore.tenant_id || "main-session");
 
 // ===== STATE =====
 const logs = ref<any[]>([]);
+const contactsCache = ref<any[]>([]);
+const groupsCache = ref<any[]>([]);
 const loading = ref(false);
 const logsPage = ref(1);
 const logsLimit = ref(20);
@@ -470,6 +536,54 @@ const logsTotalItems = ref(0);
 const logsTotalPages = ref(1);
 const logsTotalIn = ref(0);
 const logsTotalOut = ref(0);
+
+// Helper pencari penanda log (Grup vs Pribadi)
+const getLogSourceInfo = (log: any) => {
+  const phone = log?.phoneNumber || '';
+  
+  // Prioritas utama: Atribut chatType dari database
+  let isGroup = false;
+  if (log?.chatType === 'GROUP') {
+    isGroup = true;
+  } else if (log?.chatType === 'PERSONAL') {
+    isGroup = false;
+  } else {
+    // Fallback hanya untuk log lama jika chatType belum terisi di database
+    isGroup = phone.endsWith('@g.us') || phone.includes('@g.us') || (phone.length > 15 && phone.includes('-') && !phone.includes('628'));
+  }
+
+  if (isGroup) {
+    const groupCleanId = phone.split('@')[0];
+    const foundGroup = groupsCache.value.find(
+      (g: any) => g.id === phone || g.id === `${phone}@g.us` || g.id.includes(groupCleanId)
+    );
+    const groupName = foundGroup?.subject || foundGroup?.name || 'Grup WhatsApp';
+    return {
+      isGroup: true,
+      badgeText: '👥 PESAN GRUP',
+      groupName: groupName,
+      targetLabel: groupName,
+      targetDetail: phone,
+      badgeClass: 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300',
+    };
+  } else {
+    const digits = phone.replace(/[^0-9]/g, '');
+    const foundContact = contactsCache.value.find((c: any) => {
+      if (c.phoneNumber === phone || c.jid === phone) return true;
+      const cDigits = (c.phoneNumber || '').replace(/[^0-9]/g, '');
+      return digits && cDigits && (cDigits === digits || (digits.length >= 8 && cDigits.endsWith(digits.slice(-8))));
+    });
+    const contactName = foundContact?.name || foundContact?.pushName || formatPhoneNumber(phone);
+    return {
+      isGroup: false,
+      badgeText: '👤 PESAN PRIBADI',
+      groupName: null,
+      targetLabel: contactName,
+      targetDetail: formatPhoneNumber(phone),
+      badgeClass: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300',
+    };
+  }
+};
 
 // Filters
 const filterDirection = ref<"" | "IN" | "OUT">("");
@@ -799,10 +913,28 @@ const submitModal = async () => {
   }
 };
 
+const fetchMasterCaches = async () => {
+  try {
+    const [cRes, gRes] = await Promise.allSettled([
+      waService.getContacts(1, 200),
+      waService.getGroups(deviceId.value),
+    ]);
+    if (cRes.status === 'fulfilled') {
+      contactsCache.value = cRes.value?.items || [];
+    }
+    if (gRes.status === 'fulfilled') {
+      groupsCache.value = gRes.value || [];
+    }
+  } catch (err) {
+    // ignore
+  }
+};
+
 // ===== LIFECYCLE =====
 onMounted(() => {
   fetchLogs();
   fetchStats();
+  fetchMasterCaches();
 });
 </script>
 
