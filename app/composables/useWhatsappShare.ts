@@ -5,13 +5,14 @@ import { useGlobalWhatsappChat } from '@/composables/useGlobalWhatsappChat';
 import { useAuthStore } from '@/stores/auth';
 
 const isSelectorOpen = ref(false);
-const sharePayload = ref<{ fileUrl: string; fileName: string; type: 'gallery' | 'document' } | null>(null);
+interface ShareItem { fileUrl: string; fileName: string; }
+const sharePayload = ref<{ items: ShareItem[]; type: 'gallery' | 'document' } | null>(null);
 
 export const useWhatsappShare = () => {
   const waService = WhatsappService();
   const authStore = useAuthStore();
 
-  const shareFile = async (fileUrl: string, fileName: string, type: 'gallery' | 'document') => {
+  const shareFile = async (fileUrl: string | string[], fileName: string | string[], type: 'gallery' | 'document') => {
     try {
       // 1. Validasi Koneksi WA
       const deviceId = authStore.tenant_id || 'main-session';
@@ -28,8 +29,17 @@ export const useWhatsappShare = () => {
         return;
       }
 
-      // 2. Tampilkan Loading State & Simpan Payload Sementara
-      sharePayload.value = { fileUrl, fileName, type };
+      // 2. Format payload menjadi array
+      const urls = Array.isArray(fileUrl) ? fileUrl : [fileUrl];
+      const names = Array.isArray(fileName) ? fileName : [fileName];
+      
+      const items: ShareItem[] = urls.map((url, i) => ({
+        fileUrl: url,
+        fileName: names[i] || 'Media'
+      }));
+
+      // 3. Tampilkan Loading State & Simpan Payload Sementara
+      sharePayload.value = { items, type };
       isSelectorOpen.value = true;
       
     } catch (err: any) {

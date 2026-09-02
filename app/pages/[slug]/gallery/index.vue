@@ -457,6 +457,19 @@ const toggleSelectAll = () => {
   }
 };
 
+const handleShareBulk = () => {
+  if (selectedItems.value.length === 0) return;
+  const itemsToShare = items.value.filter(i => i.id && selectedItems.value.includes(i.id));
+  const urls = itemsToShare.map(i => i.path || i.fileName).filter(Boolean) as string[];
+  const names = itemsToShare.map(i => i.originalName || i.fileName || 'media');
+  
+  if (urls.length > 0) {
+    shareFile(urls, names, 'gallery');
+  } else {
+    showToast("File tidak valid untuk dibagikan", "error");
+  }
+};
+
 const handleDeleteBulk = async () => {
   if (selectedItems.value.length === 0) return;
   
@@ -997,24 +1010,34 @@ onMounted(() => {
             </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 mt-1">
+          <div class="flex items-center gap-2 mt-2">
+            <button 
+              @click="handleShareBulk" 
+              class="btn flex-1 btn-sm rounded-xl font-bold flex items-center justify-center gap-1.5 px-2 text-white border-none shadow-md hover:brightness-110 active:scale-95 transition-all"
+              style="background-color: #059669;"
+              :disabled="selectedItems.length === 0 || bulkActionLoading"
+            >
+              <span v-if="bulkActionLoading" class="loading loading-spinner loading-xs"></span>
+              <Share2 v-else class="w-4 h-4" />
+              <span class="text-xs">Kirim WA</span>
+            </button>
             <button 
               @click="handleDownloadBulk" 
-              class="btn btn-primary btn-sm rounded-xl font-bold flex items-center justify-center gap-2"
+              class="btn flex-1 btn-primary btn-sm rounded-xl font-bold flex items-center justify-center gap-1.5 px-2 text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
               :disabled="selectedItems.length === 0 || bulkActionLoading"
             >
               <span v-if="bulkActionLoading" class="loading loading-spinner loading-xs"></span>
               <Download v-else class="w-4 h-4" />
-              <span>Unduh Terpilih</span>
+              <span class="text-xs">Unduh</span>
             </button>
             <button 
               @click="handleDeleteBulk" 
-              class="btn btn-error btn-sm rounded-xl font-bold flex items-center justify-center gap-2"
+              class="btn flex-1 btn-error btn-sm rounded-xl font-bold flex items-center justify-center gap-1.5 px-2 text-white shadow-md hover:brightness-110 active:scale-95 transition-all"
               :disabled="selectedItems.length === 0 || bulkActionLoading"
             >
               <span v-if="bulkActionLoading" class="loading loading-spinner loading-xs"></span>
               <Trash2 v-else class="w-4 h-4" />
-              <span>Hapus Terpilih</span>
+              <span class="text-xs">Hapus</span>
             </button>
           </div>
           

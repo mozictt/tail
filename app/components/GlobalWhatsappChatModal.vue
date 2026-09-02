@@ -7,7 +7,8 @@ import { useAuthStore } from "@/stores/auth";
 import { useGlobalWhatsappChat } from "@/composables/useGlobalWhatsappChat";
 import Swal from "sweetalert2";
 
-const { showGlobalChat, activeChatContact, closeChat, pendingShareFile, pendingShareUrl } = useGlobalWhatsappChat();
+const { showGlobalChat, activeChatContact, closeChat, pendingShareFile, pendingShareUrls } = useGlobalWhatsappChat();
+const chatReplyUrls = ref<string[]>([]);
 const waService = WhatsappService();
 const authStore = useAuthStore();
 const deviceId = computed(() => authStore.tenant_id || "main-session");
@@ -17,7 +18,6 @@ const chatLogs = ref<any[]>([]);
 const chatLogsLoading = ref(false);
 const chatReplyText = ref("");
 const chatReplyFile = ref<File | null>(null);
-const chatReplyUrl = ref<string | null>(null);
 const sendingChatReply = ref(false);
 const replyingToMessage = ref<any>(null);
 const chatContainerRef = ref<HTMLElement | null>(null);
@@ -126,7 +126,7 @@ const handleChatFileChange = (e: Event) => {
 
 const clearChatReplyFile = () => {
   chatReplyFile.value = null;
-  chatReplyUrl.value = null;
+  chatReplyUrls.value = [];
   if (chatFileInput.value) chatFileInput.value.value = "";
 };
 
@@ -158,20 +158,37 @@ const fetchContactChatLogs = async (isSilent = false) => {
 
 const submitChatReply = async () => {
   if (!activeChatContact.value) return;
-  if (!chatReplyText.value.trim() && !chatReplyFile.value && !chatReplyUrl.value) return;
+  if (!chatReplyText.value.trim() && !chatReplyFile.value && chatReplyUrls.value.length === 0) return;
 
   sendingChatReply.value = true;
   try {
     const targetPhone = activeChatContact.value.phoneNumber;
     
-    await waService.sendMessage(
-      deviceId.value,
-      targetPhone,
-      chatReplyText.value.trim(),
-      chatReplyFile.value,
-      replyingToMessage.value?.messageId,
-      chatReplyUrl.value
-    );
+    let sendMsg = chatReplyText.value;
+    
+    if (chatReplyUrls.value.length > 0) {
+      for (const url of chatReplyUrls.value) {
+        await waService.sendMessage(
+          deviceId.value,
+          targetPhone,
+          sendMsg,
+          undefined,
+          replyingToMessage.value?.messageId,
+          url
+        );
+        sendMsg = ""; // Hanya lampirkan caption di media pertama
+        replyingToMessage.value = null; // Hanya kutip pesan di media pertama
+      }
+    } else {
+      await waService.sendMessage(
+        deviceId.value,
+        targetPhone,
+        sendMsg,
+        chatReplyFile.value || undefined,
+        replyingToMessage.value?.messageId,
+        undefined
+      );
+    }
     
     chatReplyText.value = "";
     clearChatReplyFile();
@@ -193,8 +210,8 @@ watch(showGlobalChat, (val) => {
     // Gunakan file pending jika ada (dari share fitur), jika tidak reset
     if (pendingShareFile.value) {
       chatReplyFile.value = pendingShareFile.value;
-    } else if (pendingShareUrl.value) {
-      chatReplyUrl.value = pendingShareUrl.value;
+    } else if (pendingShareUrls.value && pendingShareUrls.value.length > 0) {
+      chatReplyUrls.value = [...pendingShareUrls.value];
     } else {
       clearChatReplyFile();
     }
@@ -331,9 +348,9 @@ watch(showGlobalChat, (val) => {
                 <icons.X class="w-3.5 h-3.5" />
               </button>
             </div>
-            <div v-if="chatReplyFile || chatReplyUrl" class="flex items-center justify-between bg-emerald-500/10 text-emerald-600 p-2 rounded-xl text-xs font-semibold">
+            <div v-if="chatReplyFile || chatReplyUrls.length > 0" class="flex items-center justify-between bg-emerald-500/10 text-emerald-600 p-2 rounded-xl text-xs font-semibold">
               <span v-if="chatReplyFile" class="truncate">File: {{ chatReplyFile.name }} ({{ (chatReplyFile.size / 1024 / 1024).toFixed(2) }} MB)</span>
-              <span v-else class="truncate">Membagikan File: {{ chatReplyUrl?.split('/').pop() }}</span>
+              <span v-else class="truncate">Membagikan {{ chatReplyUrls.length > 1 ? chatReplyUrls.length + ' File Media' : 'File: ' + chatReplyUrls[0].split('/').pop() }}</span>
               <button @click="clearChatReplyFile" class="text-error hover:bg-error/10 p-1 rounded">
                 <icons.X class="w-3.5 h-3.5" />
               </button>
@@ -344,7 +361,7 @@ watch(showGlobalChat, (val) => {
                 <input type="file" ref="chatFileInput" @change="handleChatFileChange" accept="image/*,video/*,application/pdf" class="hidden" />
               </label>
               <input v-model="chatReplyText" @keyup.enter="submitChatReply" type="text" :placeholder="(activeChatContact?.phoneNumber?.endsWith('@g.us') || activeChatContact?.phoneNumber?.includes('-')) ? 'Ketik balasan ke GRUP WhatsApp ini...' : 'Ketik balasan pesan pribadi...'" class="input input-bordered input-sm flex-1 rounded-xl text-xs focus:border-emerald-500" />
-              <button @click="submitChatReply" :disabled="(!chatReplyText.trim() && !chatReplyFile && !chatReplyUrl) || sendingChatReply" class="btn btn-emerald btn-sm text-white rounded-xl gap-1 px-4 border-none shadow-md" style="background-color: #059669">
+              <button @click="submitChatReply" :disabled="(!chatReplyText.trim() && !chatReplyFile && chatReplyUrls.length === 0) || sendingChatReply" class="btn btn-emerald btn-sm text-white rounded-xl gap-1 px-4 border-none shadow-md" style="background-color: #059669">
                 <span v-if="sendingChatReply" class="loading loading-spinner loading-xs"></span>
                 <icons.Send v-else class="w-4 h-4" />
                 <span class="hidden sm:inline font-bold">Kirim</span>

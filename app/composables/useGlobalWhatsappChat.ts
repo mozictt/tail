@@ -3,7 +3,7 @@
   const showGlobalChat = ref(false);
   const activeChatContact = ref<any>(null);
   const pendingShareFile = ref<File | null>(null);
-  const pendingShareUrl = ref<string | null>(null);
+  const pendingShareUrls = ref<string[]>([]);
 
   export const useGlobalWhatsappChat = () => {
     const openChat = (
@@ -15,11 +15,17 @@
         chatType?: 'PERSONAL' | 'GROUP';
       },
       file?: File,
-      mediaUrl?: string
+      mediaUrl?: string | string[]
     ) => {
       activeChatContact.value = contact;
       pendingShareFile.value = file || null;
-      pendingShareUrl.value = mediaUrl || null;
+      if (Array.isArray(mediaUrl)) {
+        pendingShareUrls.value = mediaUrl;
+      } else if (mediaUrl) {
+        pendingShareUrls.value = [mediaUrl];
+      } else {
+        pendingShareUrls.value = [];
+      }
       showGlobalChat.value = true;
     };
 
@@ -27,14 +33,14 @@
       showGlobalChat.value = false;
       activeChatContact.value = null;
       pendingShareFile.value = null;
-      pendingShareUrl.value = null;
+      pendingShareUrls.value = [];
     };
 
     return {
       showGlobalChat,
       activeChatContact,
       pendingShareFile,
-      pendingShareUrl,
+      pendingShareUrls,
       openChat,
       closeChat,
     };

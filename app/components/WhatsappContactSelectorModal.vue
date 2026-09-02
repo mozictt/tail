@@ -90,6 +90,8 @@ const selectContact = async (contact: any, isGroup = false) => {
 
   try {
 
+    const fileUrls = payload.items.map(i => i.fileUrl);
+
     // Buka Global Chat Modal dengan mediaUrl terlampir
     if (isGroup) {
       openChat({
@@ -97,14 +99,14 @@ const selectContact = async (contact: any, isGroup = false) => {
         name: contact.subject,
         isGroup: true,
         chatType: 'GROUP'
-      }, undefined, payload.fileUrl);
+      }, undefined, fileUrls);
     } else {
       openChat({
         phoneNumber: contact.phoneNumber,
         name: contact.name || contact.pushName || contact.phoneNumber,
         isGroup: false,
         chatType: 'PERSONAL'
-      }, undefined, payload.fileUrl);
+      }, undefined, fileUrls);
     }
 
   } catch (err) {
@@ -132,7 +134,9 @@ const selectContact = async (contact: any, isGroup = false) => {
                 Kirim ke WhatsApp
               </h3>
               <p class="text-xs text-base-content/60 mt-0.5 truncate max-w-[300px]">
-                Membagikan: <span class="font-bold text-emerald-600">{{ sharePayload?.fileName }}</span>
+                Membagikan: 
+                <span v-if="sharePayload?.items?.length === 1" class="font-bold text-emerald-600">{{ sharePayload?.items[0]?.fileName }}</span>
+                <span v-else class="font-bold text-emerald-600">{{ sharePayload?.items?.length }} Media Terpilih</span>
               </p>
             </div>
             <button @click="closeSelector" class="btn btn-sm btn-ghost btn-circle text-base-content/50 hover:text-base-content">
