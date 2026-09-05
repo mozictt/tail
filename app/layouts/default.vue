@@ -5,6 +5,7 @@ import Sidebar from "@/components/Sidebar.vue";
 import { useUIStore } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
+import Swal from "sweetalert2";
 
 const ui = useUIStore();
 const auth = useAuthStore();
@@ -17,8 +18,26 @@ const onUpdateActive = (menuItem: any) => {
 };
 
 const handleLogout = async () => {
-  menuStore.clearMenus();
-  await auth.logout();
+  const result = await Swal.fire({
+    title: "Konfirmasi Logout",
+    text: "Apakah anda yakin akan logout?",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Logout",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#ef4444",
+    cancelButtonColor: "#6b7280",
+    reverseButtons: true,
+    customClass: {
+      confirmButton: "btn btn-error text-white rounded-xl px-5 font-bold",
+      cancelButton: "btn btn-ghost rounded-xl px-5 font-bold",
+    },
+  });
+
+  if (result.isConfirmed) {
+    menuStore.clearMenus();
+    await auth.logout();
+  }
 };
 </script>
 

@@ -9,6 +9,7 @@ import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useHead } from "#imports";
 import { UserService } from "@/services/user.service";
+import Swal from "sweetalert2";
 
 const router = useRouter();
 const route = useRoute();
@@ -42,9 +43,27 @@ const closeProfileDropdown = () => {
 };
 
 const handleLogout = async () => {
-  menuStore.clearMenus(); // Clear menus on logout
-  await auth.logout();
-  closeProfileDropdown();
+  const result = await Swal.fire({
+    title: "Konfirmasi Logout",
+    text: "Apakah anda yakin akan logout?",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Logout",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#ef4444",
+    cancelButtonColor: "#6b7280",
+    reverseButtons: true,
+    customClass: {
+      confirmButton: "btn btn-error text-white rounded-xl px-5 font-bold",
+      cancelButton: "btn btn-ghost rounded-xl px-5 font-bold",
+    },
+  });
+
+  if (result.isConfirmed) {
+    menuStore.clearMenus();
+    await auth.logout();
+    closeProfileDropdown();
+  }
 };
 
 // ===== RESPONSIVE =====
@@ -251,20 +270,6 @@ watch(isMobile, (val) => {
 
     <!-- MENU LIST -->
     <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0 scrollbar-thin">
-      <!-- 🔴 INSTANT LOGOUT BUTTON AT THE VERY TOP OF MOBILE SIDEBAR -->
-      <div class="md:hidden mb-2">
-        <button
-          @click="handleLogout"
-          class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error font-bold text-sm transition shadow-xs active:scale-98"
-        >
-          <div class="flex items-center gap-2.5">
-            <icons.LogOut class="w-4.5 h-4.5 shrink-0" />
-            <span>Keluar / Logout</span>
-          </div>
-          <icons.ChevronRight class="w-4 h-4 opacity-70" />
-        </button>
-      </div>
-
       <SidebarItem
         v-for="(item, idx) in menu"
         :key="idx"
@@ -273,21 +278,10 @@ watch(isMobile, (val) => {
         :isOpenSidebar="isOpen"
         @menu-click="handleMenuClick"
       />
-
-      <!-- Dedicated Mobile Logout Button directly in Navigation List -->
-      <div class="md:hidden border-t border-base-content/10 mt-auto pt-3 pb-2">
-        <button
-          @click="handleLogout"
-          class="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error font-bold text-sm transition shadow-xs active:scale-98"
-        >
-          <icons.LogOut class="w-5 h-5 shrink-0" />
-          <span>Keluar / Logout</span>
-        </button>
-      </div>
     </nav>
 
     <!-- FOOTER PROFILE -->
-    <div class="p-3 md:p-4 pb-20 md:pb-4 border-t border-base-content/5 relative bg-base-100 shrink-0">
+    <div class="p-3 md:p-4 pb-6 md:pb-4 border-t border-base-content/5 relative bg-base-100 shrink-0">
       <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-base-200/50 hover:bg-base-200 transition">
         <!-- Profile Info (Click to toggle popup menu) -->
         <div 
@@ -315,23 +309,13 @@ watch(isMobile, (val) => {
             :class="{ 'rotate-180': profileDropdownOpen }"
           />
         </div>
-
-        <!-- Tombol Quick Logout (Tampak Langsung di Mobile & Desktop saat Sidebar Terbuka) -->
-        <button
-          v-if="isOpen || isMobile"
-          @click="handleLogout"
-          class="p-2 text-error/80 hover:text-error hover:bg-error/10 rounded-lg transition shrink-0"
-          title="Keluar / Logout"
-        >
-          <icons.LogOut class="w-4.5 h-4.5" />
-        </button>
       </div>
 
       <!-- PROFIL DROPDOWN MENU -->
       <Transition name="fade">
         <div
           v-if="profileDropdownOpen"
-          class="absolute bottom-28 left-3 right-3 md:bottom-16 md:left-4 md:right-4 bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-1.5 z-50 animate-fade-in"
+          class="absolute bottom-16 left-3 right-3 md:left-4 md:right-4 bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-1.5 z-50 animate-fade-in"
         >
           <NuxtLink
             :to="slugPath('/profile')"
