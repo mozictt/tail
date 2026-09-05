@@ -131,8 +131,8 @@ const uploadItems = ref<UploadFileItem[]>([]);
 const uploadAlbumId = ref<string | undefined>(albumIdParam);
 const isDragging = ref(false);
 
-const MAX_UPLOAD_BATCH_LIMIT = 20; // Limit per upload batch
-const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
+const MAX_UPLOAD_BATCH_LIMIT = 100; // Limit per upload batch (maksimal 100 file)
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"];
 const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "mp4", "webm"];
 
@@ -495,13 +495,38 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       formData.append("albumId", uploadAlbumId.value);
     }
 
+    // Proteksi Timeout Cerdas: HANYA timeout jika TIDAK ADA PROGRES sama sekali selama 60 detik (Stalled Connection)
+    // Selama ada progres data berjalan, timer akan terus di-reset sehingga file besar (hingga 500MB) tidak akan terputus.
+    const STALL_TIMEOUT_MS = 60000; // 60 detik tanpa adanya pergerakan progres
+    let stallTimer: any = null;
+
+    const resetStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        item.status = 'failed';
+        item.errorMsg = "Koneksi terhenti (Tidak ada progres unggahan selama 60 detik)";
+        xhr.abort();
+        resolve(false);
+      }, STALL_TIMEOUT_MS);
+    };
+
+    const clearStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+    };
+
+    // Jalankan timer awal saat transmisi dimulai
+    resetStallTimer();
+
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
         item.progress = Math.round((e.loaded * 100) / e.total);
       }
+      // Setiap kali ada bytes yang terkirim (ada progres) -> RESET TIMER!
+      resetStallTimer();
     });
 
     xhr.addEventListener("load", () => {
+      clearStallTimer();
       if (xhr.status >= 200 && xhr.status < 300) {
         item.status = 'success';
         item.progress = 100;
@@ -520,14 +545,17 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
     });
 
     xhr.addEventListener("error", () => {
+      clearStallTimer();
       item.status = 'failed';
       item.errorMsg = "Koneksi terputus / kesalahan jaringan";
       resolve(false);
     });
 
     xhr.addEventListener("abort", () => {
-      item.status = 'failed';
-      item.errorMsg = "Unggahan dibatalkan";
+      clearStallTimer();
+      if (!item.errorMsg) {
+        item.errorMsg = "Unggahan dibatalkan";
+      }
       resolve(false);
     });
 
