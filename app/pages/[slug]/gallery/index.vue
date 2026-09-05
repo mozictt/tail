@@ -22,6 +22,7 @@ const { shareFile } = useWhatsappShare();
 const albumIdParam = route.query.albumId as string | undefined;
 
 const { showToast } = useToast();
+const pinoLogger = useLogger();
 const galleryService = GalleryService();
 const albumService = AlbumService();
 const { slugPath } = useSlugRoute();
@@ -132,9 +133,11 @@ const uploadAlbumId = ref<string | undefined>(albumIdParam);
 const isDragging = ref(false);
 
 const MAX_UPLOAD_BATCH_LIMIT = 100; // Limit per upload batch (maksimal 100 file)
-const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"];
-const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "mp4", "webm"];
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg", "image/png", "image/webp", "image/gif", "image/jfif", "image/heic", "image/heif", "image/avif", "image/pjpeg", "image/x-png",
+  "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/avi", "application/octet-stream"
+];
+const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "jfif", "heic", "heif", "avif", "mp4", "webm", "mov", "mkv", "avi"];
 
 const pendingOrFailedUploadsCount = computed(() => {
   return uploadItems.value.filter(item => item.status === 'pending' || item.status === 'failed').length;
@@ -505,6 +508,7 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       stallTimer = setTimeout(() => {
         item.status = 'failed';
         item.errorMsg = "Koneksi terhenti (Tidak ada progres unggahan selama 60 detik)";
+        pinoLogger.warn(`[Upload Timeout] Berkas "${item.name}" macet / tidak ada progres selama 60 detik.`, { fileName: item.name });
         xhr.abort();
         resolve(false);
       }, STALL_TIMEOUT_MS);
@@ -516,6 +520,7 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
 
     // Jalankan timer awal saat transmisi dimulai
     resetStallTimer();
+    pinoLogger.info(`[Upload Process] Memulai unggah berkas "${item.name}"`, { fileName: item.name, fileSize: item.size, type: item.type });
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
@@ -530,6 +535,7 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       if (xhr.status >= 200 && xhr.status < 300) {
         item.status = 'success';
         item.progress = 100;
+        pinoLogger.info(`[Upload Success] Berkas "${item.name}" berhasil diunggah.`, { fileName: item.name });
         resolve(true);
       } else {
         item.status = 'failed';
@@ -540,6 +546,13 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
         } catch {
           item.errorMsg = `Gagal mengunggah (HTTP ${xhr.status})`;
         }
+        pinoLogger.error(`[Upload Error] Berkas "${item.name}" gagal diunggah (HTTP ${xhr.status})`, {
+          fileName: item.name,
+          fileSize: item.size,
+          status: xhr.status,
+          responseText: xhr.responseText,
+          errorMsg: item.errorMsg
+        });
         resolve(false);
       }
     });
@@ -548,6 +561,7 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       clearStallTimer();
       item.status = 'failed';
       item.errorMsg = "Koneksi terputus / kesalahan jaringan";
+      pinoLogger.error(`[Upload Network Error] Kesalahan jaringan / koneksi terputus saat mengunggah "${item.name}".`, { fileName: item.name });
       resolve(false);
     });
 
@@ -556,6 +570,7 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       if (!item.errorMsg) {
         item.errorMsg = "Unggahan dibatalkan";
       }
+      pinoLogger.warn(`[Upload Abort] Berkas "${item.name}" dibatalkan oleh pengguna/sistem.`, { fileName: item.name });
       resolve(false);
     });
 
@@ -591,6 +606,7 @@ const submitUpload = async () => {
   }
 
   uploadLoading.value = true;
+  console.log(`[Batch Upload Start] Memulai batch upload untuk ${itemsToUpload.length} berkas.`);
 
   const CONCURRENCY_LIMIT = 2;
   const queue = [...itemsToUpload];
@@ -611,6 +627,8 @@ const submitUpload = async () => {
 
   const updatedFailed = uploadItems.value.filter((i) => i.status === 'failed').length;
   const updatedSuccess = uploadItems.value.filter((i) => i.status === 'success').length;
+
+  console.log(`[Batch Upload Finished] Hasil batch: ${updatedSuccess} Berhasil, ${updatedFailed} Gagal.`);
 
   if (updatedFailed === 0) {
     showToast(`Berhasil mengunggah ${updatedSuccess} file`, "success");
