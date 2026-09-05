@@ -208,13 +208,14 @@ watch(isMobile, (val) => {
   <!-- SIDEBAR -->
   <aside
     :class="[
-      'h-screen flex flex-col fixed md:static z-40 transition-all duration-300 border-r border-base-content/10 bg-base-100',
+      'fixed inset-y-0 left-0 flex flex-col md:static z-40 transition-all duration-300 border-r border-base-content/10 bg-base-100 shadow-2xl md:shadow-none',
       isOpen ? 'w-64' : 'w-20',
       isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
     ]"
+    style="height: 100dvh; max-height: -webkit-fill-available;"
   >
     <!-- HEADER BRANDING -->
-    <div class="flex items-center justify-between p-4 md:p-5 border-b border-base-content/5">
+    <div class="flex items-center justify-between p-4 md:p-5 border-b border-base-content/5 shrink-0">
       <div v-if="isOpen" class="flex items-center gap-2.5 min-w-0">
         <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shadow-primary/10 shrink-0 overflow-hidden">
           <SecureCompanyLogo
@@ -249,7 +250,21 @@ watch(isMobile, (val) => {
     </div>
 
     <!-- MENU LIST -->
-    <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0">
+    <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0 scrollbar-thin">
+      <!-- 🔴 INSTANT LOGOUT BUTTON AT THE VERY TOP OF MOBILE SIDEBAR -->
+      <div class="md:hidden mb-2">
+        <button
+          @click="handleLogout"
+          class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error font-bold text-sm transition shadow-xs active:scale-98"
+        >
+          <div class="flex items-center gap-2.5">
+            <icons.LogOut class="w-4.5 h-4.5 shrink-0" />
+            <span>Keluar / Logout</span>
+          </div>
+          <icons.ChevronRight class="w-4 h-4 opacity-70" />
+        </button>
+      </div>
+
       <SidebarItem
         v-for="(item, idx) in menu"
         :key="idx"
@@ -258,65 +273,89 @@ watch(isMobile, (val) => {
         :isOpenSidebar="isOpen"
         @menu-click="handleMenuClick"
       />
+
+      <!-- Dedicated Mobile Logout Button directly in Navigation List -->
+      <div class="md:hidden border-t border-base-content/10 mt-auto pt-3 pb-2">
+        <button
+          @click="handleLogout"
+          class="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error font-bold text-sm transition shadow-xs active:scale-98"
+        >
+          <icons.LogOut class="w-5 h-5 shrink-0" />
+          <span>Keluar / Logout</span>
+        </button>
+      </div>
     </nav>
 
     <!-- FOOTER PROFILE -->
-    <div class="p-4 border-t border-base-content/5 relative bg-base-100">
-      <div
-        class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-base-200 transition"
-        @click="toggleProfileDropdown"
-      >
-        <div class="relative w-10 h-10">
-          <SecureAvatar
-            :avatar-path="profile?.pegawai?.avatar"
-            :name="profileName"
-            img-class="w-10 h-10 rounded-xl object-cover ring-2 ring-base-200"
-            fallback-class="w-10 h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center ring-2 ring-base-200 uppercase text-xs border border-primary/20 shrink-0"
+    <div class="p-3 md:p-4 pb-20 md:pb-4 border-t border-base-content/5 relative bg-base-100 shrink-0">
+      <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-base-200/50 hover:bg-base-200 transition">
+        <!-- Profile Info (Click to toggle popup menu) -->
+        <div 
+          class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
+          @click="toggleProfileDropdown"
+        >
+          <div class="relative w-9 h-9 md:w-10 md:h-10 shrink-0">
+            <SecureAvatar
+              :avatar-path="profile?.pegawai?.avatar"
+              :name="profileName"
+              img-class="w-9 h-9 md:w-10 md:h-10 rounded-xl object-cover ring-2 ring-base-200"
+              fallback-class="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center ring-2 ring-base-200 uppercase text-xs border border-primary/20 shrink-0"
+            />
+            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100 z-10"></span>
+          </div>
+
+          <div v-if="isOpen || isMobile" class="flex flex-col flex-1 min-w-0">
+            <span class="font-semibold text-base-content text-xs md:text-sm truncate leading-tight">{{ profileName }}</span>
+            <span class="text-[10px] md:text-xs text-base-content/50 truncate font-medium">{{ profileRole }}</span>
+          </div>
+
+          <icons.ChevronDown
+            v-if="isOpen || isMobile"
+            class="w-4 h-4 text-base-content/40 transition-transform shrink-0"
+            :class="{ 'rotate-180': profileDropdownOpen }"
           />
-          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100 z-10"></span>
         </div>
 
-        <div v-if="isOpen" class="flex flex-col flex-1 min-w-0">
-          <span class="font-semibold text-base-content text-sm truncate">{{ profileName }}</span>
-          <span class="text-xs text-base-content/50 truncate font-medium">{{ profileRole }}</span>
-        </div>
-
-        <icons.ChevronDown
-          v-if="isOpen"
-          class="w-4 h-4 ml-auto text-base-content/40 transition-transform"
-          :class="{ 'rotate-180': profileDropdownOpen }"
-        />
+        <!-- Tombol Quick Logout (Tampak Langsung di Mobile & Desktop saat Sidebar Terbuka) -->
+        <button
+          v-if="isOpen || isMobile"
+          @click="handleLogout"
+          class="p-2 text-error/80 hover:text-error hover:bg-error/10 rounded-lg transition shrink-0"
+          title="Keluar / Logout"
+        >
+          <icons.LogOut class="w-4.5 h-4.5" />
+        </button>
       </div>
 
       <!-- PROFIL DROPDOWN MENU -->
       <Transition name="fade">
         <div
           v-if="profileDropdownOpen"
-          class="absolute bottom-16 left-4 right-4 bg-base-100 border border-base-content/10 shadow-premium rounded-xl py-2 z-20"
+          class="absolute bottom-28 left-3 right-3 md:bottom-16 md:left-4 md:right-4 bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-1.5 z-50 animate-fade-in"
         >
           <NuxtLink
             :to="slugPath('/profile')"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
+            class="flex items-center gap-2.5 px-3 py-2 text-xs md:text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content rounded-xl transition font-medium"
             @click="closeProfileDropdown"
           >
-            <icons.User class="w-4 h-4 text-base-content/40" />
-            Profil Saya
+            <icons.User class="w-4 h-4 text-primary shrink-0" />
+            <span>Profil Saya</span>
           </NuxtLink>
           <NuxtLink
             :to="slugPath('/profil-perusahaan')"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition font-medium"
+            class="flex items-center gap-2.5 px-3 py-2 text-xs md:text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content rounded-xl transition font-medium"
             @click="closeProfileDropdown"
           >
-            <icons.Building2 class="w-4 h-4 text-base-content/40" />
-            Profil Perusahaan
+            <icons.Building2 class="w-4 h-4 text-primary shrink-0" />
+            <span>Profil Perusahaan</span>
           </NuxtLink>
           <div class="border-t border-base-content/5 my-1"></div>
           <button
             @click="handleLogout"
-            class="flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 w-full text-left transition font-semibold"
+            class="flex items-center gap-2.5 px-3 py-2 text-xs md:text-sm text-error hover:bg-error/10 rounded-xl w-full text-left transition font-bold"
           >
-            <icons.LogOut class="w-4 h-4" />
-            Logout
+            <icons.LogOut class="w-4 h-4 shrink-0" />
+            <span>Logout / Keluar</span>
           </button>
         </div>
       </Transition>

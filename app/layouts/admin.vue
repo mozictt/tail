@@ -2,9 +2,13 @@
 import { ref } from "vue";
 import * as icons from "lucide-vue-next";
 import Sidebar from "@/components/Sidebar.vue"; 
+import { useAuthStore } from "@/stores/auth";
+import { useMenuStore } from "@/stores/menu";
 
 const activeMenu = ref<any>(null);
 const sidebarRef = ref();
+const auth = useAuthStore();
+const menuStore = useMenuStore();
 
 const onUpdateActive = (menuItem: any) => {
   activeMenu.value = menuItem;
@@ -12,6 +16,11 @@ const onUpdateActive = (menuItem: any) => {
 
 const toggleMobileSidebar = () => {
   sidebarRef.value?.toggleMobileSidebar();
+};
+
+const handleLogout = async () => {
+  menuStore.clearMenus();
+  await auth.logout();
 };
 </script>
 
@@ -51,10 +60,18 @@ const toggleMobileSidebar = () => {
           </div>
         </div>
 
-        <!-- Kanan: whatsapp notif & theme switcher -->
+        <!-- Kanan: whatsapp notif, theme switcher & mobile logout -->
         <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
           <WhatsappNavbarNotification />
           <ThemeSwitcher />
+          
+          <button
+            @click="handleLogout"
+            class="md:hidden p-2 text-error hover:bg-error/10 border border-error/20 rounded-xl transition flex items-center justify-center"
+            title="Keluar / Logout"
+          >
+            <icons.LogOut class="w-5 h-5" />
+          </button>
         </div>
       </header>
 

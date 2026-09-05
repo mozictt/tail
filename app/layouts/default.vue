@@ -3,13 +3,22 @@ import { ref } from "vue";
 import * as icons from "lucide-vue-next";
 import Sidebar from "@/components/Sidebar.vue";
 import { useUIStore } from "@/stores/ui";
+import { useAuthStore } from "@/stores/auth";
+import { useMenuStore } from "@/stores/menu";
 
 const ui = useUIStore();
+const auth = useAuthStore();
+const menuStore = useMenuStore();
 
 const activeMenu = ref<any>(null);
 
 const onUpdateActive = (menuItem: any) => {
   activeMenu.value = menuItem;
+};
+
+const handleLogout = async () => {
+  menuStore.clearMenus();
+  await auth.logout();
 };
 </script>
 
@@ -75,8 +84,17 @@ const onUpdateActive = (menuItem: any) => {
             <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full ring-2 ring-base-100"></span>
           </button>
 
-          <!-- USER -->
-          <div class="flex items-center gap-2">
+          <!-- MOBILE QUICK LOGOUT BUTTON -->
+          <button
+            @click="handleLogout"
+            class="md:hidden p-2 text-error hover:bg-error/10 border border-error/20 rounded-xl transition flex items-center justify-center"
+            title="Keluar / Logout"
+          >
+            <icons.LogOut class="w-5 h-5" />
+          </button>
+
+          <!-- USER (DESKTOP) -->
+          <div class="hidden md:flex items-center gap-2">
             <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100&auto=format&fit=crop" class="w-8 h-8 rounded-xl object-cover ring-2 ring-base-200" />
           </div>
         </div>
