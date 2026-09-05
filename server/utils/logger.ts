@@ -1,6 +1,8 @@
-import pino from 'pino';
+import pinoPkg from 'pino';
 import path from 'path';
 import fs from 'fs';
+
+const pino = typeof pinoPkg === 'function' ? pinoPkg : ((pinoPkg as any).default || pinoPkg);
 
 const logDir = path.join(process.cwd(), 'logs');
 if (!fs.existsSync(logDir)) {

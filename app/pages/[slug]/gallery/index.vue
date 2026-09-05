@@ -133,6 +133,7 @@ const uploadAlbumId = ref<string | undefined>(albumIdParam);
 const isDragging = ref(false);
 
 const MAX_UPLOAD_BATCH_LIMIT = 100; // Limit per upload batch (maksimal 100 file)
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // Limit per file (500 MB)
 const ALLOWED_MIME_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "image/jfif", "image/heic", "image/heif", "image/avif", "image/pjpeg", "image/x-png",
   "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/avi", "application/octet-stream"

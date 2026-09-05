@@ -39,4 +39,10 @@ export default defineNuxtConfig({
       allowedHosts: true, // Izinkan semua host (berguna untuk Cloudflare Tunnel/Ngrok)
     }
   },
+
+  nitro: {
+    externals: {
+      external: ["pino", "pino-roll"]
+    }
+  }
 });
