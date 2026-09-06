@@ -204,8 +204,8 @@ useHead(() => {
 });
 // ===== SIDEBAR WIDTH =====
 const sidebarWidthClass = computed(() => {
-  if (isMobile.value) return 'w-64'; // mobile selalu full
-  return isOpen.value ? 'w-64' : 'w-20'; // desktop toggle
+  if (isMobile.value) return 'w-72'; // mobile selalu full
+  return isOpen.value ? 'w-72' : 'w-[68px]'; // desktop toggle
 });
 watch(isMobile, (val) => {
   if (val) {
@@ -228,48 +228,71 @@ watch(isMobile, (val) => {
   <aside
     :class="[
       'fixed inset-y-0 left-0 flex flex-col md:static z-40 transition-all duration-300 border-r border-base-content/10 bg-base-100 shadow-2xl md:shadow-none',
-      isOpen ? 'w-64' : 'w-20',
+      isOpen ? 'w-72' : 'w-[68px]',
       isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
     ]"
     style="height: 100dvh; max-height: -webkit-fill-available;"
   >
     <!-- HEADER BRANDING -->
-    <div class="flex items-center justify-between p-4 md:p-5 border-b border-base-content/5 shrink-0">
-      <div v-if="isOpen" class="flex items-center gap-2.5 min-w-0">
-        <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shadow-primary/10 shrink-0 overflow-hidden">
-          <SecureCompanyLogo
-            :logo-filename="companyProfileStore.logoFilename"
-            :logo-path="companyProfileStore.logoPath"
-            :alt="companyProfileStore.appName"
-            img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
-          />
+    <div
+      class="flex shrink-0 border-b border-base-content/5 transition-all duration-300"
+      :class="isOpen ? 'items-center justify-between p-4 md:p-5' : 'flex-col items-center justify-center gap-2 py-3 px-1'"
+    >
+      <!-- Expanded header: Logo + App Name + Toggle Button -->
+      <template v-if="isOpen">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shadow-primary/10 shrink-0 overflow-hidden">
+            <SecureCompanyLogo
+              :logo-filename="companyProfileStore.logoFilename"
+              :logo-path="companyProfileStore.logoPath"
+              :alt="companyProfileStore.appName"
+              img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
+            />
+          </div>
+          <span class="font-bold text-base-content text-base tracking-tight truncate" :title="companyProfileStore.appName">
+            {{ companyProfileStore.appName }}
+          </span>
         </div>
-        <span class="font-bold text-base-content text-lg tracking-tight truncate" :title="companyProfileStore.appName">
-          {{ companyProfileStore.appName }}
-        </span>
-      </div>
-      <div v-else class="w-full flex justify-center">
-        <div class="w-8 h-8 rounded-lg bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
-          <SecureCompanyLogo
-            :logo-filename="companyProfileStore.logoFilename"
-            :logo-path="companyProfileStore.logoPath"
-            :alt="companyProfileStore.appName"
-            img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
-          />
-        </div>
-      </div>
-      
-      <button class="hidden md:inline-flex text-base-content/40 hover:text-base-content/80 hover:bg-base-200 p-1.5 rounded-lg transition" @click="toggleSidebar">
-        <component :is="isOpen ? icons.ChevronLeft : icons.Menu" class="w-4 h-4" />
-      </button>
+        
+        <button
+          class="hidden md:inline-flex text-base-content/40 hover:text-base-content/80 hover:bg-base-200 p-1.5 rounded-lg transition shrink-0"
+          @click="toggleSidebar"
+          title="Minimize Sidebar"
+        >
+          <icons.ChevronLeft class="w-4 h-4" />
+        </button>
+      </template>
 
+      <!-- Collapsed header: Centered Logo + Toggle Expand Button underneath -->
+      <template v-else>
+        <div class="w-9 h-9 rounded-xl bg-base-200 border border-base-content/10 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
+          <SecureCompanyLogo
+            :logo-filename="companyProfileStore.logoFilename"
+            :logo-path="companyProfileStore.logoPath"
+            :alt="companyProfileStore.appName"
+            img-class="max-w-full max-h-full w-auto h-auto object-contain p-0.5"
+          />
+        </div>
+        <button
+          class="hidden md:inline-flex text-base-content/40 hover:text-base-content hover:bg-base-200 p-1 rounded-lg transition text-xs"
+          @click="toggleSidebar"
+          title="Expand Sidebar"
+        >
+          <icons.ChevronRight class="w-4 h-4" />
+        </button>
+      </template>
+
+      <!-- Mobile Close Button -->
       <button class="md:hidden text-base-content/50 hover:text-base-content hover:bg-base-200 p-1.5 rounded-lg transition" @click="closeMobileSidebar" title="Tutup Menu">
         <icons.X class="w-5 h-5" />
       </button>
     </div>
 
     <!-- MENU LIST -->
-    <nav class="flex flex-col gap-1.5 p-4 overflow-y-auto flex-1 min-h-0 scrollbar-thin">
+    <nav
+      class="flex flex-col gap-1.5 flex-1 min-h-0 scrollbar-thin overflow-y-auto"
+      :class="isOpen ? 'p-4' : 'px-2 py-3'"
+    >
       <SidebarItem
         v-for="(item, idx) in menu"
         :key="idx"
@@ -281,13 +304,17 @@ watch(isMobile, (val) => {
     </nav>
 
     <!-- FOOTER PROFILE -->
-    <div class="p-3 md:p-4 pb-6 md:pb-4 border-t border-base-content/5 relative bg-base-100 shrink-0">
-      <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-base-200/50 hover:bg-base-200 transition">
-        <!-- Profile Info (Click to toggle popup menu) -->
-        <div 
-          class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
-          @click="toggleProfileDropdown"
-        >
+    <div
+      class="border-t border-base-content/5 relative bg-base-100 shrink-0 transition-all"
+      :class="isOpen ? 'p-3 md:p-4 pb-6 md:pb-4' : 'p-2 py-3 flex justify-center items-center'"
+    >
+      <!-- Expanded Footer Profile -->
+      <div
+        v-if="isOpen || isMobile"
+        class="flex items-center justify-between gap-2 p-2 rounded-xl bg-base-200/50 hover:bg-base-200 transition cursor-pointer"
+        @click="toggleProfileDropdown"
+      >
+        <div class="flex items-center gap-2.5 flex-1 min-w-0">
           <div class="relative w-9 h-9 md:w-10 md:h-10 shrink-0">
             <SecureAvatar
               :avatar-path="profile?.pegawai?.avatar"
@@ -298,16 +325,41 @@ watch(isMobile, (val) => {
             <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100 z-10"></span>
           </div>
 
-          <div v-if="isOpen || isMobile" class="flex flex-col flex-1 min-w-0">
+          <div class="flex flex-col flex-1 min-w-0">
             <span class="font-semibold text-base-content text-xs md:text-sm truncate leading-tight">{{ profileName }}</span>
             <span class="text-[10px] md:text-xs text-base-content/50 truncate font-medium">{{ profileRole }}</span>
           </div>
 
           <icons.ChevronDown
-            v-if="isOpen || isMobile"
             class="w-4 h-4 text-base-content/40 transition-transform shrink-0"
             :class="{ 'rotate-180': profileDropdownOpen }"
           />
+        </div>
+      </div>
+
+      <!-- Collapsed Footer Profile -->
+      <div
+        v-else
+        class="group relative flex items-center justify-center cursor-pointer w-full"
+        @click="toggleProfileDropdown"
+      >
+        <div class="relative w-10 h-10 rounded-xl overflow-visible flex items-center justify-center hover:bg-base-200 transition p-0.5">
+          <SecureAvatar
+            :avatar-path="profile?.pegawai?.avatar"
+            :name="profileName"
+            img-class="w-9 h-9 rounded-xl object-cover ring-2 ring-base-200"
+            fallback-class="w-9 h-9 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center ring-2 ring-base-200 uppercase text-[10px] border border-primary/20 shrink-0"
+          />
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-100 z-10"></span>
+        </div>
+
+        <!-- Tooltip nama user ketika collapsed -->
+        <div class="opacity-0 group-hover:opacity-100 pointer-events-none absolute left-full ml-3 top-1/2 -translate-y-1/2 z-[100] whitespace-nowrap transition-all duration-200 translate-x-1 group-hover:translate-x-0">
+          <div class="bg-slate-900 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xl flex flex-col gap-0.5 min-w-max">
+            <span class="text-white leading-tight">{{ profileName }}</span>
+            <span class="text-white/50 text-[10px] font-normal">{{ profileRole }}</span>
+          </div>
+          <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900"></div>
         </div>
       </div>
 
@@ -315,7 +367,8 @@ watch(isMobile, (val) => {
       <Transition name="fade">
         <div
           v-if="profileDropdownOpen"
-          class="absolute bottom-16 left-3 right-3 md:left-4 md:right-4 bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-1.5 z-50 animate-fade-in"
+          class="absolute bottom-16 left-3 right-3 md:left-4 md:right-4 bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-1.5 z-50 animate-fade-in min-w-[200px]"
+          :class="!isOpen ? 'left-full ml-2 bottom-2 w-52' : ''"
         >
           <NuxtLink
             :to="slugPath('/profile')"

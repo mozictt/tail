@@ -175,6 +175,39 @@ const overallUploadProgress = computed(() => {
 const viewMediaItem = ref<Gallery | null>(null);
 const downloadLoadingId = ref<string | null>(null);
 
+// Arah animasi slide saat navigasi gambar di Lightbox
+const slideDirection = ref<'left' | 'right' | ''>('');
+const isSliding = ref(false);
+
+// State action sheet mobile (tombol ⋯ pada kartu media)
+const activeActionItem = ref<Gallery | null>(null);
+const showMobileActionSheet = ref(false);
+
+const openMobileActionSheet = (item: Gallery) => {
+  activeActionItem.value = item;
+  showMobileActionSheet.value = true;
+};
+
+const closeMobileActionSheet = () => {
+  showMobileActionSheet.value = false;
+  setTimeout(() => { activeActionItem.value = null; }, 300);
+};
+
+const handleMobileShare = () => {
+  if (activeActionItem.value) handleShareMedia(activeActionItem.value);
+  closeMobileActionSheet();
+};
+
+const handleMobileDownload = async () => {
+  if (activeActionItem.value) await handleDownload(activeActionItem.value);
+  closeMobileActionSheet();
+};
+
+const handleMobileDelete = () => {
+  if (activeActionItem.value) deleteMedia(activeActionItem.value.id!);
+  closeMobileActionSheet();
+};
+
 const currentIndex = computed(() => {
   if (!viewMediaItem.value) return -1;
   return items.value.findIndex(item => item.id === viewMediaItem.value?.id);
@@ -183,9 +216,29 @@ const currentIndex = computed(() => {
 const hasNext = computed(() => currentIndex.value >= 0 && currentIndex.value < items.value.length - 1);
 const hasPrev = computed(() => currentIndex.value > 0);
 
+const navigateMedia = (direction: 'next' | 'prev') => {
+  if (isSliding.value) return;
+  const targetItem = direction === 'next'
+    ? items.value[currentIndex.value + 1]
+    : items.value[currentIndex.value - 1];
+  if (!targetItem) return;
+
+  isSliding.value = true;
+  slideDirection.value = direction === 'next' ? 'left' : 'right';
+
+  setTimeout(() => {
+    viewMediaItem.value = targetItem;
+    slideDirection.value = direction === 'next' ? 'from-right' : 'from-left';
+    setTimeout(() => {
+      slideDirection.value = '';
+      isSliding.value = false;
+    }, 320);
+  }, 220);
+};
+
 const nextMedia = () => {
   if (hasNext.value) {
-    viewMediaItem.value = items.value[currentIndex.value + 1];
+    navigateMedia('next');
     if (selectedAlbumId.value && hasMore.value && currentIndex.value >= items.value.length - 3 && !loadingMore.value) {
       fetchGalleriesBatch(false);
     }
@@ -194,7 +247,7 @@ const nextMedia = () => {
 
 const prevMedia = () => {
   if (hasPrev.value) {
-    viewMediaItem.value = items.value[currentIndex.value - 1];
+    navigateMedia('prev');
   }
 };
 
@@ -1029,12 +1082,13 @@ onMounted(() => {
             <!-- Media Preview (Secure Fetch) -->
             <SecureMedia :filename="item.path || item.fileName" :type="item.type" />
             
-            <!-- Gradient Overlay (Always visible on mobile, hover on desktop) -->
+            <!-- ======================================== -->
+            <!-- DESKTOP: Gradient Overlay (hover only)  -->
+            <!-- ======================================== -->
             <div 
-              class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 z-10 cursor-pointer"
+              class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent hidden sm:flex flex-col justify-end p-2 md:p-3 z-10 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               @click="isSelectionMode ? toggleSelectItem(item.id!) : (viewMediaItem = item)"
             >
-              
               <div v-if="!isSelectionMode" class="flex justify-between items-end">
                 <div class="overflow-hidden">
                   <p class="text-white text-xs font-medium truncate" :title="item.originalName">{{ item.originalName }}</p>
@@ -1047,32 +1101,64 @@ onMounted(() => {
                 
                 <div class="flex items-center gap-1.5 md:gap-2">
                   <button 
-                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    class="w-8 h-8 rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="handleShareMedia(item)"
                     title="Bagikan ke WhatsApp"
                   >
-                    <Share2 class="w-4 h-4 md:w-4 md:h-4" />
+                    <Share2 class="w-4 h-4" />
                   </button>
                   <button 
-                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-base-100/20 hover:bg-base-100 text-white hover:text-base-content flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    class="w-8 h-8 rounded-lg bg-base-100/20 hover:bg-base-100 text-white hover:text-base-content flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="handleDownload(item)"
                     title="Unduh Asli"
                   >
-                    <Download v-if="downloadLoadingId !== item.id" class="w-4 h-4 md:w-4 md:h-4" />
+                    <Download v-if="downloadLoadingId !== item.id" class="w-4 h-4" />
                     <span v-else class="loading loading-spinner loading-xs text-white"></span>
                   </button>
                   <button 
-                    class="w-9 h-9 md:w-8 md:h-8 rounded-lg bg-error/90 hover:bg-error text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                    class="w-8 h-8 rounded-lg bg-error/90 hover:bg-error text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
                     @click.stop="deleteMedia(item.id!)"
                     title="Hapus"
                   >
-                    <Trash2 class="w-4 h-4 md:w-4 md:h-4" />
+                    <Trash2 class="w-4 h-4" />
                   </button>
                 </div>
               </div>
               <div v-else class="flex justify-between items-center text-white">
                 <span class="text-xs truncate font-medium max-w-[70%]">{{ item.originalName }}</span>
                 <span class="text-[10px] bg-primary text-white font-bold px-2 py-0.5 rounded-md" v-if="selectedItems.includes(item.id!)">Terpilih</span>
+              </div>
+            </div>
+
+            <!-- ======================================== -->
+            <!-- MOBILE: Gradient tipis hanya di bawah   -->
+            <!-- Klik gambar → buka Lightbox             -->
+            <!-- ======================================== -->
+            <div 
+              class="absolute inset-0 sm:hidden bg-gradient-to-t from-slate-900/70 via-transparent to-transparent flex flex-col justify-end z-10 cursor-pointer"
+              @click="isSelectionMode ? toggleSelectItem(item.id!) : (viewMediaItem = item)"
+            >
+              <div v-if="!isSelectionMode" class="flex items-end justify-between p-1.5">
+                <!-- Nama file singkat di bawah -->
+                <p class="text-white text-[10px] font-medium truncate max-w-[calc(100%-36px)]">{{ item.originalName }}</p>
+
+                <!-- Tombol ⋯ Mobile Action Sheet -->
+                <button 
+                  class="w-8 h-8 rounded-lg bg-slate-900/60 backdrop-blur-sm text-white flex items-center justify-center flex-shrink-0 active:scale-95 transition-all"
+                  @click.stop="openMobileActionSheet(item)"
+                  title="Tindakan"
+                  aria-label="Opsi Media"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="5" cy="12" r="2"/>
+                    <circle cx="12" cy="12" r="2"/>
+                    <circle cx="19" cy="12" r="2"/>
+                  </svg>
+                </button>
+              </div>
+              <div v-else class="flex justify-between items-center text-white p-1.5">
+                <span class="text-[10px] truncate font-medium max-w-[70%]">{{ item.originalName }}</span>
+                <span class="text-[10px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-md" v-if="selectedItems.includes(item.id!)">✓</span>
               </div>
             </div>
             
@@ -1103,6 +1189,106 @@ onMounted(() => {
         </div>
       </template>
     </div>
+
+    <!-- MOBILE ACTION SHEET -->
+    <!-- Muncul saat tombol ⋯ diklik pada kartu media di perangkat mobile -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="translate-y-full opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transition duration-250 ease-in"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-full opacity-0"
+      >
+        <div
+          v-if="showMobileActionSheet && activeActionItem"
+          class="fixed inset-0 z-[200] sm:hidden flex flex-col justify-end"
+        >
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            @click="closeMobileActionSheet"
+          ></div>
+
+          <!-- Sheet Panel -->
+          <div class="relative bg-base-100 rounded-t-3xl shadow-2xl border-t border-base-content/10 p-5 pb-8 space-y-3 z-10">
+            <!-- Handle Bar -->
+            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-base-content/20"></div>
+
+            <!-- Media Info -->
+            <div class="flex items-center gap-3 pt-3 pb-2 border-b border-base-content/8">
+              <div class="w-12 h-12 rounded-xl overflow-hidden bg-base-200 flex-shrink-0">
+                <SecureMedia
+                  :filename="activeActionItem.path || activeActionItem.fileName"
+                  :type="activeActionItem.type"
+                  class="w-full h-full object-cover"
+                />
+              </div>
+              <div class="overflow-hidden flex-1">
+                <p class="font-semibold text-sm text-base-content truncate">{{ activeActionItem.originalName }}</p>
+                <p class="text-xs text-base-content/50 mt-0.5">{{ formatSize(activeActionItem.size) }}</p>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="space-y-2">
+              <!-- Lihat Full Screen -->
+              <button
+                @click="viewMediaItem = activeActionItem; closeMobileActionSheet()"
+                class="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-base-200/60 hover:bg-base-200 active:scale-[0.98] transition-all text-left"
+              >
+                <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                  <Eye class="w-4 h-4" />
+                </div>
+                <span class="font-semibold text-sm text-base-content">Lihat Full Screen</span>
+              </button>
+
+              <!-- Bagikan ke WhatsApp -->
+              <button
+                @click="handleMobileShare"
+                class="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-base-200/60 hover:bg-emerald-500/10 active:scale-[0.98] transition-all text-left"
+              >
+                <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                  <Share2 class="w-4 h-4" />
+                </div>
+                <span class="font-semibold text-sm text-base-content">Bagikan ke WhatsApp</span>
+              </button>
+
+              <!-- Unduh -->
+              <button
+                @click="handleMobileDownload"
+                class="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-base-200/60 hover:bg-blue-500/10 active:scale-[0.98] transition-all text-left"
+              >
+                <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center flex-shrink-0">
+                  <Download class="w-4 h-4" />
+                </div>
+                <span class="font-semibold text-sm text-base-content">Unduh File Asli</span>
+              </button>
+
+              <!-- Hapus -->
+              <button
+                @click="handleMobileDelete"
+                class="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-base-200/60 hover:bg-error/10 active:scale-[0.98] transition-all text-left"
+              >
+                <div class="w-9 h-9 rounded-xl bg-error/10 text-error flex items-center justify-center flex-shrink-0">
+                  <Trash2 class="w-4 h-4" />
+                </div>
+                <span class="font-semibold text-sm text-error">Hapus Media</span>
+              </button>
+            </div>
+
+            <!-- Cancel -->
+            <button
+              @click="closeMobileActionSheet"
+              class="w-full py-3.5 rounded-2xl font-bold text-sm text-base-content/70 bg-base-200 hover:bg-base-300 active:scale-[0.98] transition-all mt-1"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- UPLOAD MODAL -->
     <Teleport to="body">
@@ -1398,9 +1584,17 @@ onMounted(() => {
             <ChevronRight class="w-6 h-6 md:w-8 md:h-8 group-hover:translate-x-0.5 transition-transform" />
           </button>
 
-          <!-- Media Container -->
-          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20">
-             <div class="w-full h-full flex items-center justify-center drop-shadow-2xl">
+          <!-- Media Container dengan Animasi Slide -->
+          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20 overflow-hidden">
+             <div
+               class="w-full h-full flex items-center justify-center drop-shadow-2xl lightbox-media-wrapper"
+               :class="{
+                 'slide-out-left': slideDirection === 'left',
+                 'slide-out-right': slideDirection === 'right',
+                 'slide-in-from-right': slideDirection === 'from-right',
+                 'slide-in-from-left': slideDirection === 'from-left',
+               }"
+             >
                <SecureMedia :filename="viewMediaItem.path || viewMediaItem.fileName" :type="viewMediaItem.type" :use-original="true" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>
           </div>
@@ -1479,3 +1673,55 @@ onMounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* ====================================
+   Lightbox — Animasi Slide Navigasi
+==================================== */
+
+/* Container dengan overflow hidden agar clip animasi berjalan */
+.lightbox-media-wrapper {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+  will-change: transform, opacity;
+}
+
+/* Slide Out ke Kiri (gambar lama saat klik Next) */
+.slide-out-left {
+  animation: slideOutLeft 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Slide Out ke Kanan (gambar lama saat klik Prev) */
+.slide-out-right {
+  animation: slideOutRight 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Slide In dari Kanan (gambar baru saat klik Next) */
+.slide-in-from-right {
+  animation: slideInFromRight 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Slide In dari Kiri (gambar baru saat klik Prev) */
+.slide-in-from-left {
+  animation: slideInFromLeft 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes slideOutLeft {
+  0%   { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-60px); opacity: 0; }
+}
+
+@keyframes slideOutRight {
+  0%   { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(60px); opacity: 0; }
+}
+
+@keyframes slideInFromRight {
+  0%   { transform: translateX(80px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromLeft {
+  0%   { transform: translateX(-80px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+</style>

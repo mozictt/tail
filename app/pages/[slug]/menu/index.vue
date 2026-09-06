@@ -442,7 +442,7 @@ const submitMenu = async () => {
       url: form.value.url || "",
       icon: form.value.icon || undefined,
       order_no: Number(form.value.order_no) || 1,
-      parent_id: form.value.parent_id ? Number(form.value.parent_id) : undefined,
+      parent_id: form.value.parent_id ? Number(form.value.parent_id) : null,
       requiredResource: form.value.requiredResource || undefined,
       is_active: form.value.is_active,
       is_visible: form.value.is_visible,
