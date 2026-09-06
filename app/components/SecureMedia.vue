@@ -1,10 +1,22 @@
 <template>
   <div class="relative w-full h-full bg-slate-950 overflow-hidden flex items-center justify-center">
-    <!-- STREAMING / SKELETON LOADER OVERLAY (Muncul seketika saat Next/Prev foto & menyembunyikan foto lama) -->
+    <!-- INSTANT THUMBNAIL PLACEHOLDER (Muncul seketika 0ms dari cache WebP & di-blur halus selama HD dimuat) -->
+    <img
+      v-if="isPhoto && props.useOriginal && thumbnailUrl && !hasError"
+      :key="'thumb-' + thumbnailUrl"
+      :src="thumbnailUrl"
+      :alt="filename"
+      class="absolute inset-0 w-full h-full transition-all duration-500 filter blur-lg scale-105 opacity-80 z-0 pointer-events-none"
+      :class="fit === 'contain' ? 'object-contain' : 'object-cover'"
+      loading="eager"
+      decoding="async"
+    />
+
+    <!-- SKELETON & HD STREAMING BADGE OVERLAY -->
     <Transition name="fade">
       <div
         v-if="isLoading && !hasError"
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/90 animate-pulse p-4"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/70 backdrop-blur-xs pointer-events-none p-4"
       >
         <div class="w-full h-full rounded-2xl bg-slate-800/80 animate-pulse flex flex-col items-center justify-center gap-3 border border-white/5 shadow-2xl">
           <div class="w-12 h-12 rounded-2xl bg-slate-700/80 flex items-center justify-center text-primary shadow-inner">
@@ -13,24 +25,24 @@
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           </div>
-          <div class="h-2.5 w-24 bg-slate-700/60 rounded-full"></div>
+          <div class="h-2.5 w-24 bg-slate-700/60 rounded-full animate-pulse"></div>
           <span class="text-xs font-semibold text-white/80">
-            {{ isVideo ? 'Streaming Video...' : 'Memuat Foto...' }}
+            {{ isVideo ? 'Streaming Video...' : (props.useOriginal ? 'Memuat Resolusi Asli (HD)...' : 'Memuat Foto...') }}
           </span>
         </div>
       </div>
     </Transition>
 
-    <!-- Foto Native Stream dengan :key unik (Foto lama langsung di-unmount begitu Next diklik) -->
+    <!-- Foto Native Stream HD / Final Image -->
     <img
       v-if="isPhoto && photoUrl"
-      :key="photoUrl"
+      :key="'hd-' + photoUrl"
       :src="photoUrl"
       :alt="filename"
-      class="relative z-10 w-full h-full transition duration-300"
+      class="relative z-10 w-full h-full transition-opacity duration-500"
       :class="[
         fit === 'contain' ? 'object-contain' : 'object-cover group-hover:scale-110',
-        isLoading ? 'opacity-0' : 'opacity-100'
+        isLoading && props.useOriginal ? 'opacity-0' : 'opacity-100'
       ]"
       loading="eager"
       decoding="async"
@@ -38,10 +50,10 @@
       @error="handleImageError"
     />
 
-    <!-- Video Native HTML5 Stream dengan :key unik -->
+    <!-- Video Native HTML5 Stream -->
     <video
       v-else-if="isVideo && videoStreamingUrl"
-      :key="videoStreamingUrl"
+      :key="'video-' + videoStreamingUrl"
       :src="videoStreamingUrl"
       class="relative z-10 w-full h-full"
       :class="[
@@ -115,6 +127,18 @@ watch(
   { immediate: true }
 );
 
+// URL Thumbnail WebP ringan (~30KB) untuk Instant Placeholder
+const thumbnailUrl = computed(() => {
+  if (!props.filename || !isPhoto.value) return '';
+
+  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
+  const baseUrl = `${config.public.apiBase}/gallery/thumbnail/${cleanPath}`;
+  const token = authStore.token;
+
+  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+});
+
+// URL HD Original Foto
 const photoUrl = computed(() => {
   if (!props.filename || !isPhoto.value) return '';
 
@@ -127,6 +151,7 @@ const photoUrl = computed(() => {
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
 });
 
+// URL Streaming Video
 const videoStreamingUrl = computed(() => {
   if (!props.filename || !isVideo.value) return '';
   const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '');
