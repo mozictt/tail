@@ -7,17 +7,34 @@ export default defineEventHandler(async (event) => {
     const message = body?.message || 'Client Log';
     const meta = body?.meta || {};
 
-    if (level === 'error') {
-      logger.error(meta, message);
+    // Deteksi indikator status (SUCCESS / FAILED / PROCESS) dari pesan atau level log
+    let status = meta?.status || 'INFO';
+    if (level === 'error' || message.includes('[Upload Error]') || message.includes('[Upload Failed]')) {
+      status = 'FAILED';
+    } else if (message.includes('[Upload Success]')) {
+      status = 'SUCCESS';
+    } else if (message.includes('[Upload Process]')) {
+      status = 'PROCESS';
     } else if (level === 'warn') {
-      logger.warn(meta, message);
+      status = 'WARN';
+    }
+
+    const logPayload = {
+      status: status.toUpperCase(),
+      ...meta,
+    };
+
+    if (level === 'error' || status === 'FAILED') {
+      logger.error(logPayload, message);
+    } else if (level === 'warn') {
+      logger.warn(logPayload, message);
     } else {
-      logger.info(meta, message);
+      logger.info(logPayload, message);
     }
 
     return { success: true };
   } catch (err: any) {
-    logger.error({ err }, 'Gagal memproses client log endpoint');
+    logger.error({ status: 'FAILED', err }, 'Gagal memproses client log endpoint');
     return { success: false, error: err?.message };
   }
 });

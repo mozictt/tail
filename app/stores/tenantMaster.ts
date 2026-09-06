@@ -7,6 +7,7 @@ export interface TenantItem {
   name: string;
   slug: string;
   email: string | null;
+  expiredAt: string | null;
   isActive: boolean;
   isMaster: boolean;
   settings: Record<string, any> | null;
@@ -66,6 +67,23 @@ export const useTenantMasterStore = defineStore("tenantMaster", {
         this.loading = false;
       }
     },
+
+    async updateTenant(id: string, payload: {
+      name?: string;
+      email?: string;
+      expiredAt?: string | null;
+      isActive?: boolean;
+      settings?: Record<string, any>;
+    }) {
+      const api = useApi();
+      const res: any = await api(`/tenants/${id}`, {
+        method: "PATCH",
+        body: payload,
+      });
+      await this.fetchTenants();
+      return res;
+    },
+
     async cloneTenantConfig(payload: {
       sourceTenantId?: string;
       targetTenantId: string;

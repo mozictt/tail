@@ -3,6 +3,10 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
+  build: {
+    transpile: ["@vuepic/vue-datepicker"]
+  },
+
   modules: [
     "@nuxtjs/tailwindcss",
     "nuxt-icon",
