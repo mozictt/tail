@@ -81,12 +81,17 @@ const albumCards = computed(() => {
     if (search.value && !selectedAlbumId.value && !album.name.toLowerCase().includes(search.value.toLowerCase())) {
       return;
     }
+    const backendMedia = (album as any).galleries;
+    const mediaList = (Array.isArray(backendMedia) && backendMedia.length > 0)
+      ? backendMedia
+      : (galleriesByAlbum.get(album.id!) || []);
+
     cards.push({
       id: album.id,
       name: album.name,
       description: album.description || 'Tidak ada deskripsi',
-      media: galleriesByAlbum.get(album.id!) || [],
-      count: (album as any).mediaCount ?? (galleriesByAlbum.get(album.id!) || []).length
+      media: mediaList,
+      count: (album as any).mediaCount ?? mediaList.length
     });
   });
 
