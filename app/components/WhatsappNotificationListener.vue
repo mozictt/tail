@@ -1,9 +1,36 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import * as icons from "lucide-vue-next";
 import { WhatsappService } from "@/services/whatsapp.service";
+import { useAuthStore } from "@/stores/auth";
 
 const waService = WhatsappService();
+const authStore = useAuthStore();
+const deviceId = computed(() => authStore.tenant_id || "main-session");
+
+let isSessionConnected = false;
+let lastSessionCheckTime = 0;
+
+/**
+ * Pengecekan status koneksi sesi WhatsApp per tenant
+ */
+const checkSessionConnection = async (): Promise<boolean> => {
+  const now = Date.now();
+  // Cache status koneksi selama 10 detik agar efisien dan tidak membebani server
+  if (now - lastSessionCheckTime < 10000) {
+    return isSessionConnected;
+  }
+  try {
+    const statusRes = await waService.getDevices();
+    const activeDevices = statusRes?.devices || [];
+    isSessionConnected = activeDevices.includes(deviceId.value);
+    lastSessionCheckTime = now;
+    return isSessionConnected;
+  } catch (err) {
+    isSessionConnected = false;
+    return false;
+  }
+};
 
 interface NotificationPayload {
   isGroup: boolean;
@@ -164,6 +191,12 @@ const triggerIncomingNotification = (msg: any) => {
 
 const checkNewIncomingMessages = async () => {
   try {
+    // Jalankan request getMessageLogs hanya ketika sesi WhatsApp terhubung (konek)
+    const isConnected = await checkSessionConnection();
+    if (!isConnected) {
+      return;
+    }
+
     const res = await waService.getMessageLogs(1, 15, { direction: "IN" });
     const latestLogs = res?.items || [];
 
