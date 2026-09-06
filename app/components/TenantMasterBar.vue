@@ -177,6 +177,23 @@
                   <input v-model="cloneForm.includePermissions" type="checkbox" class="checkbox checkbox-xs checkbox-primary rounded" />
                   <span class="font-semibold">Duplikasi Hak Akses (Permissions)</span>
                 </label>
+
+                <label class="flex items-center gap-2 cursor-pointer pt-2 border-t border-base-content/10">
+                  <input v-model="cloneForm.createSuperAdminUser" type="checkbox" class="checkbox checkbox-xs checkbox-secondary rounded" />
+                  <span class="font-extrabold text-purple-600 dark:text-purple-400">⚡ Otomatis Buat Akun Super Admin Tenant</span>
+                </label>
+
+                <!-- Input Password Opsional -->
+                <div v-if="cloneForm.createSuperAdminUser" class="pt-1.5 pl-6 space-y-1">
+                  <label class="font-bold text-[11px] text-base-content/70 block">Password Akun Super Admin <span class="text-base-content/40 font-normal">(opsional)</span></label>
+                  <input 
+                    v-model="cloneForm.customPassword"
+                    type="text"
+                    placeholder="Default: Password123!"
+                    class="input input-xs input-bordered w-full rounded-xl font-mono text-xs bg-base-100"
+                  />
+                  <span class="text-[10px] text-base-content/50 block">Kosongkan untuk menggunakan password standar (<b>Password123!</b>).</span>
+                </div>
               </div>
             </div>
 
@@ -225,6 +242,8 @@ const cloneForm = reactive({
   includeMenus: true,
   includeRoles: true,
   includePermissions: true,
+  createSuperAdminUser: true,
+  customPassword: "",
 });
 
 const toggleDropdown = async () => {
@@ -259,26 +278,40 @@ const submitCloneConfig = async () => {
       includeMenus: cloneForm.includeMenus,
       includeRoles: cloneForm.includeRoles,
       includePermissions: cloneForm.includePermissions,
+      createSuperAdminUser: cloneForm.createSuperAdminUser,
+      customPassword: cloneForm.customPassword.trim() || undefined,
     });
 
     showCloneModal.value = false;
     const resultData = res?.data || res;
     const summary = resultData?.summary || {};
+    const createdUser = summary?.createdUser;
+
+    const userDetailsHtml = createdUser ? `
+      <div class="bg-purple-500/10 border border-purple-500/30 p-3 rounded-2xl font-mono text-[11px] space-y-1.5 mt-2">
+        <div class="font-sans font-bold text-purple-700 dark:text-purple-300 text-xs">👤 Akun Super Admin Terbuat:</div>
+        <div>• Username: <b class="text-emerald-600 bg-emerald-500/15 px-2 py-0.5 rounded font-mono select-all">${createdUser.username}</b></div>
+        <div>• Password: <b class="text-indigo-600 bg-indigo-500/15 px-2 py-0.5 rounded font-mono select-all">${createdUser.password}</b></div>
+        <div>• Role: <b>${createdUser.roleName}</b></div>
+      </div>
+    ` : '';
 
     Swal.fire({
       icon: "success",
       title: "Duplikasi Konfigurasi Berhasil!",
       html: `
-        <div class="text-left text-xs space-y-1.5">
+        <div class="text-left text-xs space-y-2">
           <p>${resultData?.message || 'Konfigurasi berhasil disalin.'}</p>
           <div class="bg-base-200 p-2.5 rounded-xl font-mono text-[11px] space-y-1">
             <div>• Menu Diduplikasi: <b>${summary?.clonedMenusCount ?? 0}</b></div>
             <div>• Role Diduplikasi: <b>${summary?.clonedRolesCount ?? 0}</b></div>
             <div>• Hak Akses (Permissions): <b>${summary?.clonedPermissionsCount ?? 0}</b></div>
           </div>
+          ${userDetailsHtml}
         </div>
       `,
-      confirmButtonText: "OK",
+      confirmButtonText: "OK, Mengerti",
+      confirmButtonColor: "#7c3aed",
     });
   } catch (err: any) {
     console.error("Gagal menduplikasi konfigurasi tenant:", err);

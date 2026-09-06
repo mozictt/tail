@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import EasyDataTable from "vue3-easy-data-table";
 import "vue3-easy-data-table/dist/style.css";
 import { DocumentService, type Document } from "@/services/document.service";
@@ -19,20 +19,44 @@ import {
   Calendar, 
   User, 
   FolderOpen,
-  Share2 
+  Share2,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  X
 } from "lucide-vue-next";
 import { useToast } from "@/composables/useToast";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useWhatsappShare } from "@/composables/useWhatsappShare";
+import { useAuthStore } from "@/stores/auth";
 
 definePageMeta({
   layout: 'admin'
 });
 
 const { showToast } = useToast();
+const pinoLogger = useLogger();
 const documentService = DocumentService();
 const { slugPath } = useSlugRoute();
 const { shareFile } = useWhatsappShare();
+const auth = useAuthStore();
+const config = useRuntimeConfig();
+
+/* =========================
+   TYPES & INTERFACES
+   ========================= */
+export interface UploadFileItem {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  type: string;
+  status: 'pending' | 'uploading' | 'success' | 'failed';
+  progress: number;
+  errorMsg?: string;
+  description?: string;
+}
 
 /* =========================
    STATE & DATA TABLE OPTIONS
@@ -66,26 +90,68 @@ const extensionOptions = [
   { label: "PDF Document (.pdf)", value: "pdf" },
   { label: "Word Document (.doc, .docx)", value: "docx" },
   { label: "Excel Spreadsheet (.xls, .xlsx, .csv)", value: "xlsx" },
-  { label: "Archive (.zip, .tar, .gz)", value: "zip" },
-  { label: "Text/Code (.txt, .json)", value: "txt" },
+  { label: "Archive (.zip, .tar, .gz, .rar)", value: "zip" },
+  { label: "Text/Code (.txt, .json, .xml)", value: "txt" },
 ];
 
 /* =========================
-   MODAL & FORM STATE
+   MODAL & MULTI-FILE UPLOAD STATE
    ========================= */
 const showUploadModal = ref(false);
-const submitLoading = ref(false);
-const selectedFile = ref<File | null>(null);
+const uploadLoading = ref(false);
+const uploadItems = ref<UploadFileItem[]>([]);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragActive = ref(false);
 
-const form = ref({
-  description: "",
+const MAX_UPLOAD_BATCH_LIMIT = 10; // Limit per upload batch (maksimal 10 file)
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // Limit per file (500 MB)
+const ALLOWED_EXTENSIONS = [
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "zip", "tar", "tgz", "gz", "rar", "txt", "csv", "json", "xml"
+];
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-tar",
+  "application/x-gtar",
+  "application/x-gzip",
+  "application/gzip",
+  "text/plain",
+  "text/csv",
+  "application/json",
+  "application/octet-stream"
+];
+
+/* COMPUTED UPLOAD STATS */
+const pendingOrFailedUploadsCount = computed(() => {
+  return uploadItems.value.filter(item => item.status === 'pending' || item.status === 'failed').length;
 });
 
-const formErrors = ref({
-  file: "",
-  description: "",
+const failedUploadsCount = computed(() => {
+  return uploadItems.value.filter(item => item.status === 'failed').length;
+});
+
+const successUploadsCount = computed(() => {
+  return uploadItems.value.filter(item => item.status === 'success').length;
+});
+
+const totalUploadsCount = computed(() => uploadItems.value.length);
+
+const isAllUploadsSuccess = computed(() => {
+  return uploadItems.value.length > 0 && uploadItems.value.every(item => item.status === 'success');
+});
+
+const overallUploadProgress = computed(() => {
+  if (uploadItems.value.length === 0) return 0;
+  const sumProgress = uploadItems.value.reduce((acc, item) => acc + item.progress, 0);
+  return Math.round(sumProgress / uploadItems.value.length);
 });
 
 /* =========================
@@ -98,17 +164,6 @@ const formatBytes = (bytes: number, decimals = 2) => {
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-};
-
-const formatDate = (dateStr?: string | Date) => {
-  if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
 };
 
 const formatDateOnly = (dateStr?: string | Date) => {
@@ -198,103 +253,281 @@ watch(search, () => {
 });
 
 /* =========================
-   FILE HANDLERS & UPLOAD
+   MULTI-FILE HANDLERS & UPLOAD
    ========================= */
+const openUploadModal = () => {
+  uploadItems.value = [];
+  isDragActive.value = false;
+  showUploadModal.value = true;
+};
+
 const triggerFileInput = () => {
   fileInputRef.value?.click();
 };
 
+const processIncomingFiles = (incoming: File[]) => {
+  const currentCount = uploadItems.value.length;
+  let oversizedCount = 0;
+  let invalidTypeCount = 0;
+  let duplicateCount = 0;
+  let limitExceededCount = 0;
+
+  const newItems: UploadFileItem[] = [];
+
+  for (const file of incoming) {
+    if (currentCount + newItems.length >= MAX_UPLOAD_BATCH_LIMIT) {
+      limitExceededCount++;
+      continue;
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      oversizedCount++;
+      continue;
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const isValidExt = ALLOWED_EXTENSIONS.includes(ext || '');
+    const isValidMime = ALLOWED_MIME_TYPES.includes(file.type);
+
+    if (!isValidExt && !isValidMime) {
+      invalidTypeCount++;
+      continue;
+    }
+
+    const isDuplicate = uploadItems.value.some(
+      (existing) => existing.name === file.name && existing.size === file.size
+    );
+    if (isDuplicate) {
+      duplicateCount++;
+      continue;
+    }
+
+    newItems.push({
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      status: 'pending',
+      progress: 0,
+      description: "",
+    });
+  }
+
+  if (limitExceededCount > 0) {
+    showToast(`Maksimal ${MAX_UPLOAD_BATCH_LIMIT} berkas per unggahan. ${limitExceededCount} berkas dilewati.`, "warning");
+  }
+  if (oversizedCount > 0) {
+    showToast(`${oversizedCount} berkas melebihi batas maksimal 500MB`, "error");
+  }
+  if (invalidTypeCount > 0) {
+    showToast(`${invalidTypeCount} berkas diabaikan karena format tidak didukung`, "warning");
+  }
+  if (duplicateCount > 0) {
+    showToast(`${duplicateCount} berkas duplikat dilewati`, "info");
+  }
+
+  if (newItems.length > 0) {
+    uploadItems.value = [...uploadItems.value, ...newItems];
+  }
+};
+
 const handleFileSelect = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  if (target.files && target.files[0]) {
-    validateAndSetFile(target.files[0]);
+  if (target.files) {
+    processIncomingFiles(Array.from(target.files));
+    target.value = "";
   }
 };
 
 const handleFileDrop = (e: DragEvent) => {
   isDragActive.value = false;
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-    validateAndSetFile(e.dataTransfer.files[0]);
+  if (e.dataTransfer?.files) {
+    processIncomingFiles(Array.from(e.dataTransfer.files));
   }
 };
 
-const validateAndSetFile = (file: File) => {
-  formErrors.value.file = "";
-  
-  // Batasi ukuran file 50MB
-  const maxSize = 50 * 1024 * 1024;
-  if (file.size > maxSize) {
-    formErrors.value.file = "Ukuran berkas melebihi batas maksimal (50MB)";
-    selectedFile.value = null;
+const removeUploadItem = (id: string) => {
+  const idx = uploadItems.value.findIndex(item => item.id === id);
+  if (idx >= 0) {
+    uploadItems.value.splice(idx, 1);
+  }
+};
+
+const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
+  return new Promise((resolve) => {
+    item.status = 'uploading';
+    item.progress = 0;
+    item.errorMsg = undefined;
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", item.file);
+    if (item.description) {
+      formData.append("description", item.description);
+    }
+
+    // Proteksi Timeout Cerdas: HANYA timeout jika TIDAK ADA PROGRES sama sekali selama 60 detik (Stalled Connection)
+    // Selama ada progres data berjalan, timer akan terus di-reset sehingga file besar (hingga 500MB) tidak akan terputus.
+    const STALL_TIMEOUT_MS = 60000;
+    let stallTimer: any = null;
+
+    const resetStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        item.status = 'failed';
+        item.errorMsg = "Koneksi terhenti (Tidak ada progres unggahan selama 60 detik)";
+        pinoLogger.warn(`[Upload Timeout] Berkas "${item.name}" macet / tidak ada progres selama 60 detik.`, { fileName: item.name });
+        xhr.abort();
+        resolve(false);
+      }, STALL_TIMEOUT_MS);
+    };
+
+    const clearStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+    };
+
+    resetStallTimer();
+    pinoLogger.info(`[Upload Process] Memulai unggah berkas "${item.name}"`, { fileName: item.name, fileSize: item.size, type: item.type });
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        item.progress = Math.round((e.loaded * 100) / e.total);
+      }
+      resetStallTimer();
+    });
+
+    xhr.addEventListener("load", () => {
+      clearStallTimer();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        item.status = 'success';
+        item.progress = 100;
+        pinoLogger.info(`[Upload Success] Berkas "${item.name}" berhasil diunggah.`, { fileName: item.name });
+        resolve(true);
+      } else {
+        item.status = 'failed';
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          const message = resp?.message?.message || resp?.message || "Gagal mengunggah berkas";
+          item.errorMsg = Array.isArray(message) ? message.join(", ") : String(message);
+        } catch {
+          item.errorMsg = `Gagal mengunggah (HTTP ${xhr.status})`;
+        }
+        pinoLogger.error(`[Upload Error] Berkas "${item.name}" gagal diunggah (HTTP ${xhr.status})`, {
+          fileName: item.name,
+          fileSize: item.size,
+          status: xhr.status,
+          responseText: xhr.responseText,
+          errorMsg: item.errorMsg
+        });
+        resolve(false);
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      clearStallTimer();
+      item.status = 'failed';
+      item.errorMsg = "Koneksi terputus / kesalahan jaringan";
+      pinoLogger.error(`[Upload Network Error] Kesalahan jaringan saat mengunggah "${item.name}".`, { fileName: item.name });
+      resolve(false);
+    });
+
+    xhr.addEventListener("abort", () => {
+      clearStallTimer();
+      if (!item.errorMsg) {
+        item.errorMsg = "Unggahan dibatalkan";
+      }
+      pinoLogger.warn(`[Upload Abort] Berkas "${item.name}" dibatalkan oleh pengguna/sistem.`, { fileName: item.name });
+      resolve(false);
+    });
+
+    const apiUrl = `${config.public.apiBase}/documents/upload`;
+    xhr.open("POST", apiUrl, true);
+
+    if (auth.token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`);
+    }
+
+    const targetTenantId = useCookie<string | null>("target_tenant_id").value;
+    if (targetTenantId && auth.isMasterTenant) {
+      xhr.setRequestHeader("X-Target-Tenant-Id", targetTenantId);
+    }
+
+    xhr.send(formData);
+  });
+};
+
+const submitUpload = async () => {
+  const itemsToUpload = uploadItems.value.filter(
+    (item) => item.status === 'pending' || item.status === 'failed'
+  );
+
+  if (itemsToUpload.length === 0) {
+    if (isAllUploadsSuccess.value) {
+      showUploadModal.value = false;
+      fetchDocuments();
+    } else {
+      showToast("Pilih minimal 1 berkas dokumen untuk diunggah", "error");
+    }
     return;
   }
 
-  // Cek ekstensi file yang valid
-  const allowedExtensions = [
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-    'zip', 'tar', 'tgz', 'gz', 'txt', 'csv'
-  ];
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
-  if (!allowedExtensions.includes(fileExt)) {
-    formErrors.value.file = "Format berkas tidak diizinkan. Gunakan PDF, Word, Excel, ZIP, dll.";
-    selectedFile.value = null;
-    return;
-  }
+  uploadLoading.value = true;
 
-  selectedFile.value = file;
-};
+  const CONCURRENCY_LIMIT = 2;
+  const queue = [...itemsToUpload];
 
-const removeSelectedFile = () => {
-  selectedFile.value = null;
-  formErrors.value.file = "";
-  if (fileInputRef.value) {
-    fileInputRef.value.value = "";
-  }
-};
+  const worker = async () => {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (item) {
+        await uploadSingleItem(item);
+      }
+    }
+  };
 
-const resetUploadForm = () => {
-  selectedFile.value = null;
-  form.value.description = "";
-  formErrors.value.file = "";
-  formErrors.value.description = "";
-  if (fileInputRef.value) {
-    fileInputRef.value.value = "";
-  }
-};
+  const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, itemsToUpload.length) }, () => worker());
+  await Promise.all(workers);
 
-const openUploadModal = () => {
-  resetUploadForm();
-  showUploadModal.value = true;
-};
+  uploadLoading.value = false;
 
-const uploadDocument = async () => {
-  formErrors.value.file = "";
-  formErrors.value.description = "";
+  const updatedFailed = uploadItems.value.filter((i) => i.status === 'failed').length;
+  const updatedSuccess = uploadItems.value.filter((i) => i.status === 'success').length;
 
-  if (!selectedFile.value) {
-    formErrors.value.file = "Silakan pilih berkas dokumen terlebih dahulu";
-    return;
-  }
-
-  if (form.value.description.length > 500) {
-    formErrors.value.description = "Deskripsi maksimal 500 karakter";
-    return;
-  }
-
-  submitLoading.value = true;
-  try {
-    await documentService.uploadDocument(selectedFile.value, form.value.description);
-    showToast("Dokumen berhasil diunggah", "success");
-    showUploadModal.value = false;
-    resetUploadForm();
+  if (updatedFailed === 0) {
+    showToast(`Berhasil mengunggah ${updatedSuccess} dokumen`, "success");
     fetchDocuments();
-  } catch (err: any) {
-    console.error("Gagal mengunggah dokumen:", err);
-    const errorMsg = err?.data?.message || "Terjadi kesalahan saat mengunggah dokumen";
-    showToast(errorMsg, "error");
-  } finally {
-    submitLoading.value = false;
+  } else {
+    showToast(`${updatedSuccess} dokumen berhasil, ${updatedFailed} dokumen gagal diunggah. Silakan klik 'Coba Lagi'`, "warning");
+    fetchDocuments();
   }
+};
+
+const retrySingleItem = async (item: UploadFileItem) => {
+  item.status = 'pending';
+  item.progress = 0;
+  item.errorMsg = undefined;
+  uploadLoading.value = true;
+  await uploadSingleItem(item);
+  uploadLoading.value = false;
+
+  if (item.status === 'success') {
+    showToast(`Berhasil mengunggah ${item.name}`, "success");
+    fetchDocuments();
+  } else {
+    showToast(`Gagal mengunggah ${item.name}: ${item.errorMsg}`, "error");
+  }
+};
+
+const retryAllFailed = () => {
+  uploadItems.value.forEach((item) => {
+    if (item.status === 'failed') {
+      item.status = 'pending';
+      item.progress = 0;
+      item.errorMsg = undefined;
+    }
+  });
+  submitUpload();
 };
 
 /* =========================
@@ -536,125 +769,233 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- MODAL UPLOAD DOKUMEN -->
+    <!-- MODAL MULTI-FILE UPLOAD DOKUMEN -->
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showUploadModal" />
-      <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!submitLoading && (showUploadModal = false)">
-        <div class="modal-box max-w-xl bg-base-100 rounded-3xl border border-base-content/10 p-8 shadow-2xl relative text-base-content">
-          <button class="absolute top-6 right-6 text-base-content/40 hover:text-error hover:rotate-90 transition-all duration-300" @click="showUploadModal = false" :disabled="submitLoading">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
+      <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!uploadLoading && (showUploadModal = false)">
+        <div class="modal-box max-w-3xl bg-base-100 rounded-3xl border border-base-content/10 p-6 sm:p-8 shadow-2xl relative text-base-content max-h-[90vh] flex flex-col">
+          <!-- Close Modal Button -->
+          <button 
+            class="absolute top-6 right-6 text-base-content/40 hover:text-error hover:rotate-90 transition-all duration-300 cursor-pointer" 
+            @click="showUploadModal = false" 
+            :disabled="uploadLoading"
+          >
+            <X class="w-6 h-6" />
           </button>
 
-          <h3 class="font-extrabold text-base-content text-2xl tracking-tight mb-8 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+          <!-- Modal Title -->
+          <h3 class="font-extrabold text-base-content text-xl sm:text-2xl tracking-tight mb-2 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <UploadCloud class="w-5 h-5" />
             </div>
-            <span>Unggah Dokumen Baru</span>
+            <span>Unggah Dokumen (Maks. 500MB / File)</span>
           </h3>
+          <p class="text-xs text-base-content/60 mb-6">Pilih satu atau banyak berkas dokumen sekaligus. Format yang didukung: PDF, Word, Excel, PowerPoint, ZIP, TAR, GZ, TXT, CSV, dll.</p>
 
-          <div class="space-y-5">
-            <!-- File Uploader Area -->
+          <div class="space-y-5 overflow-y-auto pr-1 flex-1 scrollbar-thin">
+            <!-- File Drop & Picker Area -->
             <div>
-              <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-2">Pilih Berkas Dokumen <span class="text-error">*</span></label>
-              
               <input 
                 ref="fileInputRef" 
                 type="file" 
+                multiple
                 class="hidden" 
                 @change="handleFileSelect" 
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.tar,.tgz,.gz,.txt,.csv"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.tar,.tgz,.gz,.rar,.txt,.csv,.json,.xml"
               />
 
-              <!-- Drag and drop zone -->
               <div 
-                v-if="!selectedFile"
                 @click="triggerFileInput"
                 @dragover.prevent="isDragActive = true"
                 @dragleave.prevent="isDragActive = false"
                 @drop.prevent="handleFileDrop"
-                class="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-3"
-                :class="isDragActive ? 'border-primary bg-primary/5 scale-98 shadow-inner' : 'border-base-content/20 hover:border-primary/50 hover:bg-base-200/50'"
+                class="border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-3 group"
+                :class="isDragActive ? 'border-primary bg-primary/5 scale-[0.99] shadow-inner' : 'border-base-content/20 hover:border-primary/50 hover:bg-base-200/50'"
               >
-                <div class="w-12 h-12 rounded-full bg-base-200 text-base-content/50 flex items-center justify-center">
+                <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
                   <UploadCloud class="w-6 h-6" />
                 </div>
                 <div>
-                  <p class="font-bold text-sm text-base-content">Klik atau seret file ke sini untuk mengunggah</p>
-                  <p class="text-xs text-base-content/50 mt-1">PDF, Word, Excel, ZIP, TAR, TXT (Maks. 50MB)</p>
+                  <p class="font-bold text-sm text-base-content">Klik atau seret berkas ke sini (Maks. 10 file)</p>
+                  <p class="text-xs text-base-content/50 mt-1">Dapat memilih hingga 10 file sekaligus • Maksimal 500 MB per file</p>
                 </div>
               </div>
+            </div>
 
-              <!-- Selected File Preview -->
-              <div 
-                v-else
-                class="border border-base-content/10 rounded-2xl p-4 bg-base-200/40 flex items-center justify-between gap-3 shadow-xs"
-              >
-                <div class="flex items-center gap-3 min-w-0">
-                  <div 
-                    class="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 font-bold"
-                    :class="getFileIconColorClass(selectedFile.name.split('.').pop() || '')"
-                  >
-                    <component :is="getFileIcon(selectedFile.name.split('.').pop() || '')" class="w-5 h-5" />
-                  </div>
-                  <div class="min-w-0">
-                    <p class="font-bold text-sm text-base-content truncate" :title="selectedFile.name">
-                      {{ selectedFile.name }}
-                    </p>
-                    <p class="text-xs text-base-content/50 mt-0.5">{{ formatBytes(selectedFile.size) }}</p>
-                  </div>
+            <!-- Overall Upload Progress Summary (Jika Ada Antrean File) -->
+            <div v-if="uploadItems.length > 0" class="bg-base-200/50 rounded-2xl p-4 border border-base-content/10 space-y-3">
+              <div class="flex items-center justify-between text-xs font-extrabold">
+                <span class="text-base-content flex items-center gap-2">
+                  <span>Progres Unggahan Massal</span>
+                  <span class="badge badge-sm badge-neutral font-mono font-bold">{{ successUploadsCount }}/{{ totalUploadsCount }} Berhasil</span>
+                </span>
+                <span class="font-mono text-primary font-black">{{ overallUploadProgress }}%</span>
+              </div>
+              
+              <!-- Multi-file progress bar -->
+              <div class="w-full bg-base-300 rounded-full h-2.5 overflow-hidden">
+                <div 
+                  class="bg-primary h-2.5 rounded-full transition-all duration-300"
+                  :style="{ width: `${overallUploadProgress}%` }"
+                ></div>
+              </div>
+
+              <!-- Summary Status Badges & Quick Action -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
+                <div class="flex items-center gap-3 font-semibold">
+                  <span v-if="successUploadsCount > 0" class="text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 class="w-3.5 h-3.5" /> {{ successUploadsCount }} Sukses
+                  </span>
+                  <span v-if="failedUploadsCount > 0" class="text-error flex items-center gap-1 font-bold">
+                    <AlertCircle class="w-3.5 h-3.5" /> {{ failedUploadsCount }} Gagal
+                  </span>
+                  <span v-if="pendingOrFailedUploadsCount > 0" class="text-amber-600 flex items-center gap-1">
+                    <Clock class="w-3.5 h-3.5" /> {{ pendingOrFailedUploadsCount }} Antrean
+                  </span>
                 </div>
+
                 <button 
-                  @click="removeSelectedFile" 
-                  class="btn btn-ghost btn-sm text-error hover:bg-error/10 rounded-xl font-bold px-3 shrink-0"
+                  v-if="failedUploadsCount > 0 && !uploadLoading"
+                  @click="retryAllFailed"
+                  class="btn btn-xs btn-error btn-outline rounded-lg font-bold flex items-center gap-1 shadow-2xs"
                 >
-                  Hapus
+                  <RotateCcw class="w-3 h-3" />
+                  <span>Coba Lagi Semua yang Gagal</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Queue File Items List -->
+            <div v-if="uploadItems.length > 0" class="space-y-3">
+              <div class="flex items-center justify-between text-xs font-bold text-base-content/70 px-1">
+                <span>Daftar Berkas Antrean ({{ uploadItems.length }})</span>
+                <button 
+                  v-if="!uploadLoading"
+                  @click="uploadItems = []"
+                  class="text-error hover:underline text-[11px]"
+                >
+                  Bersihkan Antrean
                 </button>
               </div>
 
-              <span v-if="formErrors.file" class="text-xs text-error font-semibold mt-1.5 block">
-                {{ formErrors.file }}
-              </span>
-            </div>
+              <div class="space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin divide-y divide-base-content/5">
+                <div 
+                  v-for="item in uploadItems" 
+                  :key="item.id"
+                  class="pt-2.5 first:pt-0"
+                >
+                  <div class="flex items-start justify-between gap-3 p-3 bg-base-100 rounded-2xl border border-base-content/10 shadow-3xs">
+                    <!-- Icon File -->
+                    <div 
+                      class="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 font-bold mt-0.5"
+                      :class="getFileIconColorClass(item.name.split('.').pop() || '')"
+                    >
+                      <component :is="getFileIcon(item.name.split('.').pop() || '')" class="w-5 h-5" />
+                    </div>
 
-            <!-- Description -->
-            <div>
-              <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-2">Deskripsi <span class="text-base-content/40 font-normal normal-case">(opsional)</span></label>
-              <textarea 
-                v-model="form.description" 
-                class="textarea textarea-bordered w-full rounded-2xl p-4 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 h-28 bg-base-100 resize-none font-medium text-sm leading-relaxed" 
-                placeholder="Berikan keterangan singkat tentang dokumen ini..." 
-                :class="{'border-error': formErrors.description}"
-                maxlength="500"
-              />
-              <div class="flex justify-between items-center mt-1">
-                <span v-if="formErrors.description" class="text-xs text-error font-semibold block">
-                  {{ formErrors.description }}
-                </span>
-                <span class="text-[10px] text-base-content/40 font-semibold ml-auto">
-                  {{ form.description.length }}/500 karakter
-                </span>
+                    <!-- File Details & Status -->
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between gap-2">
+                        <p class="font-extrabold text-xs text-base-content truncate" :title="item.name">
+                          {{ item.name }}
+                        </p>
+                        <!-- Status Badge -->
+                        <span 
+                          class="badge badge-xs font-bold uppercase text-[9px] px-2 py-1 shrink-0"
+                          :class="{
+                            'badge-warning': item.status === 'pending',
+                            'badge-info animate-pulse': item.status === 'uploading',
+                            'badge-success text-white': item.status === 'success',
+                            'badge-error text-white': item.status === 'failed'
+                          }"
+                        >
+                          <span v-if="item.status === 'pending'">Menunggu</span>
+                          <span v-else-if="item.status === 'uploading'">Mengunggah {{ item.progress }}%</span>
+                          <span v-else-if="item.status === 'success'">Selesai</span>
+                          <span v-else-if="item.status === 'failed'">Gagal</span>
+                        </span>
+                      </div>
+
+                      <p class="text-[11px] font-mono text-base-content/50 mt-0.5">
+                        Ukuran: {{ formatBytes(item.size) }}
+                      </p>
+
+                      <!-- Input Deskripsi Opsional Per File -->
+                      <div class="mt-2" v-if="item.status === 'pending'">
+                        <input 
+                          v-model="item.description"
+                          type="text"
+                          placeholder="Deskripsi singkat (opsional)..."
+                          class="input input-xs input-bordered w-full rounded-lg text-[11px]"
+                          maxlength="255"
+                        />
+                      </div>
+
+                      <!-- Individual Item Progress Bar -->
+                      <div v-if="item.status === 'uploading' || item.status === 'success'" class="w-full bg-base-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div 
+                          class="h-1.5 rounded-full transition-all duration-200"
+                          :class="item.status === 'success' ? 'bg-emerald-500' : 'bg-primary'"
+                          :style="{ width: `${item.progress}%` }"
+                        ></div>
+                      </div>
+
+                      <!-- Error Alert Box jika gagal -->
+                      <div v-if="item.status === 'failed' && item.errorMsg" class="mt-2 p-2 rounded-xl bg-error/10 border border-error/20 text-error text-[11px] font-medium flex items-center justify-between gap-2">
+                        <span class="truncate">{{ item.errorMsg }}</span>
+                        <button 
+                          @click="retrySingleItem(item)"
+                          class="btn btn-xs btn-error text-white rounded-lg px-2 shrink-0 font-bold flex items-center gap-1"
+                          :disabled="uploadLoading"
+                        >
+                          <RotateCcw class="w-3 h-3" />
+                          <span>Coba Lagi</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Remove Item Button -->
+                    <button 
+                      v-if="item.status !== 'uploading' && !uploadLoading"
+                      @click="removeUploadItem(item.id)"
+                      class="text-base-content/40 hover:text-error p-1 transition-colors rounded-lg shrink-0 mt-0.5"
+                      title="Hapus dari antrean"
+                    >
+                      <X class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Actions -->
-          <div class="modal-action gap-3 mt-8">
+          <div class="modal-action gap-3 mt-6 pt-4 border-t border-base-content/10">
             <button 
-              class="btn btn-ghost hover:bg-base-200 rounded-2xl font-bold px-6" 
+              class="btn btn-ghost hover:bg-base-200 rounded-2xl font-bold px-6 text-xs" 
               @click="showUploadModal = false" 
-              :disabled="submitLoading"
+              :disabled="uploadLoading"
             >
-              Batal
+              {{ isAllUploadsSuccess ? 'Tutup' : 'Batal' }}
             </button>
+
             <button 
-              class="btn btn-primary rounded-2xl font-bold px-8 shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all duration-300 flex items-center gap-2" 
-              @click="uploadDocument" 
-              :disabled="submitLoading"
+              v-if="failedUploadsCount > 0"
+              class="btn btn-warning rounded-2xl font-bold px-6 shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-xs" 
+              @click="retryAllFailed"
+              :disabled="uploadLoading"
             >
-              <span v-if="submitLoading" class="loading loading-spinner loading-sm"></span>
-              <span>Unggah</span>
+              <RotateCcw class="w-4 h-4" />
+              <span>Coba Lagi Semua yang Gagal</span>
+            </button>
+
+            <button 
+              class="btn btn-primary rounded-2xl font-bold px-8 shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all duration-300 flex items-center gap-2 text-xs" 
+              @click="submitUpload" 
+              :disabled="uploadLoading || uploadItems.length === 0"
+            >
+              <span v-if="uploadLoading" class="loading loading-spinner loading-xs"></span>
+              <span>{{ isAllUploadsSuccess ? 'Selesai' : (uploadLoading ? 'Mengunggah...' : `Unggah ${uploadItems.length} Berkas`) }}</span>
             </button>
           </div>
         </div>

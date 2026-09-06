@@ -72,6 +72,8 @@ export const useTenantMasterStore = defineStore("tenantMaster", {
       includeMenus?: boolean;
       includeRoles?: boolean;
       includePermissions?: boolean;
+      createSuperAdminUser?: boolean;
+      customPassword?: string;
       excludeSuperAdminRole?: boolean;
     }) {
       const api = useApi();
