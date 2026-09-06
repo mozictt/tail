@@ -1,18 +1,15 @@
 <template>
   <div class="relative w-full h-full bg-base-200 overflow-hidden">
-    <!-- Tampilan Loading (Untuk foto yang sedang dimuat sebagai blob) -->
-    <div v-if="isLoading && type === 'photo'" class="absolute inset-0 flex items-center justify-center">
-      <span class="loading loading-spinner loading-md text-primary"></span>
-    </div>
-
-    <!-- Tampilan Foto -->
+    <!-- Tampilan Foto Native Stream ber-Token -->
     <img
-      v-if="type === 'photo' && secureMediaUrl"
-      :src="secureMediaUrl"
+      v-if="type === 'photo' && photoUrl"
+      :src="photoUrl"
       :alt="filename"
       class="w-full h-full transition duration-500"
       :class="fit === 'contain' ? 'object-contain' : 'object-cover group-hover:scale-110'"
       loading="lazy"
+      decoding="async"
+      @error="handleImageError"
     />
 
     <!-- Tampilan Video (Streaming Langsung via Native HTML5 Video Tag) -->
@@ -37,89 +34,53 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRuntimeConfig } from '#imports';
 
-const props = defineProps({
-  filename: {
-    type: String,
-    required: true,
-  },
-  type: {
-    type: String as () => 'photo' | 'video',
-    required: true,
-  },
-  fit: {
-    type: String as () => 'cover' | 'contain',
-    default: 'cover',
-  },
-});
+const props = withDefaults(
+  defineProps<{
+    filename: string;
+    type: 'photo' | 'video';
+    fit?: 'cover' | 'contain';
+    useOriginal?: boolean;
+  }>(),
+  {
+    fit: 'cover',
+    useOriginal: false,
+  }
+);
 
 const config = useRuntimeConfig();
 const authStore = useAuthStore();
-const secureMediaUrl = ref<string | null>(null);
-const isLoading = ref(false);
+const isFallbackToOriginal = ref(false);
 const hasError = ref(false);
 
-// URL Streaming langsung untuk video menggunakan Query Token
+const photoUrl = computed(() => {
+  if (!props.filename || props.type !== 'photo') return '';
+
+  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
+  const isThumb = !props.useOriginal && !isFallbackToOriginal.value;
+  const endpoint = isThumb ? `/gallery/thumbnail/${cleanPath}` : `/gallery/media/${cleanPath}`;
+  const baseUrl = `${config.public.apiBase}${endpoint}`;
+  const token = authStore.token;
+
+  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+});
+
 const videoStreamingUrl = computed(() => {
   if (!props.filename || props.type !== 'video') return '';
-  const cleanPath = props.filename.startsWith('/') ? props.filename : `/${props.filename}`;
-  const baseUrl = `${config.public.apiBase}${cleanPath}`;
+  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '');
+  const baseUrl = `${config.public.apiBase}/gallery/media/${cleanPath}`;
   const token = authStore.token;
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
 });
 
-const loadSecurePhoto = async () => {
-  if (!props.filename || props.type !== 'photo') return;
-
-  isLoading.value = true;
-  hasError.value = false;
-  secureMediaUrl.value = null;
-
-  try {
-    const token = authStore.token;
-    const cleanPath = props.filename.startsWith('/') ? props.filename : `/${props.filename}`;
-    const url = `${config.public.apiBase}${cleanPath}`;
-
-    const response = await $fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      responseType: 'blob',
-    });
-
-    secureMediaUrl.value = URL.createObjectURL(response as Blob);
-  } catch (error) {
-    console.error('Gagal memuat foto aman:', error);
+const handleImageError = () => {
+  if (!props.useOriginal && !isFallbackToOriginal.value) {
+    isFallbackToOriginal.value = true;
+  } else {
     hasError.value = true;
-  } finally {
-    isLoading.value = false;
   }
 };
-
-watch(
-  () => props.filename,
-  () => {
-    if (secureMediaUrl.value) {
-      URL.revokeObjectURL(secureMediaUrl.value);
-    }
-    if (props.type === 'photo') {
-      loadSecurePhoto();
-    }
-  },
-);
-
-onMounted(() => {
-  if (props.type === 'photo') {
-    loadSecurePhoto();
-  }
-});
-
-onBeforeUnmount(() => {
-  if (secureMediaUrl.value) {
-    URL.revokeObjectURL(secureMediaUrl.value);
-  }
-});
 </script>

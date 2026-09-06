@@ -195,6 +195,11 @@ export const GalleryService = () => {
     }
   };
 
+  const getThumbnailUrl = (fileName: string) => {
+    const cleanPath = fileName?.replace(/^\/+/, '') || '';
+    return `${config.public.apiBase}/gallery/thumbnail/${cleanPath}`;
+  };
+
   return {
     getGalleries,
     getGalleryById,
@@ -204,6 +209,7 @@ export const GalleryService = () => {
     deleteBulk,
     downloadBulk,
     getMediaUrl,
+    getThumbnailUrl,
     downloadMedia
   };
 };

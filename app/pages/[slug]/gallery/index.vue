@@ -1396,7 +1396,7 @@ onMounted(() => {
           <!-- Media Container -->
           <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20">
              <div class="w-full h-full flex items-center justify-center drop-shadow-2xl">
-               <SecureMedia :filename="viewMediaItem.path || viewMediaItem.fileName" :type="viewMediaItem.type" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
+               <SecureMedia :filename="viewMediaItem.path || viewMediaItem.fileName" :type="viewMediaItem.type" :use-original="true" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
              </div>
           </div>
         </div>
