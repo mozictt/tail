@@ -1,42 +1,53 @@
 <template>
-  <div class="relative w-full h-full bg-base-300 overflow-hidden flex items-center justify-center">
-    <!-- STREAMING / SKELETON BADGE (Pointer-events-none, melayang transparan) -->
+  <div class="relative w-full h-full bg-slate-950 overflow-hidden flex items-center justify-center">
+    <!-- STREAMING / SKELETON LOADER OVERLAY (Muncul seketika saat Next/Prev foto & menyembunyikan foto lama) -->
     <Transition name="fade">
       <div
         v-if="isLoading && !hasError"
-        class="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/30 backdrop-blur-xs pointer-events-none p-4"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/90 animate-pulse p-4"
       >
-        <div class="px-4 py-2.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-white/10 flex items-center gap-2.5 text-white/90 shadow-2xl animate-pulse">
-          <svg class="w-4 h-4 animate-spin text-primary shrink-0" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span class="text-xs font-semibold tracking-wide">
+        <div class="w-full h-full rounded-2xl bg-slate-800/80 animate-pulse flex flex-col items-center justify-center gap-3 border border-white/5 shadow-2xl">
+          <div class="w-12 h-12 rounded-2xl bg-slate-700/80 flex items-center justify-center text-primary shadow-inner">
+            <svg class="w-6 h-6 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div class="h-2.5 w-24 bg-slate-700/60 rounded-full"></div>
+          <span class="text-xs font-semibold text-white/80">
             {{ isVideo ? 'Streaming Video...' : 'Memuat Foto...' }}
           </span>
         </div>
       </div>
     </Transition>
 
-    <!-- Foto Native Stream -->
+    <!-- Foto Native Stream dengan :key unik (Foto lama langsung di-unmount begitu Next diklik) -->
     <img
       v-if="isPhoto && photoUrl"
+      :key="photoUrl"
       :src="photoUrl"
       :alt="filename"
       class="relative z-10 w-full h-full transition duration-300"
-      :class="fit === 'contain' ? 'object-contain' : 'object-cover group-hover:scale-110'"
+      :class="[
+        fit === 'contain' ? 'object-contain' : 'object-cover group-hover:scale-110',
+        isLoading ? 'opacity-0' : 'opacity-100'
+      ]"
       loading="eager"
       decoding="async"
       @load="handleMediaLoaded"
       @error="handleImageError"
     />
 
-    <!-- Video Native HTML5 Stream -->
+    <!-- Video Native HTML5 Stream dengan :key unik -->
     <video
       v-else-if="isVideo && videoStreamingUrl"
+      :key="videoStreamingUrl"
       :src="videoStreamingUrl"
       class="relative z-10 w-full h-full"
-      :class="fit === 'contain' ? 'object-contain' : 'object-cover'"
+      :class="[
+        fit === 'contain' ? 'object-contain' : 'object-cover',
+        isLoading ? 'opacity-0' : 'opacity-100'
+      ]"
       controls
       preload="metadata"
       playsinline
