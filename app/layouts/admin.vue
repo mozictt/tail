@@ -50,6 +50,9 @@ const handleLogout = async () => {
 
     <!-- Main -->
     <div class="flex-1 flex flex-col min-w-0">
+      <!-- Sticky Impersonation Warning Banner -->
+      <ImpersonationBanner />
+
       <!-- Navbar -->
       <header class="bg-base-100/85 backdrop-blur-md border-b border-base-content/10 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 z-10">
         <!-- Kiri: mobile sidebar toggle, icon & judul -->

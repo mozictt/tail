@@ -13,7 +13,17 @@ export const useAuthStore = defineStore("auth", {
     username: useCookie<string | null>("username").value || null,
     slug: useCookie<string | null>("slug").value || null,
     tenant_id: useCookie<string | null>("tenant_id").value || null,
-    isMasterTenant: useCookie<boolean>("is_master_tenant").value || false,
+    isMasterTenant: String(useCookie("is_master_tenant").value) === "true",
+    isImpersonated: String(useCookie("is_impersonated").value) === "true",
+    impersonator: (() => {
+      const val = useCookie<any>("impersonator_info").value;
+      if (!val) return null;
+      try {
+        return typeof val === "string" ? JSON.parse(val) : val;
+      } catch {
+        return null;
+      }
+    })(),
     refreshing: null as Promise<any> | null,
   }),
 
@@ -33,7 +43,14 @@ export const useAuthStore = defineStore("auth", {
       this.username = useCookie("username").value || null;
       this.slug = useCookie("slug").value || null;
       this.tenant_id = useCookie("tenant_id").value || null;
-      this.isMasterTenant = Boolean(useCookie("is_master_tenant").value);
+      this.isMasterTenant = String(useCookie("is_master_tenant").value) === "true";
+      this.isImpersonated = String(useCookie("is_impersonated").value) === "true";
+      const impCookie = useCookie("impersonator_info").value;
+      this.impersonator = impCookie
+        ? typeof impCookie === "string"
+          ? JSON.parse(impCookie)
+          : impCookie
+        : null;
     },
 
     saveCookies() {
@@ -45,7 +62,11 @@ export const useAuthStore = defineStore("auth", {
       useCookie("username").value = this.username;
       useCookie("slug").value = this.slug;
       useCookie("tenant_id").value = this.tenant_id;
-      useCookie("is_master_tenant").value = String(this.isMasterTenant);
+      useCookie("is_master_tenant").value = this.isMasterTenant ? "true" : "false";
+      useCookie("is_impersonated").value = this.isImpersonated ? "true" : "false";
+      useCookie("impersonator_info").value = this.impersonator
+        ? JSON.stringify(this.impersonator)
+        : null;
     },
 
     clearAllCookies() {
@@ -59,6 +80,8 @@ export const useAuthStore = defineStore("auth", {
         "slug",
         "tenant_id",
         "is_master_tenant",
+        "is_impersonated",
+        "impersonator_info",
         "target_tenant_id",
         "target_tenant_name",
         "target_tenant_slug",
@@ -89,7 +112,7 @@ export const useAuthStore = defineStore("auth", {
         const payloadBase64 = token.split(".")[1];
         if (!payloadBase64) return true;
         // Fix base64url format
-        const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+        const base64 = payloadBase64.replace(/-/g, "+").replace(/_/g, "/");
         const payloadJson = atob(base64);
         const payload = JSON.parse(payloadJson);
         const now = Math.floor(Date.now() / 1000);
@@ -111,17 +134,22 @@ export const useAuthStore = defineStore("auth", {
           },
         });
 
-        const { accessToken, refreshToken, user } = res.data;
+        const data = res?.data || res;
+        const user = data?.user || {};
+        const accessToken = data?.accessToken || res?.accessToken;
+        const refreshToken = data?.refreshToken || res?.refreshToken;
 
         this.token = accessToken;
         this.refreshToken = refreshToken;
-        this.role = user.role || "guest";
-        this.id_role = user.id_role || "";
-        this.username = user.username || "";
-        this.id_user = user.id || "";
-        this.slug = user.tenant?.slug || null;
-        this.tenant_id = user.tenantId || user.tenant?.id || null;
-        this.isMasterTenant = Boolean(user.isMaster || user.tenant?.isMaster || user.tenantId === '00000000-0000-0000-0000-000000000000');
+        this.role = user?.role || "guest";
+        this.id_role = user?.id_role || "";
+        this.username = user?.username || "";
+        this.id_user = user?.id || "";
+        this.slug = user?.tenant?.slug || user?.tenantSlug || null;
+        this.tenant_id = user?.tenantId || user?.tenant?.id || null;
+        this.isMasterTenant = Boolean(user?.isMaster || user?.tenant?.isMaster || user?.tenantId === '00000000-0000-0000-0000-000000000000');
+        this.isImpersonated = false;
+        this.impersonator = null;
 
         // ✅ PENTING: sync ke cookie (FIX refresh issue)
         this.saveCookies();
@@ -158,8 +186,9 @@ export const useAuthStore = defineStore("auth", {
             }
           );
 
-          this.token = res.data.accessToken;
-          this.refreshToken = res.data.refreshToken;
+          const data = res?.data || res;
+          this.token = data?.accessToken || res?.accessToken;
+          this.refreshToken = data?.refreshToken || res?.refreshToken;
 
           this.saveCookies();
 
@@ -172,6 +201,101 @@ export const useAuthStore = defineStore("auth", {
       return this.refreshing;
     },
 
+    async switchUser(targetUserId: number | string) {
+      const config = useRuntimeConfig();
+      try {
+        const res: any = await $fetch(`${config.public.apiBase}/auth/switch-user`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+          },
+          body: { targetUserId },
+        });
+
+        const data = res?.data || res;
+        const user = data?.user || res?.user || {};
+        const accessToken = data?.accessToken || res?.accessToken;
+        const refreshToken = data?.refreshToken || res?.refreshToken;
+
+        if (accessToken || res?.success) {
+          this.token = accessToken;
+          this.refreshToken = refreshToken;
+          this.role = user?.role || "guest";
+          this.id_role = user?.id_role || "";
+          this.username = user?.username || "";
+          this.id_user = user?.id || "";
+          this.slug = user?.tenantSlug || user?.tenant?.slug || null;
+          this.tenant_id = user?.tenantId || null;
+          this.isMasterTenant = false;
+          this.isImpersonated = Boolean(data?.isImpersonated ?? res?.isImpersonated ?? true);
+          this.impersonator = data?.impersonator || res?.impersonator || null;
+
+          this.saveCookies();
+
+          try {
+            const masterStore = useTenantMasterStore();
+            masterStore.clearTargetTenant();
+          } catch (e) {}
+
+          const menuStore = useMenuStore();
+          menuStore.clearMenus();
+          await menuStore.fetchMenus();
+
+          return res;
+        }
+        return false;
+      } catch (error: any) {
+        console.error("Error switch user:", error);
+        throw error;
+      }
+    },
+
+    async switchBackToMaster() {
+      const config = useRuntimeConfig();
+      try {
+        const res: any = await $fetch(`${config.public.apiBase}/auth/switch-back`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+          },
+        });
+
+        const data = res?.data || res;
+        const user = data?.user || res?.user || {};
+        const accessToken = data?.accessToken || res?.accessToken;
+        const refreshToken = data?.refreshToken || res?.refreshToken;
+
+        if (accessToken || res?.success) {
+          this.token = accessToken;
+          this.refreshToken = refreshToken;
+          this.role = user?.role || "guest";
+          this.id_role = user?.id_role || "";
+          this.username = user?.username || "";
+          this.id_user = user?.id || "";
+          this.slug = user?.tenant?.slug || user?.tenantSlug || null;
+          this.tenant_id = user?.tenantId || null;
+          this.isMasterTenant = Boolean(user?.isMaster || user?.tenant?.isMaster || true);
+          this.isImpersonated = false;
+          this.impersonator = null;
+
+          useCookie("is_impersonated").value = null;
+          useCookie("impersonator_info").value = null;
+
+          this.saveCookies();
+
+          const menuStore = useMenuStore();
+          menuStore.clearMenus();
+          await menuStore.fetchMenus();
+
+          return res;
+        }
+        return false;
+      } catch (error: any) {
+        console.error("Error switch back:", error);
+        throw error;
+      }
+    },
+
     logout() {
       this.token = null;
       this.refreshToken = null;
@@ -182,6 +306,8 @@ export const useAuthStore = defineStore("auth", {
       this.slug = null;
       this.tenant_id = null;
       this.isMasterTenant = false;
+      this.isImpersonated = false;
+      this.impersonator = null;
 
       // ✅ Reset Pinia Stores
       try {
@@ -189,7 +315,7 @@ export const useAuthStore = defineStore("auth", {
         masterStore.clearTargetTenant();
 
         const menuStore = useMenuStore();
-        if (typeof menuStore.$reset === 'function') {
+        if (typeof menuStore.$reset === "function") {
           menuStore.$reset();
         }
       } catch (e) {

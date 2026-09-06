@@ -17,14 +17,17 @@ import {
   Calendar, 
   KeyRound,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  UserCheck
 } from "lucide-vue-next";
+import { useAuthStore } from "@/stores/auth";
 
 definePageMeta({
   layout: 'admin'
 });
 
 const { showToast } = useToast();
+const auth = useAuthStore();
 const userService = UserService();
 const roleService = RoleService();
 const pegawaiService = PegawaiService();
@@ -391,6 +394,42 @@ const handleResetPassword = async (user: UserItem) => {
   }
 };
 
+const handleSwitchUser = async (targetUser: UserItem) => {
+  const confirmResult = await Swal.fire({
+    title: "Switch Login Pengguna?",
+    html: `Apakah Anda yakin ingin berpindah login sebagai pengguna <strong>"${targetUser.username}"</strong>?<br/><br/><span class="text-info font-medium text-xs">Anda akan sementara waktu bertindak atas nama akun ini. Anda dapat kembali ke akun Master Tenant kapan saja melalui banner di bagian atas.</span>`,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Switch Login",
+    cancelButtonText: "Batal",
+    customClass: {
+      confirmButton: "btn btn-primary rounded-xl px-5 font-bold",
+      cancelButton: "btn btn-ghost rounded-xl px-5 font-bold",
+    },
+  });
+
+  if (!confirmResult.isConfirmed) return;
+
+  try {
+    const res: any = await auth.switchUser(targetUser.id);
+    if (res) {
+      await Swal.fire({
+        icon: "success",
+        title: "Switch User Berhasil!",
+        text: `Anda sekarang bertindak sebagai ${targetUser.username}`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+
+      const targetSlug = res.user?.tenantSlug || res.user?.tenant?.slug || auth.slug || "dashboard";
+      window.location.href = `/${targetSlug}/dashboard`;
+    }
+  } catch (err: any) {
+    console.error("Gagal switch user:", err);
+    showToast(err?.data?.message || err?.message || "Gagal melakukan switch login pengguna", "error");
+  }
+};
+
 /* =========================
    HELPER FORMATTING & STYLES
 ========================= */
@@ -529,19 +568,19 @@ onMounted(() => {
             </template>
 
             <!-- Column Role Customizer -->
-            <template #item-role="{ role }">
+            <template #item-role="item">
               <span 
                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border shadow-2xs"
-                :class="getRoleBadgeClass(role?.name)"
+                :class="getRoleBadgeClass(item?.role?.name)"
               >
                 <ShieldCheck class="w-3.5 h-3.5" />
-                <span>{{ role?.name || 'Tanpa Role' }}</span>
+                <span>{{ item?.role?.name || 'Tanpa Role' }}</span>
               </span>
             </template>
 
             <!-- Column Status Customizer (Interactive Toggle Switch) -->
             <template #item-is_active="item">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2" v-if="item">
                 <input 
                   type="checkbox" 
                   class="toggle toggle-emerald toggle-sm"
@@ -559,16 +598,25 @@ onMounted(() => {
             </template>
 
             <!-- Column Date Customizer -->
-            <template #item-createdAt="{ createdAt }">
-              <div class="flex items-center gap-1.5 text-xs font-semibold text-base-content/70">
+            <template #item-createdAt="item">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-base-content/70" v-if="item">
                 <Calendar class="w-3.5 h-3.5 text-base-content/40" />
-                <span>{{ formatDate(createdAt) }}</span>
+                <span>{{ formatDate(item?.createdAt) }}</span>
               </div>
             </template>
 
             <!-- Column Action Customizer -->
             <template #item-aksi="item">
               <div class="flex items-center justify-end gap-1.5">
+                <button 
+                  v-if="auth.isMasterTenant && String(item.id) !== String(auth.id_user)"
+                  class="btn btn-ghost btn-xs btn-circle text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:bg-purple-500/10 rounded-xl"
+                  @click="handleSwitchUser(item)"
+                  title="Switch Login ke User Ini (Impersonation)"
+                >
+                  <UserCheck class="w-3.5 h-3.5" />
+                </button>
+
                 <button 
                   class="btn btn-ghost btn-xs btn-circle text-base-content/70 hover:text-warning hover:bg-warning/10 rounded-xl"
                   @click="handleResetPassword(item)"

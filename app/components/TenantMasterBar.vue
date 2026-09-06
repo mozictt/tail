@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="(auth.isMasterTenant && auth.role === 'Super Admin') || masterStore.targetTenantId"
+    v-if="!auth.isImpersonated && ((auth.isMasterTenant && auth.role === 'Super Admin') || masterStore.targetTenantId)"
     class="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-slate-900 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md border-b border-purple-500/20 backdrop-blur-sm relative z-40"
   >
     <!-- Left Indicator -->

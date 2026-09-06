@@ -57,16 +57,18 @@ export function useAuth() {
         body: { username: usernameInput, password: passwordInput },
       });
 
-      const { accessToken, refreshToken: newRefreshToken, user } = res.data;
+      const data = res?.data || res;
+      const user = data?.user || {};
+      const accessToken = data?.accessToken || res?.accessToken;
+      const newRefreshToken = data?.refreshToken || res?.refreshToken;
 
       token.value = accessToken;
       refreshToken.value = newRefreshToken;
 
-      role.value = user.role || "guest";
-      username.value = user.username || "";
-      id_user.value = user.id || "";
+      role.value = user?.role || "guest";
+      username.value = user?.username || "";
+      id_user.value = user?.id || "";
 
-      
       return true;
     } catch (error) {
       console.error("Login error:", error);

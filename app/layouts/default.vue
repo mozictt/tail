@@ -46,6 +46,8 @@ const handleLogout = async () => {
     <Sidebar @update-active="onUpdateActive" />
 
     <div class="flex-1 flex flex-col min-w-0">
+      <!-- Sticky Impersonation Warning Banner -->
+      <ImpersonationBanner />
       
       <!-- HEADER -->
       <header
