@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { useRuntimeConfig, navigateTo, useCookie } from "#app";
 import { useTenantMasterStore } from "@/stores/tenantMaster";
 import { useMenuStore } from "@/stores/menu";
+import { useCompanyProfileStore } from "@/stores/company-profile";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -116,7 +117,7 @@ export const useAuthStore = defineStore("auth", {
         const payloadJson = atob(base64);
         const payload = JSON.parse(payloadJson);
         const now = Math.floor(Date.now() / 1000);
-        return payload.exp < now + 60;
+        return payload.exp < now + 30; // buffer 30 detik sebelum expired
       } catch {
         return true;
       }
@@ -186,13 +187,26 @@ export const useAuthStore = defineStore("auth", {
             }
           );
 
-          const data = res?.data || res;
-          this.token = data?.accessToken || res?.accessToken;
-          this.refreshToken = data?.refreshToken || res?.refreshToken;
+          // Backend mengembalikan { accessToken, refreshToken } langsung
+          // Fallback ke res.data untuk kompatibilitas respons yang terbungkus
+          const data = res?.data ?? res;
+          const newAccessToken = data?.accessToken;
+          const newRefreshToken = data?.refreshToken;
+
+          if (!newAccessToken) {
+            throw new Error("Refresh token gagal: accessToken tidak ditemukan pada respons");
+          }
+
+          this.token = newAccessToken;
+          this.refreshToken = newRefreshToken ?? this.refreshToken;
 
           this.saveCookies();
 
           return this.token;
+        } catch (error) {
+          // Reset state refresh agar tidak loop
+          this.refreshing = null;
+          throw error; // propagasi error ke caller (useApi)
         } finally {
           this.refreshing = null;
         }
@@ -296,36 +310,60 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
-    logout() {
-      this.token = null;
-      this.refreshToken = null;
-      this.role = null;
-      this.id_role = null;
-      this.username = null;
-      this.id_user = null;
-      this.slug = null;
-      this.tenant_id = null;
-      this.isMasterTenant = false;
-      this.isImpersonated = false;
-      this.impersonator = null;
+    async logout() {
+      const config = useRuntimeConfig();
 
-      // ✅ Reset Pinia Stores
       try {
-        const masterStore = useTenantMasterStore();
-        masterStore.clearTargetTenant();
-
-        const menuStore = useMenuStore();
-        if (typeof menuStore.$reset === "function") {
-          menuStore.$reset();
+        if (this.token) {
+          await $fetch(`${config.public.apiBase}/auth/logout`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${this.token}`,
+            },
+            body: {
+              refreshToken: this.refreshToken,
+              userId: this.id_user,
+            },
+          });
         }
-      } catch (e) {
-        console.error("Error resetting stores on logout:", e);
+      } catch (error) {
+        console.error("Logout API error:", error);
+      } finally {
+        this.token = null;
+        this.refreshToken = null;
+        this.role = null;
+        this.id_role = null;
+        this.username = null;
+        this.id_user = null;
+        this.slug = null;
+        this.tenant_id = null;
+        this.isMasterTenant = false;
+        this.isImpersonated = false;
+        this.impersonator = null;
+
+        // ✅ Reset Pinia Stores
+        try {
+          const masterStore = useTenantMasterStore();
+          masterStore.clearTargetTenant();
+
+          const menuStore = useMenuStore();
+          if (typeof menuStore.$reset === "function") {
+            menuStore.$reset();
+          }
+
+          const companyProfileStore = useCompanyProfileStore();
+          if (typeof companyProfileStore.$reset === "function") {
+            companyProfileStore.$reset();
+          }
+        } catch (e) {
+          console.error("Error resetting stores on logout:", e);
+        }
+
+        // ✅ Hapus SEMUA cookie secara total
+        this.clearAllCookies();
+
+        return navigateTo("/login");
       }
-
-      // ✅ Hapus SEMUA cookie secara total
-      this.clearAllCookies();
-
-      return navigateTo("/login");
     },
   },
 });

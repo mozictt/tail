@@ -948,7 +948,26 @@ onMounted(() => {
       
       <!-- SKELETON LOADER -->
       <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div v-for="i in 8" :key="i" class="h-64 bg-base-200 rounded-2xl animate-pulse"></div>
+        <div 
+          v-for="i in 8" 
+          :key="i" 
+          class="rounded-2xl border border-base-content/10 bg-base-200/40 overflow-hidden flex flex-col h-[280px] shadow-sm animate-pulse"
+        >
+          <!-- Media Area Skeleton -->
+          <div class="h-[200px] bg-base-300/50 relative overflow-hidden flex items-center justify-center">
+            <div class="w-10 h-10 rounded-full bg-base-100/40 flex items-center justify-center">
+              <div class="w-5 h-5 rounded bg-base-300/60"></div>
+            </div>
+          </div>
+          <!-- Card Info Skeleton -->
+          <div class="p-3 bg-base-100/80 flex-1 flex flex-col justify-between border-t border-base-content/5">
+            <div class="h-4 bg-base-300/70 rounded-md w-3/4"></div>
+            <div class="flex justify-between items-center mt-2">
+              <div class="h-3 bg-base-300/50 rounded-md w-1/3"></div>
+              <div class="h-6 w-16 bg-base-300/50 rounded-lg"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- VIEW: ALBUMS LIST -->
@@ -978,16 +997,13 @@ onMounted(() => {
                   <div 
                     v-for="(media, idx) in album.media.slice(0, 3)" 
                     :key="media.id" 
-                    class="absolute w-32 h-32 bg-white rounded-2xl shadow-lg border border-slate-200/60 p-1.5 transition-all duration-500 ease-out group-hover:-translate-y-2 group-hover:shadow-xl" 
+                    class="absolute w-32 h-32 bg-white rounded-2xl shadow-lg border border-slate-200/60 p-1.5 transition-all duration-500 ease-out group-hover:-translate-y-2 group-hover:shadow-xl"
                     :style="getStackStyle(idx)"
-                  >
+                    >
                     <!-- Inner Image Container -->
                     <div class="relative w-full h-full rounded-xl overflow-hidden bg-slate-100">
-                      <SecureMedia :filename="media.path || media.fileName" :type="media.type" class="pointer-events-none opacity-100 transition duration-500 w-full h-full object-cover" />
-                      <!-- Icon Overlay if it's a video -->
-                      <div v-if="media.type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/20">
-                         <Film class="w-6 h-6 text-white/80 drop-shadow-md" />
-                      </div>
+                      <!-- use-original=false: tampilkan thumbnail statis, tidak streaming video -->
+                      <SecureMedia :filename="media.path || media.fileName" :type="media.type" :use-original="false" class="pointer-events-none opacity-100 transition duration-500 w-full h-full object-cover" />
                     </div>
                   </div>
                 </template>
@@ -1079,8 +1095,8 @@ onMounted(() => {
               />
             </div>
 
-            <!-- Media Preview (Secure Fetch) -->
-            <SecureMedia :filename="item.path || item.fileName" :type="item.type" />
+            <!-- Media Preview (Secure Fetch) — use-original=false: tidak streaming video di grid -->
+            <SecureMedia :filename="item.path || item.fileName" :type="item.type" :use-original="false" />
             
             <!-- ======================================== -->
             <!-- DESKTOP: Gradient Overlay (hover only)  -->

@@ -22,11 +22,6 @@ watchEffect(() => {
   }
 });
 
-onMounted(() => {
-  // Ambil data profil perusahaan
-  companyStore.fetchProfile();
-});
-
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value;
 };

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { CompanyProfileService, type CompanyProfile } from "@/services/company-profile.service";
+import { useAuthStore } from "@/stores/auth";
 
 export const useCompanyProfileStore = defineStore("companyProfile", {
   state: () => ({
@@ -23,7 +24,7 @@ export const useCompanyProfileStore = defineStore("companyProfile", {
       if (state.profile?.name) {
         return state.profile.name;
       }
-      return "Admin Panel";
+      return "Admin";
     },
 
     hasLogo: (state): boolean => {
@@ -41,6 +42,9 @@ export const useCompanyProfileStore = defineStore("companyProfile", {
 
   actions: {
     async fetchProfile(force = false) {
+      const auth = useAuthStore();
+      if (!auth.isLoggedIn || !auth.token) return;
+
       if (this.hasFetched && !force) return;
 
       this.isLoading = true;

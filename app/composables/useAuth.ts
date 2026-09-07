@@ -1,5 +1,6 @@
 import { computed } from "vue"; 
 import { useCookie, useRuntimeConfig, navigateTo } from "#app";
+import { useAuthStore } from "@/stores/auth";
 
 const isTokenExpired = (token: string | null) => {
   if (!token) return true;
@@ -8,7 +9,7 @@ const isTokenExpired = (token: string | null) => {
     const payloadJson = atob(payloadBase64);
     const payload = JSON.parse(payloadJson);
     const now = Math.floor(Date.now() / 1000);
-    return payload.exp < now + 60;
+    return payload.exp < now + 30; // buffer 30 detik sebelum expired
   } catch (err) {
     return true;
   }
@@ -17,8 +18,9 @@ const isTokenExpired = (token: string | null) => {
 export function useAuth() {
   const config = useRuntimeConfig(); 
 
-  const token = useCookie<string | null>("access_token");
-  const refreshToken = useCookie<string | null>("refresh_token");
+  // Nama cookie harus konsisten dengan yang dipakai auth store
+  const token = useCookie<string | null>("token");
+  const refreshToken = useCookie<string | null>("refreshToken");
   const id_user = useCookie<string | null>("id_user");
   const role = useCookie<string | null>("role");
   const username = useCookie<string | null>("username");
@@ -29,26 +31,39 @@ export function useAuth() {
 
   let refreshing: Promise<any> | null = null;
   const refreshTokenAsync = async () => {
-  if (refreshing) return refreshing;
+    if (refreshing) return refreshing;
 
-  refreshing = (async () => {
-    try {
-      const res: any = await $fetch(`${config.public.apiBase}/auth/refresh`, {
-        method: "POST",
-        body: { userId: id_user.value, refreshToken: refreshToken.value },
-      });
+    refreshing = (async () => {
+      try {
+        const res: any = await $fetch(`${config.public.apiBase}/auth/refresh`, {
+          method: "POST",
+          body: { userId: id_user.value, refreshToken: refreshToken.value },
+        });
 
-      token.value = res.data.accessToken;
-      refreshToken.value = res.data.refreshToken;
+        // Backend mengembalikan { accessToken, refreshToken } langsung
+        // Fallback ke res.data untuk kompatibilitas respons terbungkus
+        const data = res?.data ?? res;
+        const newAccessToken = data?.accessToken;
+        const newRefreshToken = data?.refreshToken;
 
-      return token.value;
-    } finally {
-      refreshing = null;
-    }
-  })();
+        if (!newAccessToken) {
+          throw new Error("Refresh token gagal: accessToken tidak ditemukan pada respons");
+        }
 
-  return refreshing;
-};
+        token.value = newAccessToken;
+        refreshToken.value = newRefreshToken ?? refreshToken.value;
+
+        return token.value;
+      } catch (error) {
+        refreshing = null;
+        throw error;
+      } finally {
+        refreshing = null;
+      }
+    })();
+
+    return refreshing;
+  };
 
   const login = async (usernameInput: string, passwordInput: string) => {
     try {
@@ -76,14 +91,9 @@ export function useAuth() {
     }
   };
 
-  const logout = () => {
-    token.value = null;
-    refreshToken.value = null;
-    role.value = null;
-    username.value = null; 
-      id_user.value = null; 
-
-    return navigateTo("/login");
+  const logout = async () => {
+    const authStore = useAuthStore();
+    return authStore.logout();
   };
 
   return {
