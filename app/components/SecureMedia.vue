@@ -70,25 +70,26 @@
 
     <!--
       VIDEO — MODE GRID (useOriginal = false, default):
-      1. Muat metadata & frame 0.5s via <video> sementara.
-      2. Capture frame tersebut ke <canvas> -> ubah jadi <img> statis ultra ringan (~20KB).
-      3. Unmount elemen <video> agar grid galeri 100% berupa <img> gambar statis & super ringan.
+      1. Utamakan thumbnail .webp statis (~15KB) dari backend.
+      2. Jika thumbnail .webp belum ada/gagal, fallback ke frame video (#t=0.5 + preload=metadata)
+         sehingga gambar cuplikan isi video SELALU tampil & TIDAK PERNAH blank hitam.
     -->
     <template v-else-if="isVideo && !props.useOriginal">
-      <!-- Gambar Statis (Hasil Capture Canvas) -->
+      <!-- 1. Gambar Thumbnail WebP Statis dari Backend -->
       <img
-        v-if="videoCapturedThumbnail"
-        :src="videoCapturedThumbnail"
+        v-if="videoThumbnailUrl && !videoThumbnailFailed && !hasError"
+        :src="videoThumbnailUrl"
         :alt="filename"
         class="relative z-10 w-full h-full transition-opacity duration-500"
         :class="fit === 'contain' ? 'object-contain' : 'object-cover group-hover:scale-110'"
         loading="lazy"
         decoding="async"
+        @load="handleMediaLoaded"
+        @error="handleVideoThumbnailError"
       />
-      <!-- Element Video Frame Extractor Sementara -->
+      <!-- 2. Fallback: Frame Cuplikan Video Browser (#t=0.5) jika thumbnail WebP backend belum ada -->
       <video
         v-else-if="videoStreamingUrl && !hasError"
-        ref="gridVideoRef"
         :src="videoStreamingUrl + '#t=0.5'"
         preload="metadata"
         muted
@@ -98,12 +99,11 @@
           fit === 'contain' ? 'object-contain' : 'object-cover',
           isLoading ? 'opacity-0' : 'opacity-100'
         ]"
-        @seeked="captureVideoFrame"
-        @loadeddata="captureVideoFrame"
         @loadedmetadata="handleMediaLoaded"
+        @loadeddata="handleMediaLoaded"
         @error="handleImageError"
       ></video>
-      <!-- Fallback jika video gagal dimuat -->
+      <!-- 3. Fallback jika semua gagal -->
       <div
         v-else
         class="relative z-10 w-full h-full bg-slate-900 flex items-center justify-center"
@@ -179,60 +179,11 @@ const authStore = useAuthStore();
 const isFallbackToOriginal = ref(false);
 const hasError = ref(false);
 const isLoading = ref(true);
+const videoThumbnailFailed = ref(false);
 
-// Ref untuk elemen <video> di mode lightbox & mode grid canvas extractor
+// Ref untuk elemen <video> di mode lightbox (lazy src injection)
 const videoRef = ref<HTMLVideoElement | null>(null);
-const gridVideoRef = ref<HTMLVideoElement | null>(null);
-const videoCapturedThumbnail = ref<string | null>(null);
 let videoObserver: IntersectionObserver | null = null;
-
-// RAM Cache untuk thumbnail canvas video agar tidak meng-capture berulang kali
-const thumbnailCache = new Map<string, string>();
-
-/**
- * Capture frame video dari <video> ke <canvas> dan konversi ke dataURL JPG ringan (~20KB)
- */
-const captureVideoFrame = () => {
-  if (videoCapturedThumbnail.value) return;
-
-  const key = props.filename;
-  if (thumbnailCache.has(key)) {
-    videoCapturedThumbnail.value = thumbnailCache.get(key)!;
-    isLoading.value = false;
-    hasError.value = false;
-    return;
-  }
-
-  const video = gridVideoRef.value;
-  if (!video || video.readyState < 2) return;
-
-  try {
-    const canvas = document.createElement('canvas');
-    const w = video.videoWidth || 320;
-    const h = video.videoHeight || 240;
-    
-    // Scale resolusi max 400px agar penggunaan memori sangat kecil
-    const maxDim = 400;
-    const scale = Math.min(maxDim / w, maxDim / h, 1);
-    canvas.width = w * scale;
-    canvas.height = h * scale;
-
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      if (dataUrl && dataUrl.length > 100) {
-        thumbnailCache.set(key, dataUrl);
-        videoCapturedThumbnail.value = dataUrl;
-        isLoading.value = false;
-        hasError.value = false;
-      }
-    }
-  } catch (e) {
-    // Jika gagal capture (misal CORS/SecurityError), tetap fallback ke elemen video
-    isLoading.value = false;
-  }
-};
 
 const isVideo = computed(() => {
   if (!props.type) return false;
@@ -251,14 +202,7 @@ watch(
     isLoading.value = true;
     hasError.value = false;
     isFallbackToOriginal.value = false;
-
-    // Cek apakah thumbnail canvas sudah ada di RAM cache
-    if (props.filename && thumbnailCache.has(props.filename)) {
-      videoCapturedThumbnail.value = thumbnailCache.get(props.filename)!;
-      isLoading.value = false;
-    } else {
-      videoCapturedThumbnail.value = null;
-    }
+    videoThumbnailFailed.value = false;
 
     // Jika mode lightbox, pasang ulang observer
     if (isVideo.value && props.useOriginal) {
@@ -279,6 +223,18 @@ const thumbnailUrl = computed(() => {
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
 });
 
+/**
+ * URL Thumbnail statis (.webp ~15KB) untuk video di mode grid (useOriginal = false).
+ * Mengakses endpoint backend /gallery/thumbnail/... yang mengembalikan static WebP image!
+ */
+const videoThumbnailUrl = computed(() => {
+  if (!props.filename || !isVideo.value) return '';
+  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
+  const baseUrl = `${config.public.apiBase}/gallery/thumbnail/${cleanPath}`;
+  const token = authStore.token;
+  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+});
+
 // URL HD Original Foto
 const photoUrl = computed(() => {
   if (!props.filename || !isPhoto.value) return '';
@@ -291,12 +247,6 @@ const photoUrl = computed(() => {
 
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
 });
-
-// Jika thumbnail video gagal, fallback ke background gelap
-const handleVideoThumbnailError = () => {
-  videoThumbnailFailed.value = true;
-  isLoading.value = false;
-};
 
 /**
  * URL Streaming Video — hanya dipakai di mode lightbox (useOriginal = true).
@@ -375,6 +325,11 @@ const handleImageError = () => {
     hasError.value = true;
     isLoading.value = false;
   }
+};
+
+// Jika thumbnail .webp statis backend belum ada / gagal, alihkan ke video frame fallback (#t=0.5)
+const handleVideoThumbnailError = () => {
+  videoThumbnailFailed.value = true;
 };
 </script>
 
