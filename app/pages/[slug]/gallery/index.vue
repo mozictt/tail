@@ -276,7 +276,7 @@ let initialPanOffset = { x: 0, y: 0 };
 let initialPinchDistance = 0;
 let initialScaleOnPinch = 1;
 let lastTapTime = 0;
-let lastTouchTapTime = 0;
+let preventSyntheticClick = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
@@ -287,11 +287,12 @@ const resetZoom = () => {
 };
 
 const toggleZoom = () => {
-  if (zoomScale.value > 1) {
+  if (zoomScale.value > 1.05) {
     resetZoom();
   } else {
     zoomScale.value = 2.5;
     panOffset.value = { x: 0, y: 0 };
+    isDraggingImage.value = false;
   }
 };
 
@@ -318,7 +319,7 @@ const zoomIn = () => {
 const zoomOut = () => {
   const newScale = Math.max(Number((zoomScale.value - 0.5).toFixed(1)), 1);
   zoomScale.value = newScale;
-  if (newScale === 1) {
+  if (newScale <= 1.05) {
     panOffset.value = { x: 0, y: 0 };
   } else {
     panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
@@ -330,7 +331,7 @@ const handleWheel = (e: WheelEvent) => {
   const delta = e.deltaY * -0.002;
   const newScale = Math.min(Math.max(Number((zoomScale.value + delta).toFixed(2)), 1), 4);
   zoomScale.value = newScale;
-  if (newScale === 1) {
+  if (newScale <= 1.05) {
     panOffset.value = { x: 0, y: 0 };
   } else {
     panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
@@ -340,7 +341,7 @@ const handleWheel = (e: WheelEvent) => {
 /* Desktop Mouse Dragging & Double Click */
 const handleMouseDown = (e: MouseEvent) => {
   if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
-  if (zoomScale.value > 1) {
+  if (zoomScale.value > 1.05) {
     isDraggingImage.value = true;
     startDragPos = { x: e.clientX, y: e.clientY };
     initialPanOffset = { ...panOffset.value };
@@ -350,7 +351,7 @@ const handleMouseDown = (e: MouseEvent) => {
 };
 
 const handleMouseMove = (e: MouseEvent) => {
-  if (!isDraggingImage.value || zoomScale.value <= 1) return;
+  if (!isDraggingImage.value || zoomScale.value <= 1.05) return;
   const dx = e.clientX - startDragPos.x;
   const dy = e.clientY - startDragPos.y;
   panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
@@ -364,8 +365,10 @@ const handleMouseUp = () => {
 
 const handleDoubleClick = (e: MouseEvent) => {
   if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
-  // Abaikan event dblclick sintetis dari browser mobile setelah touchstart
-  if (Date.now() - lastTouchTapTime < 500) return;
+  if (preventSyntheticClick) {
+    preventSyntheticClick = false;
+    return;
+  }
   toggleZoom();
 };
 
@@ -387,16 +390,17 @@ const handleTouchStart = (e: TouchEvent) => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 
-    if (isPhoto && now - lastTapTime < 300) {
+    const timeDiff = now - lastTapTime;
+    if (isPhoto && timeDiff > 30 && timeDiff < 350) {
       if (e.cancelable) e.preventDefault();
-      lastTouchTapTime = now;
+      preventSyntheticClick = true;
       lastTapTime = 0;
       toggleZoom();
       return;
     }
     lastTapTime = now;
 
-    if (zoomScale.value > 1 && isPhoto) {
+    if (zoomScale.value > 1.05 && isPhoto) {
       isDraggingImage.value = true;
       startDragPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       initialPanOffset = { ...panOffset.value };
@@ -418,13 +422,13 @@ const handleTouchMove = (e: TouchEvent) => {
       const scaleFactor = currentDist / initialPinchDistance;
       const newScale = Math.min(Math.max(Number((initialScaleOnPinch * scaleFactor).toFixed(2)), 1), 4);
       zoomScale.value = newScale;
-      if (newScale === 1) {
+      if (newScale <= 1.05) {
         panOffset.value = { x: 0, y: 0 };
       } else {
         panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
       }
     }
-  } else if (e.touches.length === 1 && zoomScale.value > 1 && isDraggingImage.value && isPhoto) {
+  } else if (e.touches.length === 1 && zoomScale.value > 1.05 && isDraggingImage.value && isPhoto) {
     if (e.cancelable) e.preventDefault();
     const dx = e.touches[0].clientX - startDragPos.x;
     const dy = e.touches[0].clientY - startDragPos.y;
