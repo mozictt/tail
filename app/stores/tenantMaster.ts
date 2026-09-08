@@ -14,11 +14,17 @@ export interface TenantItem {
   createdAt: string;
 }
 
+const COOKIE_OPTS = {
+  maxAge: 60 * 60 * 24 * 7, // 7 hari
+  path: "/",
+  sameSite: "lax" as const,
+};
+
 export const useTenantMasterStore = defineStore("tenantMaster", {
   state: () => ({
-    targetTenantId: useCookie<string | null>("target_tenant_id").value || null,
-    targetTenantName: useCookie<string | null>("target_tenant_name").value || null,
-    targetTenantSlug: useCookie<string | null>("target_tenant_slug").value || null,
+    targetTenantId: useCookie<string | null>("target_tenant_id", COOKIE_OPTS).value || null,
+    targetTenantName: useCookie<string | null>("target_tenant_name", COOKIE_OPTS).value || null,
+    targetTenantSlug: useCookie<string | null>("target_tenant_slug", COOKIE_OPTS).value || null,
     tenants: [] as TenantItem[],
     loading: false,
   }),
@@ -29,16 +35,16 @@ export const useTenantMasterStore = defineStore("tenantMaster", {
         this.targetTenantId = tenant.id;
         this.targetTenantName = tenant.name;
         this.targetTenantSlug = tenant.slug;
-        useCookie("target_tenant_id").value = tenant.id;
-        useCookie("target_tenant_name").value = tenant.name;
-        useCookie("target_tenant_slug").value = tenant.slug;
+        useCookie("target_tenant_id", COOKIE_OPTS).value = tenant.id;
+        useCookie("target_tenant_name", COOKIE_OPTS).value = tenant.name;
+        useCookie("target_tenant_slug", COOKIE_OPTS).value = tenant.slug;
       } else {
         this.targetTenantId = null;
         this.targetTenantName = null;
         this.targetTenantSlug = null;
-        useCookie("target_tenant_id").value = null;
-        useCookie("target_tenant_name").value = null;
-        useCookie("target_tenant_slug").value = null;
+        useCookie("target_tenant_id", { path: "/" }).value = null;
+        useCookie("target_tenant_name", { path: "/" }).value = null;
+        useCookie("target_tenant_slug", { path: "/" }).value = null;
       }
     },
 

@@ -4,20 +4,29 @@ import { useTenantMasterStore } from "@/stores/tenantMaster";
 import { useMenuStore } from "@/stores/menu";
 import { useCompanyProfileStore } from "@/stores/company-profile";
 
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 hari dalam detik
+
+const getCookieOptions = () => ({
+  maxAge: COOKIE_MAX_AGE,
+  path: "/",
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+});
+
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: useCookie<string | null>("token").value || null,
-    refreshToken: useCookie<string | null>("refreshToken").value || null,
-    id_user: useCookie<string | null>("id_user").value || null,
-    id_role: useCookie<string | null>("id_role").value || null,
-    role: useCookie<string | null>("role").value || null,
-    username: useCookie<string | null>("username").value || null,
-    slug: useCookie<string | null>("slug").value || null,
-    tenant_id: useCookie<string | null>("tenant_id").value || null,
-    isMasterTenant: String(useCookie("is_master_tenant").value) === "true",
-    isImpersonated: String(useCookie("is_impersonated").value) === "true",
+    token: useCookie<string | null>("token", getCookieOptions()).value || null,
+    refreshToken: useCookie<string | null>("refreshToken", getCookieOptions()).value || null,
+    id_user: useCookie<string | null>("id_user", getCookieOptions()).value || null,
+    id_role: useCookie<string | null>("id_role", getCookieOptions()).value || null,
+    role: useCookie<string | null>("role", getCookieOptions()).value || null,
+    username: useCookie<string | null>("username", getCookieOptions()).value || null,
+    slug: useCookie<string | null>("slug", getCookieOptions()).value || null,
+    tenant_id: useCookie<string | null>("tenant_id", getCookieOptions()).value || null,
+    isMasterTenant: String(useCookie("is_master_tenant", getCookieOptions()).value) === "true",
+    isImpersonated: String(useCookie("is_impersonated", getCookieOptions()).value) === "true",
     impersonator: (() => {
-      const val = useCookie<any>("impersonator_info").value;
+      const val = useCookie<any>("impersonator_info", getCookieOptions()).value;
       if (!val) return null;
       try {
         return typeof val === "string" ? JSON.parse(val) : val;
@@ -36,17 +45,18 @@ export const useAuthStore = defineStore("auth", {
 
   actions: {
     syncCookies() {
-      this.token = useCookie("token").value || null;
-      this.refreshToken = useCookie("refreshToken").value || null;
-      this.id_user = useCookie("id_user").value || null;
-      this.id_role = useCookie("id_role").value || null;
-      this.role = useCookie("role").value || null;
-      this.username = useCookie("username").value || null;
-      this.slug = useCookie("slug").value || null;
-      this.tenant_id = useCookie("tenant_id").value || null;
-      this.isMasterTenant = String(useCookie("is_master_tenant").value) === "true";
-      this.isImpersonated = String(useCookie("is_impersonated").value) === "true";
-      const impCookie = useCookie("impersonator_info").value;
+      const opts = getCookieOptions();
+      this.token = useCookie("token", opts).value || null;
+      this.refreshToken = useCookie("refreshToken", opts).value || null;
+      this.id_user = useCookie("id_user", opts).value || null;
+      this.id_role = useCookie("id_role", opts).value || null;
+      this.role = useCookie("role", opts).value || null;
+      this.username = useCookie("username", opts).value || null;
+      this.slug = useCookie("slug", opts).value || null;
+      this.tenant_id = useCookie("tenant_id", opts).value || null;
+      this.isMasterTenant = String(useCookie("is_master_tenant", opts).value) === "true";
+      this.isImpersonated = String(useCookie("is_impersonated", opts).value) === "true";
+      const impCookie = useCookie("impersonator_info", opts).value;
       this.impersonator = impCookie
         ? typeof impCookie === "string"
           ? JSON.parse(impCookie)
@@ -55,17 +65,18 @@ export const useAuthStore = defineStore("auth", {
     },
 
     saveCookies() {
-      useCookie("token").value = this.token;
-      useCookie("refreshToken").value = this.refreshToken;
-      useCookie("id_user").value = this.id_user;
-      useCookie("id_role").value = this.id_role;
-      useCookie("role").value = this.role;
-      useCookie("username").value = this.username;
-      useCookie("slug").value = this.slug;
-      useCookie("tenant_id").value = this.tenant_id;
-      useCookie("is_master_tenant").value = this.isMasterTenant ? "true" : "false";
-      useCookie("is_impersonated").value = this.isImpersonated ? "true" : "false";
-      useCookie("impersonator_info").value = this.impersonator
+      const opts = getCookieOptions();
+      useCookie("token", opts).value = this.token;
+      useCookie("refreshToken", opts).value = this.refreshToken;
+      useCookie("id_user", opts).value = this.id_user;
+      useCookie("id_role", opts).value = this.id_role;
+      useCookie("role", opts).value = this.role;
+      useCookie("username", opts).value = this.username;
+      useCookie("slug", opts).value = this.slug;
+      useCookie("tenant_id", opts).value = this.tenant_id;
+      useCookie("is_master_tenant", opts).value = this.isMasterTenant ? "true" : "false";
+      useCookie("is_impersonated", opts).value = this.isImpersonated ? "true" : "false";
+      useCookie("impersonator_info", opts).value = this.impersonator
         ? JSON.stringify(this.impersonator)
         : null;
     },
@@ -89,7 +100,7 @@ export const useAuthStore = defineStore("auth", {
       ];
 
       for (const key of cookieKeys) {
-        const cookie = useCookie(key);
+        const cookie = useCookie(key, { path: "/" });
         cookie.value = null;
       }
 

@@ -59,21 +59,24 @@ definePageMeta({
 
 <template>
   <div class="min-h-screen w-full flex bg-slate-50 text-slate-900 font-sans relative overflow-hidden">
-    <!-- BACKGROUND GRID PATTERN OVERLAY (LIGHT & CERAH) -->
+    <!-- BACKGROUND GRID PATTERN OVERLAY -->
     <div class="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none opacity-60"></div>
 
-    <!-- AMBIENT PASTEL GLOW ORBS -->
-    <div class="absolute -top-20 -left-20 w-[500px] h-[500px] bg-gradient-to-br from-indigo-200/50 via-purple-200/40 to-sky-200/30 rounded-full blur-[130px] pointer-events-none"></div>
-    <div class="absolute -bottom-20 -right-20 w-[500px] h-[500px] bg-gradient-to-tr from-sky-200/50 via-indigo-200/40 to-purple-200/30 rounded-full blur-[130px] pointer-events-none"></div>
+    <!-- AMBIENT GLOW ORBS -->
+    <div class="absolute -top-20 -left-20 w-[400px] h-[400px] bg-gradient-to-br from-indigo-200/50 via-purple-200/40 to-sky-200/30 rounded-full blur-[130px] pointer-events-none"></div>
+    <div class="absolute -bottom-20 -right-20 w-[400px] h-[400px] bg-gradient-to-tr from-sky-200/50 via-indigo-200/40 to-purple-200/30 rounded-full blur-[130px] pointer-events-none"></div>
 
-    <!-- MAIN CONTAINER SPLIT SCREEN -->
-    <div class="w-full min-h-screen grid grid-cols-1 lg:grid-cols-12 relative z-10">
-      
-      <!-- ================= LEFT HERO PANEL (DESKTOP FEATURE SHOWCASE - BRIGHT THEME) ================= -->
+    <!-- MAIN CONTAINER -->
+    <div class="w-full min-h-screen flex flex-col lg:grid lg:grid-cols-12 relative z-10">
+
+      <!-- ================= LEFT HERO PANEL (DESKTOP ONLY) ================= -->
       <div class="hidden lg:flex lg:col-span-6 xl:col-span-7 relative flex-col justify-between p-12 overflow-hidden border-r border-slate-200/80 bg-gradient-to-br from-white/90 via-slate-50/80 to-indigo-50/50 backdrop-blur-md">
-        
-        <!-- Bright Background Art Floating -->
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[580px] h-[580px] bg-cover bg-center rounded-3xl opacity-85 shadow-2xl shadow-indigo-200/50 pointer-events-none border border-white/80" style="background-image: url('/login-light-bg.png');"></div>
+
+        <!-- Background Art -->
+        <div
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-cover bg-center rounded-3xl opacity-85 shadow-2xl shadow-indigo-200/50 pointer-events-none border border-white/80"
+          style="background-image: url('/login-light-bg.png');"
+        ></div>
         <div class="absolute inset-0 bg-gradient-to-t from-slate-50/90 via-slate-50/40 to-white/70 pointer-events-none"></div>
 
         <!-- Header Branding -->
@@ -102,15 +105,15 @@ definePageMeta({
           </div>
 
           <h1 class="text-4xl xl:text-5xl font-black text-slate-900 tracking-tight leading-[1.15]">
-            Kelola Bisnis Lebih <span class="bg-gradient-to-r from-primary via-indigo-600 to-purple-600 bg-clip-text text-transparent">Cerdas, Cepat & Aman</span>
+            Kelola Bisnis Lebih <span class="bg-gradient-to-r from-primary via-indigo-600 to-purple-600 bg-clip-text text-transparent">Cerdas, Cepat &amp; Aman</span>
           </h1>
 
           <p class="text-slate-600 text-sm leading-relaxed font-medium">
             Platform manajemen terpadu yang dirancang dengan antarmuka bersih, responsif, dan siap mendukung produktivitas tim Anda.
           </p>
 
-          <!-- Feature Cards Grid (Bright White Cards) -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <!-- Feature Cards Grid -->
+          <div class="grid grid-cols-2 gap-4 pt-2">
             <div class="p-4 rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-sm shadow-slate-200/60 space-y-1.5 hover:shadow-md hover:border-primary/30 transition-all">
               <div class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                 <icons.ShieldCheck class="w-4 h-4" />
@@ -139,14 +142,30 @@ definePageMeta({
         </div>
       </div>
 
-      <!-- ================= RIGHT FORM PANEL (BRIGHT GLASS CARD) ================= -->
-      <div class="lg:col-span-6 xl:col-span-5 flex items-center justify-center p-6 sm:p-12 relative">
-        
-        <!-- Clean White Glassmorphism Card -->
-        <div class="w-full max-w-md bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-indigo-100/60 space-y-7 relative z-10">
-          
-          <!-- Logo Header -->
-          <div class="flex flex-col items-center text-center space-y-3">
+      <!-- ================= RIGHT FORM PANEL (MOBILE-FIRST) ================= -->
+      <div class="lg:col-span-6 xl:col-span-5 flex-1 flex flex-col items-center justify-center p-5 sm:p-8 lg:p-12 min-h-screen lg:min-h-0 relative">
+
+        <!-- Mobile Header Branding (visible on mobile only) -->
+        <div class="lg:hidden w-full max-w-sm flex flex-col items-center mb-6">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary via-indigo-600 to-purple-600 p-0.5 shadow-lg shadow-primary/25 flex items-center justify-center mb-3">
+            <div class="w-full h-full bg-white rounded-[14px] flex items-center justify-center p-2">
+              <SecureCompanyLogo
+                :logo-filename="companyStore.logoFilename"
+                :logo-path="companyStore.logoPath"
+                :alt="companyStore.appName"
+                img-class="max-w-full max-h-full w-auto h-auto object-contain"
+              />
+            </div>
+          </div>
+          <h2 class="text-xl font-black text-slate-900 tracking-tight">{{ companyStore.appName }}</h2>
+          <span class="text-xs text-primary font-bold tracking-wide uppercase mt-0.5">Enterprise Panel</span>
+        </div>
+
+        <!-- Glass Card Form -->
+        <div class="w-full max-w-sm sm:max-w-md bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl shadow-indigo-100/60 space-y-6 relative z-10">
+
+          <!-- Form Header (Desktop) -->
+          <div class="hidden lg:flex flex-col items-center text-center space-y-3">
             <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary via-indigo-600 to-purple-600 p-0.5 shadow-lg shadow-primary/25 flex items-center justify-center">
               <div class="w-full h-full bg-white rounded-[14px] flex items-center justify-center p-2">
                 <SecureCompanyLogo
@@ -157,7 +176,6 @@ definePageMeta({
                 />
               </div>
             </div>
-
             <div>
               <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Selamat Datang</h2>
               <p class="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
@@ -166,17 +184,23 @@ definePageMeta({
             </div>
           </div>
 
+          <!-- Mobile Form Title -->
+          <div class="lg:hidden">
+            <h1 class="text-xl font-black text-slate-900 tracking-tight">Masuk ke Akun</h1>
+            <p class="text-xs text-slate-500 mt-1 font-medium">Masukkan akun Anda untuk melanjutkan</p>
+          </div>
+
           <!-- Alert Error Message -->
           <Transition name="fade">
-            <div v-if="error" class="p-3.5 rounded-2xl bg-red-50 border border-red-200/80 flex items-center gap-3 text-red-700 text-xs font-semibold shadow-xs">
-              <icons.AlertCircle class="w-4 h-4 shrink-0 text-red-500" />
+            <div v-if="error" class="p-3 rounded-xl bg-red-50 border border-red-200/80 flex items-start gap-2.5 text-red-700 text-xs font-semibold shadow-sm">
+              <icons.AlertCircle class="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
               <span>{{ error }}</span>
             </div>
           </Transition>
 
           <!-- Form Input Fields -->
-          <form @submit.prevent="doLogin" class="space-y-5">
-            
+          <form @submit.prevent="doLogin" class="space-y-4">
+
             <!-- Username Input -->
             <div class="space-y-1.5">
               <label for="username" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -200,11 +224,9 @@ definePageMeta({
 
             <!-- Password Input -->
             <div class="space-y-1.5">
-              <div class="flex items-center justify-between">
-                <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Password
-                </label>
-              </div>
+              <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Password
+              </label>
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <icons.Lock class="w-4 h-4" />
@@ -229,7 +251,7 @@ definePageMeta({
               </div>
             </div>
 
-            <!-- Remember Me & Extra Link -->
+            <!-- Remember Me & Forgot Password -->
             <div class="flex items-center justify-between text-xs pt-1">
               <label class="flex items-center gap-2 cursor-pointer select-none text-slate-600 hover:text-slate-900 font-medium transition">
                 <input
@@ -239,7 +261,7 @@ definePageMeta({
                 />
                 <span>Ingat saya</span>
               </label>
-              
+
               <a href="#" class="text-primary hover:text-primary/80 font-bold transition hover:underline">
                 Lupa Password?
               </a>
@@ -249,7 +271,7 @@ definePageMeta({
             <button
               type="submit"
               :disabled="loading"
-              class="w-full py-3.5 px-4 bg-gradient-to-r from-primary via-indigo-600 to-purple-600 hover:from-primary/95 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full py-3.5 px-4 bg-gradient-to-r from-primary via-indigo-600 to-purple-600 hover:from-primary/95 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <template v-if="!loading">
                 <span>Masuk ke Dashboard</span>
@@ -263,7 +285,7 @@ definePageMeta({
           </form>
 
           <!-- Register Footer Link -->
-          <div class="text-center pt-2 border-t border-slate-100">
+          <div class="text-center pt-1 border-t border-slate-100">
             <p class="text-xs text-slate-500 font-medium">
               Belum memiliki akun?
               <NuxtLink to="/register" class="text-primary hover:text-primary/80 font-extrabold ml-1 transition hover:underline">
@@ -272,6 +294,12 @@ definePageMeta({
             </p>
           </div>
 
+        </div>
+
+        <!-- Mobile Footer -->
+        <div class="lg:hidden mt-5 flex items-center gap-2 text-xs text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>&copy; {{ new Date().getFullYear() }} {{ companyStore.appName }}</span>
         </div>
       </div>
 
@@ -291,5 +319,3 @@ definePageMeta({
   transform: translateY(-6px);
 }
 </style>
-
-

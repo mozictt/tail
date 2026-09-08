@@ -1,26 +1,26 @@
 <template>
   <div
     v-if="!auth.isImpersonated && ((auth.isMasterTenant && auth.role === 'Super Admin') || masterStore.targetTenantId)"
-    class="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-slate-900 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md border-b border-purple-500/20 backdrop-blur-sm relative z-40"
+    class="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-slate-900 text-white px-3 sm:px-4 py-2 text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-1.5 shadow-md border-b border-purple-500/20 backdrop-blur-sm relative z-40"
   >
     <!-- Left Indicator -->
-    <div class="flex items-center gap-2.5">
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 tracking-wider uppercase">
-        👑 Master Tenant Mode
+    <div class="flex items-center gap-2 min-w-0 flex-1">
+      <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 tracking-wider uppercase whitespace-nowrap">
+        👑 Master Mode
       </span>
-      <div v-if="masterStore.targetTenantId" class="flex items-center gap-1.5 font-semibold text-emerald-300">
-        <span>Menargetkan Tenant:</span>
-        <span class="bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-200 font-bold border border-emerald-400/30">
+      <div v-if="masterStore.targetTenantId" class="flex items-center gap-1.5 font-semibold text-emerald-300 min-w-0">
+        <span class="hidden sm:inline shrink-0">Target:</span>
+        <span class="bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-200 font-bold border border-emerald-400/30 truncate max-w-[120px] sm:max-w-none">
           {{ masterStore.targetTenantName || masterStore.targetTenantId }}
         </span>
       </div>
-      <div v-else class="text-slate-300">
-        <span>Konteks Mode:</span> <strong class="text-white">Tenant Utama (Pusat)</strong>
+      <div v-else class="text-slate-300 hidden sm:block">
+        <span>Konteks:</span> <strong class="text-white">Tenant Utama (Pusat)</strong>
       </div>
     </div>
 
     <!-- Right Actions -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1.5 shrink-0">
       <!-- Clone Config Button -->
       <button
         @click="openCloneModal"
@@ -30,7 +30,7 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
         </svg>
-        <span>Duplikasi Config</span>
+        <span class="hidden sm:inline">Duplikasi Config</span>
       </button>
 
       <!-- Tenant Selector Dropdown -->
@@ -42,7 +42,8 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
           </svg>
-          <span>{{ masterStore.targetTenantId ? 'Ganti Target Tenant' : 'Pilih Target Tenant' }}</span>
+          <span class="hidden sm:inline">{{ masterStore.targetTenantId ? 'Ganti Target' : 'Pilih Tenant' }}</span>
+          <span class="sm:hidden">Tenant</span>
         </button>
 
         <!-- Dropdown Menu -->

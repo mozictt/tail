@@ -76,14 +76,15 @@ const getMenuIcon = (iconName?: string | null, fallbackIcon: any = icons.Circle)
   return fallbackIcon;
 };
 
-const isActive = (path: string) => {
-  if (!path) return false;
+const isActive = (path: string | undefined | null): boolean => {
+  // Guard: path wajib berupa string yang valid
+  if (!path || typeof path !== 'string') return false;
   const currentPath = route.path.replace(`/${currentSlug.value}`, '') || '/';
   return currentPath === path || currentPath.startsWith(path + "/");
 };
 
 const isParentActive = (children: any[]): boolean =>
-  children && children.some((c) => isActive(c.url || c.path) || (c.children && isParentActive(c.children)));
+  Array.isArray(children) && children.some((c) => isActive(c.url || c.path) || (c.children && isParentActive(c.children)));
 
 const handleItemClick = () => {
   if (hasChildren.value) {

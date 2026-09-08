@@ -25,7 +25,10 @@ export const useSlugRoute = () => {
    * Membuat path URL dengan prefix slug tenant.
    * Contoh: slugPath('/dashboard') → '/klinik-sehat/dashboard'
    */
-  const slugPath = (path: string): string => {
+  const slugPath = (path: string | undefined | null): string => {
+    // Guard: jika path tidak valid, kembalikan '/' untuk menghindari TypeError
+    if (!path || typeof path !== 'string') return '/';
+
     const slug = currentSlug.value;
     if (!slug) return path;
 

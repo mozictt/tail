@@ -15,15 +15,21 @@ const isTokenExpired = (token: string | null) => {
   }
 };
 
+const COOKIE_OPTS = {
+  maxAge: 60 * 60 * 24 * 7, // 7 hari
+  path: "/",
+  sameSite: "lax" as const,
+};
+
 export function useAuth() {
   const config = useRuntimeConfig(); 
 
   // Nama cookie harus konsisten dengan yang dipakai auth store
-  const token = useCookie<string | null>("token");
-  const refreshToken = useCookie<string | null>("refreshToken");
-  const id_user = useCookie<string | null>("id_user");
-  const role = useCookie<string | null>("role");
-  const username = useCookie<string | null>("username");
+  const token = useCookie<string | null>("token", COOKIE_OPTS);
+  const refreshToken = useCookie<string | null>("refreshToken", COOKIE_OPTS);
+  const id_user = useCookie<string | null>("id_user", COOKIE_OPTS);
+  const role = useCookie<string | null>("role", COOKIE_OPTS);
+  const username = useCookie<string | null>("username", COOKIE_OPTS);
 
   const userRole = computed(() => role.value || "guest");
   const userName = computed(() => username.value || "");
