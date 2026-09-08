@@ -368,6 +368,7 @@ const handleTouchStart = (e: TouchEvent) => {
   const now = Date.now();
 
   if (e.touches.length === 2 && isPhoto) {
+    if (e.cancelable) e.preventDefault();
     const dist = Math.hypot(
       e.touches[0].clientX - e.touches[1].clientX,
       e.touches[0].clientY - e.touches[1].clientY
@@ -379,6 +380,7 @@ const handleTouchStart = (e: TouchEvent) => {
     touchStartY = e.touches[0].clientY;
 
     if (isPhoto && now - lastTapTime < 300) {
+      if (e.cancelable) e.preventDefault();
       if (zoomScale.value > 1) {
         resetZoom();
       } else {
@@ -401,18 +403,21 @@ const handleTouchMove = (e: TouchEvent) => {
   if (!viewMediaItem.value) return;
   const isPhoto = viewMediaItem.value.type === 'photo';
 
-  if (e.touches.length === 2 && isPhoto && initialPinchDistance > 0) {
-    const currentDist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    const scaleFactor = currentDist / initialPinchDistance;
-    const newScale = Math.min(Math.max(Number((initialScaleOnPinch * scaleFactor).toFixed(2)), 1), 4);
-    zoomScale.value = newScale;
-    if (newScale === 1) {
-      panOffset.value = { x: 0, y: 0 };
-    } else {
-      panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+  if (e.touches.length === 2 && isPhoto) {
+    if (e.cancelable) e.preventDefault();
+    if (initialPinchDistance > 0) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scaleFactor = currentDist / initialPinchDistance;
+      const newScale = Math.min(Math.max(Number((initialScaleOnPinch * scaleFactor).toFixed(2)), 1), 4);
+      zoomScale.value = newScale;
+      if (newScale === 1) {
+        panOffset.value = { x: 0, y: 0 };
+      } else {
+        panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+      }
     }
   } else if (e.touches.length === 1 && zoomScale.value > 1 && isDraggingImage.value && isPhoto) {
     if (e.cancelable) e.preventDefault();
@@ -424,10 +429,14 @@ const handleTouchMove = (e: TouchEvent) => {
 
 const handleTouchEnd = (e: TouchEvent) => {
   if (!viewMediaItem.value) return;
-  isDraggingImage.value = false;
-  initialPinchDistance = 0;
+  if (e.touches.length < 2) {
+    initialPinchDistance = 0;
+  }
+  if (e.touches.length === 0) {
+    isDraggingImage.value = false;
+  }
 
-  if (zoomScale.value === 1 && e.changedTouches.length > 0) {
+  if (zoomScale.value === 1 && e.changedTouches.length > 0 && e.touches.length === 0) {
     const diffX = e.changedTouches[0].clientX - touchStartX;
     const diffY = e.changedTouches[0].clientY - touchStartY;
     const minSwipeDistance = 50;
@@ -1695,7 +1704,7 @@ onMounted(() => {
       >
         <div 
           v-if="viewMediaItem" 
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8 select-none" 
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8 select-none touch-none" 
           @click.self="viewMediaItem = null"
           @touchstart="handleTouchStart"
           @touchmove="handleTouchMove"
@@ -1909,6 +1918,7 @@ onMounted(() => {
 
 /* Container dengan overflow hidden agar clip animasi berjalan */
 .lightbox-media-wrapper {
+  touch-action: none;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
   will-change: transform, opacity;
 }
