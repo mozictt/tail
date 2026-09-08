@@ -350,11 +350,20 @@ const handleMouseDown = (e: MouseEvent) => {
   }
 };
 
+let rAFPending = false;
+
 const handleMouseMove = (e: MouseEvent) => {
   if (!isDraggingImage.value || zoomScale.value <= 1.05) return;
   const dx = e.clientX - startDragPos.x;
   const dy = e.clientY - startDragPos.y;
-  panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+  
+  if (!rAFPending) {
+    rAFPending = true;
+    requestAnimationFrame(() => {
+      rAFPending = false;
+      panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+    });
+  }
 };
 
 const handleMouseUp = () => {
@@ -421,18 +430,32 @@ const handleTouchMove = (e: TouchEvent) => {
       );
       const scaleFactor = currentDist / initialPinchDistance;
       const newScale = Math.min(Math.max(Number((initialScaleOnPinch * scaleFactor).toFixed(2)), 1), 4);
-      zoomScale.value = newScale;
-      if (newScale <= 1.05) {
-        panOffset.value = { x: 0, y: 0 };
-      } else {
-        panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+      
+      if (!rAFPending) {
+        rAFPending = true;
+        requestAnimationFrame(() => {
+          rAFPending = false;
+          zoomScale.value = newScale;
+          if (newScale <= 1.05) {
+            panOffset.value = { x: 0, y: 0 };
+          } else {
+            panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+          }
+        });
       }
     }
   } else if (e.touches.length === 1 && zoomScale.value > 1.05 && isDraggingImage.value && isPhoto) {
     if (e.cancelable) e.preventDefault();
     const dx = e.touches[0].clientX - startDragPos.x;
     const dy = e.touches[0].clientY - startDragPos.y;
-    panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+
+    if (!rAFPending) {
+      rAFPending = true;
+      requestAnimationFrame(() => {
+        rAFPending = false;
+        panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+      });
+    }
   }
 };
 
@@ -1819,7 +1842,7 @@ onMounted(() => {
           <!-- Media Container dengan Zoom & Pan Transform -->
           <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-2 sm:px-8 md:px-16 z-20 overflow-hidden select-none">
              <div
-               class="w-full h-full flex items-center justify-center drop-shadow-2xl lightbox-media-wrapper"
+               class="w-full h-full flex items-center justify-center lightbox-media-wrapper"
                :class="[
                  isDraggingImage ? 'transition-none' : 'transition-transform duration-150 ease-out',
                  {
@@ -1928,8 +1951,11 @@ onMounted(() => {
 /* Container dengan overflow hidden agar clip animasi berjalan */
 .lightbox-media-wrapper {
   touch-action: none;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
   will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
 }
 
 /* Slide Out ke Kiri (gambar lama saat klik Next) */
