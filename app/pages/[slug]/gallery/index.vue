@@ -7,7 +7,7 @@ import HeaderSearch from "@/components/header-master.vue";
 import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
-import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw } from "lucide-vue-next";
+import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw, ZoomIn, ZoomOut } from "lucide-vue-next";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useWhatsappShare } from "@/composables/useWhatsappShare";
 import { useAuthStore } from "@/stores/auth";
@@ -267,26 +267,185 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 };
 
-/* Touch Swipe Navigation for Mobile */
+/* Lightbox Zoom & Drag / Pan Gesture State (Mobile & Desktop) */
+const zoomScale = ref(1);
+const panOffset = ref({ x: 0, y: 0 });
+const isDraggingImage = ref(false);
+let startDragPos = { x: 0, y: 0 };
+let initialPanOffset = { x: 0, y: 0 };
+let initialPinchDistance = 0;
+let initialScaleOnPinch = 1;
+let lastTapTime = 0;
 let touchStartX = 0;
-let touchEndX = 0;
+let touchStartY = 0;
 
+const resetZoom = () => {
+  zoomScale.value = 1;
+  panOffset.value = { x: 0, y: 0 };
+  isDraggingImage.value = false;
+};
+
+const getMaxOffset = () => {
+  const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1000;
+  const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const maxOffsetX = ((zoomScale.value - 1) * windowWidth) / 1.2;
+  const maxOffsetY = ((zoomScale.value - 1) * windowHeight) / 1.2;
+  return { maxOffsetX: Math.max(maxOffsetX, 100), maxOffsetY: Math.max(maxOffsetY, 100) };
+};
+
+const clampPanOffset = (x: number, y: number) => {
+  const { maxOffsetX, maxOffsetY } = getMaxOffset();
+  return {
+    x: Math.min(Math.max(x, -maxOffsetX), maxOffsetX),
+    y: Math.min(Math.max(y, -maxOffsetY), maxOffsetY),
+  };
+};
+
+const zoomIn = () => {
+  zoomScale.value = Math.min(Number((zoomScale.value + 0.5).toFixed(1)), 4);
+};
+
+const zoomOut = () => {
+  const newScale = Math.max(Number((zoomScale.value - 0.5).toFixed(1)), 1);
+  zoomScale.value = newScale;
+  if (newScale === 1) {
+    panOffset.value = { x: 0, y: 0 };
+  } else {
+    panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+  }
+};
+
+const handleWheel = (e: WheelEvent) => {
+  if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
+  const delta = e.deltaY * -0.002;
+  const newScale = Math.min(Math.max(Number((zoomScale.value + delta).toFixed(2)), 1), 4);
+  zoomScale.value = newScale;
+  if (newScale === 1) {
+    panOffset.value = { x: 0, y: 0 };
+  } else {
+    panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+  }
+};
+
+/* Desktop Mouse Dragging & Double Click */
+const handleMouseDown = (e: MouseEvent) => {
+  if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
+  if (zoomScale.value > 1) {
+    isDraggingImage.value = true;
+    startDragPos = { x: e.clientX, y: e.clientY };
+    initialPanOffset = { ...panOffset.value };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
+};
+
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isDraggingImage.value || zoomScale.value <= 1) return;
+  const dx = e.clientX - startDragPos.x;
+  const dy = e.clientY - startDragPos.y;
+  panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+};
+
+const handleMouseUp = () => {
+  isDraggingImage.value = false;
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
+};
+
+const handleDoubleClick = (e: MouseEvent) => {
+  if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
+  if (zoomScale.value > 1) {
+    resetZoom();
+  } else {
+    zoomScale.value = 2.5;
+  }
+};
+
+/* Mobile Touch Pinch & Dragging */
 const handleTouchStart = (e: TouchEvent) => {
-  touchStartX = e.changedTouches[0].screenX;
+  if (!viewMediaItem.value) return;
+  const isPhoto = viewMediaItem.value.type === 'photo';
+  const now = Date.now();
+
+  if (e.touches.length === 2 && isPhoto) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    initialPinchDistance = dist;
+    initialScaleOnPinch = zoomScale.value;
+  } else if (e.touches.length === 1) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+
+    if (isPhoto && now - lastTapTime < 300) {
+      if (zoomScale.value > 1) {
+        resetZoom();
+      } else {
+        zoomScale.value = 2.5;
+      }
+      lastTapTime = 0;
+      return;
+    }
+    lastTapTime = now;
+
+    if (zoomScale.value > 1 && isPhoto) {
+      isDraggingImage.value = true;
+      startDragPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      initialPanOffset = { ...panOffset.value };
+    }
+  }
+};
+
+const handleTouchMove = (e: TouchEvent) => {
+  if (!viewMediaItem.value) return;
+  const isPhoto = viewMediaItem.value.type === 'photo';
+
+  if (e.touches.length === 2 && isPhoto && initialPinchDistance > 0) {
+    const currentDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const scaleFactor = currentDist / initialPinchDistance;
+    const newScale = Math.min(Math.max(Number((initialScaleOnPinch * scaleFactor).toFixed(2)), 1), 4);
+    zoomScale.value = newScale;
+    if (newScale === 1) {
+      panOffset.value = { x: 0, y: 0 };
+    } else {
+      panOffset.value = clampPanOffset(panOffset.value.x, panOffset.value.y);
+    }
+  } else if (e.touches.length === 1 && zoomScale.value > 1 && isDraggingImage.value && isPhoto) {
+    if (e.cancelable) e.preventDefault();
+    const dx = e.touches[0].clientX - startDragPos.x;
+    const dy = e.touches[0].clientY - startDragPos.y;
+    panOffset.value = clampPanOffset(initialPanOffset.x + dx, initialPanOffset.y + dy);
+  }
 };
 
 const handleTouchEnd = (e: TouchEvent) => {
-  touchEndX = e.changedTouches[0].screenX;
-  const diff = touchEndX - touchStartX;
-  const minSwipeDistance = 40;
-  if (diff < -minSwipeDistance) {
-    nextMedia();
-  } else if (diff > minSwipeDistance) {
-    prevMedia();
+  if (!viewMediaItem.value) return;
+  isDraggingImage.value = false;
+  initialPinchDistance = 0;
+
+  if (zoomScale.value === 1 && e.changedTouches.length > 0) {
+    const diffX = e.changedTouches[0].clientX - touchStartX;
+    const diffY = e.changedTouches[0].clientY - touchStartY;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > minSwipeDistance) {
+      if (diffX < 0) {
+        nextMedia();
+      } else {
+        prevMedia();
+      }
+    }
   }
 };
 
 watch(viewMediaItem, (newItem) => {
+  resetZoom();
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
   if (newItem) {
     window.addEventListener("keydown", handleKeyDown);
   } else {
@@ -296,6 +455,8 @@ watch(viewMediaItem, (newItem) => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
   if (observer) observer.disconnect();
 });
 
@@ -1534,15 +1695,19 @@ onMounted(() => {
       >
         <div 
           v-if="viewMediaItem" 
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8" 
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm p-4 md:p-8 select-none" 
           @click.self="viewMediaItem = null"
           @touchstart="handleTouchStart"
+          @touchmove="handleTouchMove"
           @touchend="handleTouchEnd"
+          @mousedown="handleMouseDown"
+          @dblclick="handleDoubleClick"
+          @wheel.prevent="handleWheel"
         >
           
           <!-- Top Bar -->
           <div class="absolute top-0 inset-x-0 h-16 bg-gradient-to-b from-slate-950/90 to-transparent flex items-center justify-between px-4 md:px-6 pointer-events-none z-50">
-             <div class="text-white pointer-events-auto max-w-[50%] md:max-w-[60%]">
+             <div class="text-white pointer-events-auto max-w-[40%] md:max-w-[50%]">
                 <div class="flex items-center gap-2">
                   <p class="font-medium truncate text-sm md:text-base">{{ viewMediaItem.originalName }}</p>
                   <span v-if="currentIndex >= 0" class="text-xs bg-white/20 text-white/90 px-2 py-0.5 rounded-full font-mono flex-shrink-0">
@@ -1552,38 +1717,71 @@ onMounted(() => {
                 <p class="text-xs text-white/60 hidden sm:block">{{ formatSize(viewMediaItem.size) }}</p>
              </div>
              
-             <div class="flex items-center gap-1.5 md:gap-3 pointer-events-auto">
+             <div class="flex items-center gap-1 md:gap-2.5 pointer-events-auto">
+               <!-- Zoom Controls for Photos -->
+               <template v-if="viewMediaItem.type === 'photo'">
+                 <button 
+                   class="btn btn-sm btn-circle btn-ghost text-white/80 hover:text-white hover:bg-white/20"
+                   @click="zoomOut"
+                   :disabled="zoomScale <= 1"
+                   title="Zoom Out (-)"
+                 >
+                   <ZoomOut class="w-4 h-4 md:w-5 md:h-5" />
+                 </button>
+                 <span class="text-xs font-mono font-semibold text-white/90 px-1.5 py-0.5 bg-white/10 rounded-md min-w-[42px] text-center">
+                   {{ Math.round(zoomScale * 100) }}%
+                 </span>
+                 <button 
+                   class="btn btn-sm btn-circle btn-ghost text-white/80 hover:text-white hover:bg-white/20"
+                   @click="zoomIn"
+                   :disabled="zoomScale >= 4"
+                   title="Zoom In (+)"
+                 >
+                   <ZoomIn class="w-4 h-4 md:w-5 md:h-5" />
+                 </button>
+                 <button 
+                   v-if="zoomScale > 1"
+                   class="btn btn-sm btn-circle btn-ghost text-warning hover:bg-warning/20 ml-0.5"
+                   @click="resetZoom"
+                   title="Reset Zoom (100%)"
+                 >
+                   <RotateCcw class="w-4 h-4 md:w-5 md:h-5" />
+                 </button>
+               </template>
+
+               <div class="h-5 w-px bg-white/20 mx-1 hidden sm:block"></div>
+
                <button 
                   class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-emerald-500 hover:text-white"
                   @click="handleShareMedia(viewMediaItem)"
                   title="Bagikan ke WhatsApp"
                 >
-                  <Share2 class="w-5 h-5" />
+                  <Share2 class="w-4 h-4 md:w-5 md:h-5" />
                </button>
                <button 
                   class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-error hover:text-white"
                   @click="deleteMediaFromLightbox(viewMediaItem.id!)"
                   title="Hapus"
                 >
-                  <Trash2 class="w-5 h-5" />
+                  <Trash2 class="w-4 h-4 md:w-5 md:h-5" />
                </button>
                <button 
                   class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20"
                   @click="handleDownload(viewMediaItem)"
-                  title="Unduh Asli"
+                  title="Unduh Asli HD"
                 >
-                  <Download v-if="downloadLoadingId !== viewMediaItem.id" class="w-5 h-5" />
+                  <Download v-if="downloadLoadingId !== viewMediaItem.id" class="w-4 h-4 md:w-5 md:h-5" />
                   <span v-else class="loading loading-spinner loading-xs"></span>
                </button>
-               <button class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error" @click="viewMediaItem = null" title="Tutup (Esc)">
-                 <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+               <button class="btn btn-sm md:btn-md btn-circle btn-ghost text-white hover:bg-white/20 hover:text-error ml-1" @click="viewMediaItem = null" title="Tutup (Esc)">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                </button>
              </div>
           </div>
 
-          <!-- Navigation Buttons: Previous & Next -->
+          <!-- Navigation Buttons: Previous & Next (Hide when zoomed in) -->
           <button 
-            v-if="hasPrev"
+            v-if="hasPrev && zoomScale === 1"
             @click="prevMedia"
             class="fixed left-2 md:left-6 top-1/2 -translate-y-1/2 z-[60] p-2.5 md:p-3.5 rounded-full bg-slate-900/70 hover:bg-slate-800 backdrop-blur-md border border-white/10 text-white shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 group focus:outline-none"
             title="Sebelumnya (Panah Kiri)"
@@ -1592,7 +1790,7 @@ onMounted(() => {
           </button>
 
           <button 
-            v-if="hasNext"
+            v-if="hasNext && zoomScale === 1"
             @click="nextMedia"
             class="fixed right-2 md:right-6 top-1/2 -translate-y-1/2 z-[60] p-2.5 md:p-3.5 rounded-full bg-slate-900/70 hover:bg-slate-800 backdrop-blur-md border border-white/10 text-white shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 group focus:outline-none"
             title="Berikutnya (Panah Kanan)"
@@ -1600,18 +1798,32 @@ onMounted(() => {
             <ChevronRight class="w-6 h-6 md:w-8 md:h-8 group-hover:translate-x-0.5 transition-transform" />
           </button>
 
-          <!-- Media Container dengan Animasi Slide -->
-          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-8 md:px-16 z-20 overflow-hidden">
+          <!-- Media Container dengan Zoom & Pan Transform -->
+          <div class="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-transparent px-2 sm:px-8 md:px-16 z-20 overflow-hidden select-none">
              <div
                class="w-full h-full flex items-center justify-center drop-shadow-2xl lightbox-media-wrapper"
-               :class="{
-                 'slide-out-left': slideDirection === 'left',
-                 'slide-out-right': slideDirection === 'right',
-                 'slide-in-from-right': slideDirection === 'from-right',
-                 'slide-in-from-left': slideDirection === 'from-left',
-               }"
+               :class="[
+                 isDraggingImage ? 'transition-none' : 'transition-transform duration-150 ease-out',
+                 {
+                   'slide-out-left': slideDirection === 'left',
+                   'slide-out-right': slideDirection === 'right',
+                   'slide-in-from-right': slideDirection === 'from-right',
+                   'slide-in-from-left': slideDirection === 'from-left',
+                   'cursor-grab': zoomScale > 1 && !isDraggingImage && viewMediaItem?.type === 'photo',
+                   'cursor-grabbing': zoomScale > 1 && isDraggingImage && viewMediaItem?.type === 'photo'
+                 }
+               ]"
+               :style="viewMediaItem.type === 'photo' ? {
+                 transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0px) scale(${zoomScale})`
+               } : {}"
              >
-               <SecureMedia :filename="viewMediaItem.path || viewMediaItem.fileName" :type="viewMediaItem.type" :use-original="true" fit="contain" class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" />
+               <SecureMedia 
+                 :filename="viewMediaItem.path || viewMediaItem.fileName" 
+                 :type="viewMediaItem.type" 
+                 :use-original="true" 
+                 fit="contain" 
+                 class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent pointer-events-none" 
+               />
              </div>
           </div>
         </div>
