@@ -135,7 +135,8 @@
         isLoading ? 'opacity-0' : 'opacity-100'
       ]"
       controls
-      preload="metadata"
+      preload="auto"
+      autoplay
       playsinline
       @loadedmetadata="handleMediaLoaded"
       @canplay="handleMediaLoaded"
@@ -282,6 +283,7 @@ const setupVideoLazyLoad = () => {
         if (entry.isIntersecting && videoRef.value && !videoRef.value.src) {
           videoRef.value.src = url;
           videoRef.value.load();
+          videoRef.value.play().catch(() => {});
           videoObserver?.disconnect();
           videoObserver = null;
         }

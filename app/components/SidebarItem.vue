@@ -76,15 +76,9 @@ const getMenuIcon = (iconName?: string | null, fallbackIcon: any = icons.Circle)
   return fallbackIcon;
 };
 
-const isActive = (path: string | undefined | null): boolean => {
-  // Guard: path wajib berupa string yang valid
-  if (!path || typeof path !== 'string') return false;
-  const currentPath = route.path.replace(`/${currentSlug.value}`, '') || '/';
-  return currentPath === path || currentPath.startsWith(path + "/");
-};
+import { useActiveMenu } from "@/composables/useActiveMenu";
 
-const isParentActive = (children: any[]): boolean =>
-  Array.isArray(children) && children.some((c) => isActive(c.url || c.path) || (c.children && isParentActive(c.children)));
+const { isActive, isParentActive } = useActiveMenu();
 
 const handleItemClick = () => {
   if (hasChildren.value) {
@@ -95,7 +89,7 @@ const handleItemClick = () => {
 
 // Auto expand when parent is active
 watch(
-  () => props.item,
+  [() => route.path, () => props.item],
   () => {
     if (hasChildren.value && isParentActive(props.item.children)) {
       isExpanded.value = true;

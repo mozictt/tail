@@ -92,27 +92,9 @@ defineExpose({
   toggleMobileSidebar,
 });
 
-const isActive = (path: string) => {
-  if (!path) return false;
-  // Bandingkan path menu (tanpa slug) dengan path URL (tanpa slug prefix)
-  const currentPath = route.path.replace(`/${currentSlug.value}`, '') || '/';
-  return currentPath === path || currentPath.startsWith(path + "/");
-};
+import { useActiveMenu } from "@/composables/useActiveMenu";
 
-const isParentActive = (children: any[]) =>
-  children && children.some((c) => isActive(c.url || c.path));
-
-const findActiveMenu = (items: any[]): any | null => {
-  for (const item of items) {
-    const itemPath = item.url || item.path;
-    if (itemPath && isActive(itemPath)) return item;
-    if (item.children && item.children.length > 0) {
-      const child = findActiveMenu(item.children);
-      if (child) return child;
-    }
-  }
-  return null;
-};
+const { isActive, isParentActive, findActiveMenu } = useActiveMenu();
 
 const updateActiveMenu = () => {
   const active = findActiveMenu(menu.value);
