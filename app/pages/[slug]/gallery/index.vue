@@ -276,6 +276,7 @@ let initialPanOffset = { x: 0, y: 0 };
 let initialPinchDistance = 0;
 let initialScaleOnPinch = 1;
 let lastTapTime = 0;
+let lastTouchTapTime = 0;
 let touchStartX = 0;
 let touchStartY = 0;
 
@@ -283,6 +284,15 @@ const resetZoom = () => {
   zoomScale.value = 1;
   panOffset.value = { x: 0, y: 0 };
   isDraggingImage.value = false;
+};
+
+const toggleZoom = () => {
+  if (zoomScale.value > 1) {
+    resetZoom();
+  } else {
+    zoomScale.value = 2.5;
+    panOffset.value = { x: 0, y: 0 };
+  }
 };
 
 const getMaxOffset = () => {
@@ -354,11 +364,9 @@ const handleMouseUp = () => {
 
 const handleDoubleClick = (e: MouseEvent) => {
   if (!viewMediaItem.value || viewMediaItem.value.type !== 'photo') return;
-  if (zoomScale.value > 1) {
-    resetZoom();
-  } else {
-    zoomScale.value = 2.5;
-  }
+  // Abaikan event dblclick sintetis dari browser mobile setelah touchstart
+  if (Date.now() - lastTouchTapTime < 500) return;
+  toggleZoom();
 };
 
 /* Mobile Touch Pinch & Dragging */
@@ -381,12 +389,9 @@ const handleTouchStart = (e: TouchEvent) => {
 
     if (isPhoto && now - lastTapTime < 300) {
       if (e.cancelable) e.preventDefault();
-      if (zoomScale.value > 1) {
-        resetZoom();
-      } else {
-        zoomScale.value = 2.5;
-      }
+      lastTouchTapTime = now;
       lastTapTime = 0;
+      toggleZoom();
       return;
     }
     lastTapTime = now;
