@@ -84,7 +84,7 @@ const loadSecureAvatar = async () => {
   }
 
   try {
-    const token = authStore.token;
+    const api = useApi();
     
     // Pastikan URL tidak terduplikasi. Database path sudah berisi '/users/profile/avatar-stream/'
     let path = props.avatarPath;
@@ -93,12 +93,7 @@ const loadSecureAvatar = async () => {
       path = `/users/profile/avatar-stream/${cleanPath}`;
     }
 
-    const url = `${config.public.apiBase}${path}`;
-
-    const response = await $fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    const response = await api(path, {
       responseType: "blob",
     });
 

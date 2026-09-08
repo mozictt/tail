@@ -1,52 +1,64 @@
 import { useRuntimeConfig } from "#app";
-// import { useAuth } from "@/composables/useAuth";
 import { useAuthStore } from "@/stores/auth";
 import Swal from "sweetalert2";
 
 export const useApi = () => {
   const config = useRuntimeConfig();
-  // const { token,id_user, isTokenExpired, refreshTokenAsync, logout } = useAuth();
   const auth = useAuthStore(); 
+
+  const setHeader = (options: any, key: string, val: string) => {
+    if (!options.headers) {
+      options.headers = {};
+    }
+    if (options.headers instanceof Headers) {
+      options.headers.set(key, val);
+    } else if (Array.isArray(options.headers)) {
+      options.headers = options.headers.filter(([k]) => k.toLowerCase() !== key.toLowerCase());
+      options.headers.push([key, val]);
+    } else if (typeof options.headers === "object") {
+      options.headers[key] = val;
+    }
+  };
 
   const api = $fetch.create({
     baseURL: config.public.apiBase,
+    retry: 1,
+    retryStatusCodes: [401],
+    retryMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 
     async onRequest({ options }) {
-      // cek token expired sebelum request 
+      // 1. Validasi proaktif: Jika access token expired, lakukan refresh token terlebih dahulu sebelum hit API yang dituju
       if (auth.token && auth.isTokenExpired(auth.token)) {
         try {
           await auth.refreshTokenAsync();
         } catch (err) {
-          // gagal refresh token → logout
-          Swal.fire({
-            icon: "error",
-            title: "Session Berakhir",
-            text: "Token Anda sudah kedaluwarsa, silahkan login kembali",
-            confirmButtonText: "OK",
-          }).then(() => auth.logout());
-          throw new Error("Token expired dan gagal refresh");
+          if (process.client) {
+            Swal.fire({
+              icon: "error",
+              title: "Session Berakhir",
+              text: "Sesi Anda telah kedaluwarsa, silakan login kembali",
+              confirmButtonText: "OK",
+            }).then(() => auth.logout());
+          } else {
+            await auth.logout();
+          }
+          throw new Error("Token expired dan gagal refresh token");
         }
       }
 
-      // pasang Authorization header
+      // 2. Pasang Authorization header dengan token terbaru
       if (auth.token) {
-        options.headers = {
-          ...options.headers,
-          Authorization: `Bearer ${auth.token}`,
-        };
+        setHeader(options, "Authorization", `Bearer ${auth.token}`);
       }
 
-      // pasang target tenant header hanya jika pengguna adalah Master Tenant yang meng-override target tenant
+      // 3. Pasang target tenant header hanya jika pengguna adalah Master Tenant
       const targetTenantId = useCookie<string | null>("target_tenant_id").value;
       if (targetTenantId && auth.isMasterTenant) {
-        options.headers = {
-          ...options.headers,
-          "X-Target-Tenant-Id": targetTenantId,
-        };
+        setHeader(options, "X-Target-Tenant-Id", targetTenantId);
       }
     },
 
-    async onResponseError({ response }) {
+    async onResponseError({ response, options }) {
       if (!response) return; // network error
 
       if (response.status === 401) {
@@ -76,10 +88,13 @@ export const useApi = () => {
           return;
         }
 
-        // Coba refresh token jika expired biasa
+        // Coba refresh token jika terjadi 401 saat request berlangsung
         try {
-          await auth.refreshTokenAsync();
-          // Refresh berhasil → biarkan request original retry oleh caller
+          const newToken = await auth.refreshTokenAsync();
+          if (newToken) {
+            // Perbarui header Authorization pada options agar retry request menggunakan token baru
+            setHeader(options, "Authorization", `Bearer ${newToken}`);
+          }
         } catch (err: any) {
           if (process.client) {
             Swal.fire({

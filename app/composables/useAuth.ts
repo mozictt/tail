@@ -9,7 +9,7 @@ const isTokenExpired = (token: string | null) => {
     const payloadJson = atob(payloadBase64);
     const payload = JSON.parse(payloadJson);
     const now = Math.floor(Date.now() / 1000);
-    return payload.exp < now + 30; // buffer 30 detik sebelum expired
+    return payload.exp < now + 15; // Buffer 15 detik agar refresh token terjadi SEBELUM hit API jika hampir expired
   } catch (err) {
     return true;
   }

@@ -88,13 +88,11 @@ const loadSecureLogo = async () => {
     }
     if (!filename) throw new Error("Nama file logo tidak valid");
 
+    const api = useApi();
     const cleanFilename = filename.replace(/^\/+/, "");
-    const url = `${config.public.apiBase}/company-profile/logo/${cleanFilename}`;
+    const path = `/company-profile/logo/${cleanFilename}`;
 
-    const response = await $fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    const response = await api(path, {
       responseType: "blob",
     });
 

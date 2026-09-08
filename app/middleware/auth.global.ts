@@ -14,6 +14,23 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return navigateTo("/login");
   }
 
+  // 🔄 Cek proaktif: Jika access token sudah expired, lakukan refresh token
+  // SEBELUM komponen halaman di-render dan SEBELUM API apapun dipanggil
+  if (auth.isTokenExpired(auth.token)) {
+    if (!auth.refreshToken) {
+      // Tidak ada refresh token → paksa logout
+      auth.clearAllCookies();
+      return navigateTo("/login");
+    }
+    try {
+      await auth.refreshTokenAsync();
+    } catch (err) {
+      // Refresh token juga expired → paksa logout ke halaman login
+      auth.clearAllCookies();
+      return navigateTo("/login");
+    }
+  }
+
   // ✅ Root path "/" → redirect ke /{slug}/dashboard
   if (to.path === "/") {
     if (auth.slug) {
