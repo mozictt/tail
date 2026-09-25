@@ -99,11 +99,9 @@ const handleLogout = async () => {
           <!-- THEME SWITCHER -->
           <ThemeSwitcher />
 
-          <!-- NOTIF -->
-          <button class="relative p-2 hover:bg-base-200 border border-base-content/10 rounded-xl transition text-base-content/85">
-            <icons.Bell class="w-4 h-4 md:w-5 md:h-5" />
-            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full ring-2 ring-base-100"></span>
-          </button>
+          <!-- NOTIFIKASI CHAT & WHATSAPP GLOBAL -->
+          <ChatNavbarNotification />
+          <WhatsappNavbarNotification />
 
           <!-- MOBILE QUICK LOGOUT BUTTON -->
           <button
@@ -125,5 +123,10 @@ const handleLogout = async () => {
         <slot />
       </main>
     </div>
+
+    <!-- Global WhatsApp Components -->
+    <WhatsappNotificationListener />
+    <WhatsappContactSelectorModal />
+    <GlobalWhatsappChatModal />
   </div>
 </template>

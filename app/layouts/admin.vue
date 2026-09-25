@@ -82,8 +82,9 @@ const handleLogout = async () => {
           </div>
         </div>
 
-        <!-- Kanan: whatsapp notif, theme switcher & mobile logout -->
+        <!-- Kanan: chat notif, whatsapp notif, theme switcher & mobile logout -->
         <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
+          <ChatNavbarNotification />
           <WhatsappNavbarNotification />
           <ThemeSwitcher />
           

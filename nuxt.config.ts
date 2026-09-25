@@ -31,6 +31,8 @@ export default defineNuxtConfig({
       // Public: dipakai browser, arahkan ke proxy internal Nuxt
       apiBase: "/api/proxy",
       appName: process.env.NUXT_PUBLIC_APP_NAME,
+      // WebSocket URL langsung ke backend (Socket.IO tidak bisa lewat Nuxt proxy)
+      wsBase: process.env.NUXT_PUBLIC_WS_BASE || process.env.API_BASE_URL || "http://localhost:4000",
     }
   },
 
