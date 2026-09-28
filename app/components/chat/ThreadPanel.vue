@@ -127,9 +127,20 @@ const onKeydown = (e: KeyboardEvent) => {
 const isSelf = (reply: any): boolean => {
   const myId = authStore.id_user
   const myUsername = authStore.username
-  const sId = reply.senderId || reply.sender?.id
+  const sId =
+    reply.senderId ||
+    reply.sender?.id ||
+    reply.sender_id ||
+    reply.userId ||
+    reply.user_id ||
+    reply.user?.id
   if (myId && sId != null && String(sId) === String(myId)) return true
-  const sUsername = reply.senderUsername || reply.sender?.username || ''
+  const sUsername =
+    reply.senderUsername ||
+    reply.sender?.username ||
+    reply.username ||
+    reply.user?.username ||
+    ''
   if (myUsername && sUsername && sUsername === myUsername) return true
   return false
 }
@@ -165,8 +176,8 @@ const getAvatarColor = (name: string) => {
 const showSenderHeader = (reply: any, idx: number, list: any[]): boolean => {
   if (idx === 0) return true
   const prev = list[idx - 1]
-  const prevSId = prev.senderId || prev.sender?.id
-  const currSId = reply.senderId || reply.sender?.id
+  const prevSId = prev.senderId || prev.sender?.id || prev.sender_id || prev.userId || prev.user_id
+  const currSId = reply.senderId || reply.sender?.id || reply.sender_id || reply.userId || reply.user_id
   if (String(prevSId) !== String(currSId)) return true
   const gap = new Date(reply.createdAt).getTime() - new Date(prev.createdAt).getTime()
   return gap > 5 * 60 * 1000
@@ -178,7 +189,7 @@ onMounted(() => scrollToBottom())
 </script>
 
 <template>
-  <!-- Thread Panel — Google Chat Overlay Style -->
+  <!-- Thread Panel — Google Chat / Modern Overlay Style -->
   <div class="absolute inset-0 z-30 flex">
     <!-- Backdrop — klik untuk tutup -->
     <div
@@ -276,60 +287,71 @@ onMounted(() => scrollToBottom())
             <div
               v-for="(reply, idx) in group.messages"
               :key="reply.id"
-              class="group/reply px-4 hover:bg-base-200/30 transition-colors"
+              class="group/reply px-4 py-1 flex flex-col transition-colors"
+              :class="isSelf(reply) ? 'items-end' : 'items-start'"
             >
-              <!-- Sender header -->
+              <!-- Sender header untuk orang lain -->
               <div
-                v-if="showSenderHeader(reply, idx, group.messages)"
-                class="flex items-center gap-2 mt-3 mb-0.5"
+                v-if="!isSelf(reply) && showSenderHeader(reply, idx, group.messages)"
+                class="flex items-center gap-2 mb-1 ml-0.5 mt-1"
               >
                 <div
-                  class="w-7 h-7 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                  class="w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
                   :class="getAvatarColor(getSenderName(reply))"
                 >
                   {{ getSenderName(reply)[0]?.toUpperCase() ?? '?' }}
                 </div>
-                <span
-                  class="text-xs font-bold"
-                  :class="isSelf(reply) ? 'text-primary' : 'text-base-content'"
-                >
-                  {{ isSelf(reply) ? 'Anda' : getSenderName(reply) }}
-                </span>
-                <span class="text-[10px] text-base-content/35">
-                  {{ formatTime(reply.createdAt) }}
+                <span class="text-xs font-bold text-base-content truncate max-w-[180px]">
+                  {{ getSenderName(reply) }}
                 </span>
               </div>
 
-              <!-- Content -->
+              <!-- Sender header untuk pesan sendiri -->
               <div
-                class="text-sm text-base-content/85 leading-relaxed break-words pb-0.5"
-                :class="showSenderHeader(reply, idx, group.messages) ? 'ml-9' : 'ml-9 mt-0.5'"
+                v-if="isSelf(reply) && showSenderHeader(reply, idx, group.messages)"
+                class="flex items-center gap-1.5 mb-1 mr-0.5 justify-end mt-1"
+              >
+                <span class="text-xs font-bold text-primary">
+                  Anda
+                </span>
+              </div>
+
+              <!-- Content / Bubble -->
+              <div
+                class="relative rounded-2xl px-3.5 pt-2 pb-1.5 text-sm leading-relaxed break-words max-w-[85%] shadow-xs"
+                :class="[
+                  isSelf(reply)
+                    ? 'bg-primary text-primary-content rounded-tr-xs'
+                    : 'bg-base-200 text-base-content rounded-tl-xs border border-base-content/5',
+                  reply.isDeleted ? 'italic opacity-70' : '',
+                ]"
               >
                 <template v-if="reply.isDeleted">
-                  <span class="italic text-base-content/40 text-xs">
-                    <Icon name="lucide:ban" class="w-3 h-3 inline mr-0.5 opacity-50" />
-                    Pesan dihapus
-                  </span>
+                  <Icon name="lucide:ban" class="w-3.5 h-3.5 inline mr-1 opacity-70" />
+                  Pesan dihapus
                 </template>
                 <template v-else-if="reply.type === 'IMAGE' && reply.attachmentUrl">
                   <img
                     :src="reply.attachmentUrl"
                     :alt="reply.attachmentName ?? 'gambar'"
-                    class="max-w-[200px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition"
+                    class="max-w-[200px] rounded-lg mt-0.5 cursor-pointer hover:opacity-90 transition mb-1"
                     loading="lazy"
                   />
                   <p v-if="reply.content" class="mt-1">{{ reply.content }}</p>
                 </template>
                 <template v-else>
                   <span>{{ reply.content }}</span>
-                  <span v-if="reply.isEdited" class="text-[10px] opacity-40 ml-1">(diedit)</span>
+                  <span v-if="reply.isEdited" class="text-[10px] opacity-70 ml-1">(diedit)</span>
                 </template>
-                <span
-                  v-if="!showSenderHeader(reply, idx, group.messages)"
-                  class="text-[10px] text-base-content/30 ml-2 opacity-0 group-hover/reply:opacity-100 transition-opacity"
+
+                <!-- Time inside bubble -->
+                <div
+                  class="inline-flex items-center gap-1 float-right mt-1.5 ml-3 -mb-0.5"
+                  :class="isSelf(reply) ? 'text-primary-content/75' : 'text-base-content/50'"
                 >
-                  {{ formatTime(reply.createdAt) }}
-                </span>
+                  <span class="text-[10px] leading-none">{{ formatTime(reply.createdAt) }}</span>
+                </div>
+                <div class="clear-both" />
               </div>
             </div>
           </template>

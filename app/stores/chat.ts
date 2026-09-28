@@ -870,12 +870,33 @@ export const useChatStore = defineStore('chat', () => {
 
   // ─── Actions: Presence ───────────────────────────────────────────────────
 
+  const setOnlineUsers = (userIds: number[]) => {
+    const map: OnlineUsersMap = {}
+    if (Array.isArray(userIds)) {
+      for (const id of userIds) {
+        if (id != null) {
+          map[Number(id)] = true
+        }
+      }
+    }
+    onlineUsers.value = map
+  }
+
   const setUserOnline = (event: WsPresenceEvent) => {
-    onlineUsers.value[event.userId] = true
+    if (event?.userId != null) {
+      onlineUsers.value = {
+        ...onlineUsers.value,
+        [Number(event.userId)]: true,
+      }
+    }
   }
 
   const setUserOffline = (event: WsPresenceEvent) => {
-    onlineUsers.value[event.userId] = false
+    if (event?.userId != null) {
+      const copy = { ...onlineUsers.value }
+      delete copy[Number(event.userId)]
+      onlineUsers.value = copy
+    }
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -944,6 +965,7 @@ export const useChatStore = defineStore('chat', () => {
     applyReaction,
     applyReadReceipt,
     setUserTyping,
+    setOnlineUsers,
     setUserOnline,
     setUserOffline,
     markThreadOpened,

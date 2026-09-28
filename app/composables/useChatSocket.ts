@@ -1,5 +1,6 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { Socket } from 'socket.io-client'
+import { useChatStore } from '@/stores/chat'
 import type {
   ChatMessage,
   WsTypingPayload,
@@ -10,6 +11,7 @@ import type {
   WsReadReceiptEvent,
   WsReactionEvent,
   WsPresenceEvent,
+  WsInitialOnlineUsersEvent,
   WsConversationReadEvent,
 } from '@/types/chat'
 
@@ -38,6 +40,7 @@ const listenerRegistry: Record<string, Set<Function>> = {
   user_typing: new Set(),
   read_receipt: new Set(),
   new_reaction: new Set(),
+  initial_online_users: new Set(),
   user_online: new Set(),
   user_offline: new Set(),
   conversation_read: new Set(),
@@ -46,6 +49,7 @@ const listenerRegistry: Record<string, Set<Function>> = {
 export const useChatSocket = () => {
   const config = useRuntimeConfig()
   const authStore = useAuthStore()
+  const chatStore = useChatStore()
 
   const registerListener = (event: string, cb: Function) => {
     if (!listenerRegistry[event]) {
@@ -73,6 +77,25 @@ export const useChatSocket = () => {
     }
   }
 
+  // Registrasi otomatis listener presence global untuk meng-update Pinia chatStore secara real-time
+  registerListener('initial_online_users', (data: WsInitialOnlineUsersEvent) => {
+    if (data?.userIds) {
+      chatStore.setOnlineUsers(data.userIds)
+    }
+  })
+
+  registerListener('user_online', (data: WsPresenceEvent) => {
+    if (data?.userId != null) {
+      chatStore.setUserOnline(data)
+    }
+  })
+
+  registerListener('user_offline', (data: WsPresenceEvent) => {
+    if (data?.userId != null) {
+      chatStore.setUserOffline(data)
+    }
+  })
+
   // ─── Derived base URL untuk WebSocket ─────────────────────────────────────
 
   /**
@@ -81,14 +104,10 @@ export const useChatSocket = () => {
    * Fallback: window.location.origin (untuk development).
    */
   const getWsBaseUrl = (): string => {
-    // Di server-side tidak ada window, tapi socket hanya diinisialisasi di client
     if (typeof window === 'undefined') return ''
 
-    // Ambil backend URL: di production via env, di dev via proxy
-    // Karena nuxt proxy /api/proxy → backendUrl, kita gunakan origin yang sama
-    // dan biarkan CORS ditangani backend
     const backendUrl = (config.public as any).wsBase
-      || window.location.origin.replace(/:\d+$/, ':4000') // dev fallback
+      || window.location.origin.replace(/:\d+$/, ':4000')
 
     return backendUrl
   }
@@ -107,15 +126,13 @@ export const useChatSocket = () => {
       return
     }
 
-    // Dynamic import agar tidak break SSR
     const { io } = await import('socket.io-client')
 
     const baseUrl = getWsBaseUrl()
     console.log('[ChatSocket] Connecting to namespace /chat at:', baseUrl)
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       socket.value = io(`${baseUrl}/chat`, {
-        // Kirim JWT via query param (sesuai ChatGateway backend)
         query: { token: authStore.token },
         transports: ['websocket', 'polling'],
         reconnection: true,
@@ -128,6 +145,10 @@ export const useChatSocket = () => {
         isConnected.value = true
         connectionError.value = null
         reattachListeners()
+
+        // Minta daftar user online di awal koneksi
+        getOnlineUsers()
+
         resolve()
       })
 
@@ -140,7 +161,7 @@ export const useChatSocket = () => {
         console.error('[ChatSocket] Connection error:', err.message)
         connectionError.value = err.message
         isConnected.value = false
-        resolve() // Resolve bukan reject — agar app tetap berjalan; socket retry otomatis
+        resolve()
       })
     })
   }
@@ -152,7 +173,6 @@ export const useChatSocket = () => {
     socket.value?.disconnect()
     socket.value = null
     isConnected.value = false
-    // Tidak clear listenerRegistry agar listener bisa dipakai kembali saat reconnect baru
   }
 
   // ─── Room Management ──────────────────────────────────────────────────────
@@ -194,12 +214,12 @@ export const useChatSocket = () => {
     socket.value?.emit('heartbeat')
   }
 
+  const getOnlineUsers = () => {
+    socket.value?.emit('get_online_users')
+  }
+
   // ─── Event Listener Helpers ───────────────────────────────────────────────
 
-  /**
-   * Register listener untuk pesan baru.
-   * Mengembalikan fungsi cleanup untuk digunakan di onUnmounted.
-   */
   const onNewMessage = (cb: (message: ChatMessage) => void) => {
     return registerListener('new_message', cb)
   }
@@ -224,6 +244,10 @@ export const useChatSocket = () => {
     return registerListener('new_reaction', cb)
   }
 
+  const onInitialOnlineUsers = (cb: (data: WsInitialOnlineUsersEvent) => void) => {
+    return registerListener('initial_online_users', cb)
+  }
+
   const onUserOnline = (cb: (data: WsPresenceEvent) => void) => {
     return registerListener('user_online', cb)
   }
@@ -232,11 +256,6 @@ export const useChatSocket = () => {
     return registerListener('user_offline', cb)
   }
 
-  /**
-   * Register listener untuk event 'conversation_read'.
-   * Diemit backend ketika user menandai seluruh pesan conversation sebagai terbaca.
-   * Berguna untuk sinkronisasi badge unread di semua tab/device user yang sama.
-   */
   const onConversationRead = (cb: (data: WsConversationReadEvent) => void) => {
     return registerListener('conversation_read', cb)
   }
@@ -248,7 +267,7 @@ export const useChatSocket = () => {
   const startHeartbeat = () => {
     heartbeatInterval = setInterval(() => {
       if (isConnected.value) sendHeartbeat()
-    }, 30_000) // setiap 30 detik
+    }, 30_000)
   }
 
   const stopHeartbeat = () => {
@@ -257,10 +276,6 @@ export const useChatSocket = () => {
       heartbeatInterval = null
     }
   }
-
-  // ─── Cleanup ─────────────────────────────────────────────────────────────
-  // Catatan: WebSocket koneksi bersifat global (di-manage oleh ChatNavbarNotification).
-  // Tidak memanggil disconnect() di onUnmounted composable agar socket tetap aktif di seluruh halaman.
 
   return {
     socket,
@@ -279,6 +294,7 @@ export const useChatSocket = () => {
     reactMessage,
     markRead,
     sendHeartbeat,
+    getOnlineUsers,
     // Heartbeat
     startHeartbeat,
     stopHeartbeat,
@@ -289,6 +305,7 @@ export const useChatSocket = () => {
     onUserTyping,
     onReadReceipt,
     onNewReaction,
+    onInitialOnlineUsers,
     onUserOnline,
     onUserOffline,
     onConversationRead,

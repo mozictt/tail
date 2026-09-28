@@ -146,6 +146,9 @@ const setupSocketListeners = () => {
         chatStore.applyReaction(chatStore.activeConversationId, event)
       }
     }),
+    chatSocket.onInitialOnlineUsers((event) => {
+      chatStore.setOnlineUsers(event.userIds)
+    }),
     chatSocket.onUserOnline((event) => {
       chatStore.setUserOnline(event)
     }),

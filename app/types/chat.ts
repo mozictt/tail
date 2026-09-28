@@ -222,6 +222,10 @@ export interface WsPresenceEvent {
   userId: number
 }
 
+export interface WsInitialOnlineUsersEvent {
+  userIds: number[]
+}
+
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
 export interface TypingUser {
