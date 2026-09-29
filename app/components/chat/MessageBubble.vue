@@ -11,6 +11,7 @@ const props = defineProps<{
   isSelf: boolean
   conversationId: string
   showAvatar: boolean
+  isHighlighted?: boolean
 }>()
 
 const chatStore = useChatStore()
@@ -244,6 +245,14 @@ const senderDisplayName = computed(() => {
         {{ senderDisplayName }}
       </span>
 
+      <!-- Highlight Badge Notification Indicator -->
+      <div
+        v-if="isHighlighted"
+        class="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md mb-1 shadow-sm animate-bounce"
+      >
+        <span>📍 Pesan dari Notifikasi</span>
+      </div>
+
       <!-- Reply indicator — hanya tampil di Thread Panel, bukan di Main Chat -->
       <!-- Komentar: Jangan hapus block ini, sudah disabled via v-if="false" -->
       <div v-if="false" class="hidden" />
@@ -251,9 +260,11 @@ const senderDisplayName = computed(() => {
       <!-- Bubble -->
       <div class="relative">
         <div
-          class="rounded-2xl px-3.5 pt-2 pb-2 text-[14.5px] leading-relaxed break-words shadow-sm min-w-[80px]"
+          class="rounded-2xl px-3.5 pt-2 pb-2 text-[14.5px] leading-relaxed break-words shadow-sm min-w-[80px] transition-all duration-300"
           :class="[
-            isSelf
+            isHighlighted
+              ? 'ring-4 ring-amber-400 dark:ring-amber-500 bg-amber-100 text-slate-900 dark:bg-amber-950 dark:text-amber-100 shadow-2xl scale-[1.02] animate-pulse'
+              : isSelf
               ? 'bg-primary text-primary-content rounded-br-none'
               : 'bg-base-200 text-base-content rounded-bl-none border border-base-content/5',
             message.isDeleted ? 'opacity-60 italic' : '',

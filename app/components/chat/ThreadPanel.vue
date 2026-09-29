@@ -183,9 +183,48 @@ const showSenderHeader = (reply: any, idx: number, list: any[]): boolean => {
   return gap > 5 * 60 * 1000
 }
 
-// Auto scroll saat ada reply baru
-watch(() => replies.value.length, () => scrollToBottom(true))
-onMounted(() => scrollToBottom())
+// Auto scroll saat ada reply baru atau target highlight dari notifikasi
+const scrollToThreadHighlight = () => {
+  const targetId = chatStore.highlightedMessageId
+  if (!targetId) return
+  nextTick(() => {
+    setTimeout(() => {
+      const el =
+        document.getElementById(`thread-msg-${targetId}`) ||
+        document.getElementById(`thread-root-${targetId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 200)
+  })
+}
+
+watch(
+  () => chatStore.highlightedMessageId,
+  (val) => {
+    if (val) scrollToThreadHighlight()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => replies.value.length,
+  () => {
+    if (chatStore.highlightedMessageId) {
+      scrollToThreadHighlight()
+    } else {
+      scrollToBottom(true)
+    }
+  },
+)
+
+onMounted(() => {
+  if (chatStore.highlightedMessageId) {
+    scrollToThreadHighlight()
+  } else {
+    scrollToBottom()
+  }
+})
 </script>
 
 <template>
@@ -287,7 +326,8 @@ onMounted(() => scrollToBottom())
             <div
               v-for="(reply, idx) in group.messages"
               :key="reply.id"
-              class="group/reply px-4 py-1 flex flex-col transition-colors"
+              :id="'thread-msg-' + reply.id"
+              class="group/reply px-4 py-1 flex flex-col transition-all"
               :class="isSelf(reply) ? 'items-end' : 'items-start'"
             >
               <!-- Sender header untuk orang lain -->
@@ -318,9 +358,11 @@ onMounted(() => scrollToBottom())
 
               <!-- Content / Bubble -->
               <div
-                class="relative rounded-2xl px-3.5 pt-2 pb-1.5 text-sm leading-relaxed break-words max-w-[85%] shadow-xs"
+                class="relative rounded-2xl px-3.5 pt-2 pb-1.5 text-sm leading-relaxed break-words max-w-[85%] shadow-xs transition-all duration-300"
                 :class="[
-                  isSelf(reply)
+                  String(chatStore.highlightedMessageId) === String(reply.id)
+                    ? 'ring-4 ring-amber-400 dark:ring-amber-500 bg-amber-100 text-slate-900 dark:bg-amber-950 dark:text-amber-100 shadow-xl scale-[1.02] animate-pulse'
+                    : isSelf(reply)
                     ? 'bg-primary text-primary-content rounded-tr-xs'
                     : 'bg-base-200 text-base-content rounded-tl-xs border border-base-content/5',
                   reply.isDeleted ? 'italic opacity-70' : '',

@@ -62,6 +62,28 @@ const onScroll = async () => {
   }
 }
 
+// Auto scroll ke target highlight message jika ada
+const scrollToHighlight = () => {
+  const targetId = chatStore.highlightedMessageId
+  if (!targetId) return
+  nextTick(() => {
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${targetId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 150)
+  })
+}
+
+watch(
+  () => chatStore.highlightedMessageId,
+  (val) => {
+    if (val) scrollToHighlight()
+  },
+  { immediate: true },
+)
+
 // Auto scroll ke bawah saat ada pesan baru (hanya jika user di posisi bawah)
 watch(
   () => messages.value.length,
@@ -69,17 +91,28 @@ watch(
     if (newLen > oldLen && isAtBottom.value) {
       scrollToBottom(true)
     }
+    if (chatStore.highlightedMessageId) {
+      scrollToHighlight()
+    }
   },
 )
 
 // Scroll ke bawah saat ganti conversation
 watch(conversationId, () => {
   isAtBottom.value = true
-  nextTick(() => scrollToBottom())
+  if (chatStore.highlightedMessageId) {
+    scrollToHighlight()
+  } else {
+    nextTick(() => scrollToBottom())
+  }
 })
 
 onMounted(() => {
-  scrollToBottom()
+  if (chatStore.highlightedMessageId) {
+    scrollToHighlight()
+  } else {
+    scrollToBottom()
+  }
 })
 
 /** Format tanggal untuk divider */
@@ -163,10 +196,12 @@ const isSelf = (senderId: number, senderUsername?: string) => {
           </div>
 
           <MessageBubble
+            :id="'msg-' + msg.id"
             :message="msg"
             :is-self="isSelf(msg.senderId, msg.senderUsername)"
             :conversation-id="conversationId!"
             :show-avatar="!isSelf(msg.senderId, msg.senderUsername) && (idx === 0 || messages[idx - 1]?.senderId !== msg.senderId)"
+            :is-highlighted="String(chatStore.highlightedMessageId) === String(msg.id)"
           />
         </template>
       </template>

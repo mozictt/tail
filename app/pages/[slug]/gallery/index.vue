@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { GalleryService, type Gallery } from "@/services/gallery.service";
 import { AlbumService, type Album } from "@/services/album.service";
@@ -7,7 +7,7 @@ import HeaderSearch from "@/components/header-master.vue";
 import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
-import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw, ZoomIn, ZoomOut } from "lucide-vue-next";
+import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw, ZoomIn, ZoomOut, Camera, Video, StopCircle, SwitchCamera, FolderUp } from "lucide-vue-next";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useWhatsappShare } from "@/composables/useWhatsappShare";
 import { useAuthStore } from "@/stores/auth";
@@ -136,6 +136,195 @@ const uploadLoading = ref(false);
 const uploadItems = ref<UploadFileItem[]>([]);
 const uploadAlbumId = ref<string | undefined>(albumIdParam);
 const isDragging = ref(false);
+
+/* =========================
+   MODE KAMERA
+========================= */
+// 'file' | 'camera-photo' | 'camera-video'
+const uploadMode = ref<'file' | 'camera-photo' | 'camera-video'>('file');
+
+// Ref elemen <video> untuk preview stream kamera
+const cameraVideoRef = ref<HTMLVideoElement | null>(null);
+// Ref elemen <canvas> untuk capture foto
+const cameraCanvasRef = ref<HTMLCanvasElement | null>(null);
+
+let cameraStream: MediaStream | null = null;
+// Sisi kamera aktif: 'user' (depan) | 'environment' (belakang)
+const cameraFacing = ref<'user' | 'environment'>('environment');
+const isCameraReady = ref(false);
+const cameraError = ref<string | null>(null);
+
+// Status rekam video
+let mediaRecorder: MediaRecorder | null = null;
+const isRecording = ref(false);
+const recordedChunks = ref<BlobPart[]>([]);
+const recordingDuration = ref(0);
+let recordingTimer: any = null;
+
+/** Mulai stream kamera */
+const startCamera = async () => {
+  cameraError.value = null;
+  isCameraReady.value = false;
+  stopCamera();
+
+  try {
+    const constraints: MediaStreamConstraints = {
+      video: { facingMode: cameraFacing.value, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: uploadMode.value === 'camera-video',
+    };
+    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    // Tunggu DOM terender, lalu pasang stream ke elemen video
+    await nextTick();
+    if (cameraVideoRef.value) {
+      cameraVideoRef.value.srcObject = cameraStream;
+      cameraVideoRef.value.play();
+      isCameraReady.value = true;
+    }
+  } catch (err: any) {
+    const msg = err?.name === 'NotAllowedError'
+      ? 'Akses kamera ditolak. Izinkan akses kamera di browser Anda.'
+      : err?.name === 'NotFoundError'
+      ? 'Tidak ada kamera yang ditemukan pada perangkat ini.'
+      : `Gagal mengakses kamera: ${err?.message || 'Error tidak diketahui'}`;
+    cameraError.value = msg;
+    pinoLogger.warn('[Camera] Gagal akses kamera', { error: err?.name });
+  }
+};
+
+/** Hentikan stream kamera & rekaman (jika ada) */
+const stopCamera = () => {
+  stopRecording(false);
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+  isCameraReady.value = false;
+};
+
+/** Ganti sisi kamera (depan ↔ belakang) */
+const flipCamera = async () => {
+  if (isRecording.value) return;
+  cameraFacing.value = cameraFacing.value === 'environment' ? 'user' : 'environment';
+  await startCamera();
+};
+
+/** Ambil foto dari stream kamera */
+const capturePhoto = () => {
+  if (!cameraVideoRef.value || !cameraCanvasRef.value || !isCameraReady.value) return;
+
+  const video = cameraVideoRef.value;
+  const canvas = cameraCanvasRef.value;
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Flip horizontal jika kamera depan (mirror)
+  if (cameraFacing.value === 'user') {
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (cameraFacing.value === 'user') ctx.restore();
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = new File([blob], `foto-kamera-${timestamp}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    processIncomingFiles([file]);
+    pinoLogger.info('[Camera] Foto berhasil diambil', { name: file.name, size: file.size });
+  }, 'image/jpeg', 0.92);
+};
+
+/** Mulai rekam video */
+const startRecording = () => {
+  if (!cameraStream || !isCameraReady.value) return;
+
+  recordedChunks.value = [];
+  recordingDuration.value = 0;
+
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+    ? 'video/webm;codecs=vp9,opus'
+    : MediaRecorder.isTypeSupported('video/webm')
+    ? 'video/webm'
+    : 'video/mp4';
+
+  try {
+    mediaRecorder = new MediaRecorder(cameraStream, { mimeType });
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunks.value.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(recordedChunks.value, { type: mimeType });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = new File([blob], `video-kamera-${timestamp}.${ext}`, { type: mimeType, lastModified: Date.now() });
+      processIncomingFiles([file]);
+      pinoLogger.info('[Camera] Video berhasil direkam', { name: file.name, size: file.size });
+    };
+    mediaRecorder.start(500); // Kumpulkan chunk setiap 500ms
+    isRecording.value = true;
+
+    // Timer durasi rekaman
+    recordingTimer = setInterval(() => {
+      recordingDuration.value++;
+    }, 1000);
+  } catch (err) {
+    pinoLogger.error('[Camera] Gagal memulai rekaman', { error: err });
+    showToast('Gagal memulai rekaman video', 'error');
+  }
+};
+
+/** Hentikan rekam video */
+const stopRecording = (save = true) => {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    if (!save) {
+      // Hapus handler agar tidak menyimpan chunk
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onstop = null;
+    }
+    mediaRecorder.stop();
+  }
+  mediaRecorder = null;
+  isRecording.value = false;
+  recordingDuration.value = 0;
+};
+
+/** Format detik menjadi MM:SS */
+const formatDuration = (sec: number): string => {
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+};
+
+/** Dipanggil saat user mengganti tab mode upload */
+const setUploadMode = async (mode: 'file' | 'camera-photo' | 'camera-video') => {
+  if (isRecording.value) stopRecording(false);
+  stopCamera();
+  uploadMode.value = mode;
+
+  if (mode === 'camera-photo' || mode === 'camera-video') {
+    await nextTick();
+    await startCamera();
+  }
+};
+
+/** Reset state kamera saat modal ditutup */
+const closeUploadModal = () => {
+  if (!uploadLoading.value) {
+    if (isRecording.value) stopRecording(false);
+    stopCamera();
+    uploadMode.value = 'file';
+    showUploadModal.value = false;
+  }
+};
 
 const MAX_UPLOAD_BATCH_LIMIT = 100; // Limit per upload batch (maksimal 100 file)
 const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // Limit per file (500 MB)
@@ -499,6 +688,8 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
   if (observer) observer.disconnect();
+  // Pastikan stream kamera selalu dihentikan saat navigasi keluar halaman
+  stopCamera();
 });
 
 const handleDownload = async (item: Gallery) => {
@@ -638,6 +829,7 @@ const doSearch = () => {
 const openUploadModal = () => {
   uploadItems.value = [];
   isDragging.value = false;
+  uploadMode.value = 'file';
   uploadAlbumId.value = selectedAlbumId.value === 'uncategorized' ? undefined : selectedAlbumId.value;
   showUploadModal.value = true;
 };
@@ -1511,9 +1703,9 @@ onMounted(() => {
     <!-- UPLOAD MODAL -->
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" v-model="showUploadModal" />
-      <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="!uploadLoading && (showUploadModal = false)">
+      <div class="modal backdrop-blur-md bg-slate-950/40" @click.self="closeUploadModal">
         <div class="modal-box max-w-2xl bg-base-100 rounded-2xl border border-base-content/10 p-6 shadow-premium relative text-base-content">
-          <button class="absolute top-4 right-4 text-base-content/40 hover:text-base-content/70 transition" @click="showUploadModal = false" :disabled="uploadLoading">
+          <button class="absolute top-4 right-4 text-base-content/40 hover:text-base-content/70 transition" @click="closeUploadModal" :disabled="uploadLoading">
             <X class="w-5 h-5" />
           </button>
 
@@ -1558,32 +1750,188 @@ onMounted(() => {
               />
             </div>
 
-            <!-- Dropzone / Input File -->
-            <label 
-              v-if="uploadItems.length < MAX_UPLOAD_BATCH_LIMIT"
-              class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200"
-              :class="[
-                isDragging ? 'border-primary bg-primary/10 scale-[1.01]' : 'border-base-content/20 bg-base-200/50 hover:bg-base-200',
-                uploadLoading ? 'pointer-events-none opacity-50' : ''
-              ]"
-              @dragover.prevent="isDragging = true"
-              @dragleave.prevent="isDragging = false"
-              @drop.prevent="handleFileDrop"
-            >
-              <div class="flex flex-col items-center justify-center pt-4 pb-4 px-4 text-center">
-                <UploadCloud class="w-9 h-9 text-base-content/40 mb-2 transition-transform duration-200" :class="isDragging ? 'scale-110 text-primary' : ''" />
-                <p class="mb-1 text-sm text-base-content/70"><span class="font-semibold text-primary">Klik untuk memilih</span> atau seret file ke sini</p>
-                <p class="text-xs text-base-content/50">Mendukung Foto (JPG, PNG, WEBP) & Video (MP4, WEBM) maks 500MB (Maks {{ MAX_UPLOAD_BATCH_LIMIT - uploadItems.length }} file lagi)</p>
-              </div>
-              <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" class="hidden" @change="handleFileSelect" :disabled="uploadLoading" />
-            </label>
-            
-            <div v-else class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center text-xs text-amber-600 font-semibold">
-              Batas maksimal {{ MAX_UPLOAD_BATCH_LIMIT }} file per unggahan telah tercapai. Hapus beberapa file jika ingin menambah file lain.
+            <!-- ==========================================
+                 TAB SELECTOR: Pilih File / Foto / Video
+            =========================================== -->
+            <div class="flex items-center gap-1.5 p-1 bg-base-200/70 rounded-xl border border-base-content/5">
+              <!-- Tab: Pilih File -->
+              <button
+                id="upload-tab-file"
+                type="button"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200"
+                :class="uploadMode === 'file' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/50 hover:text-base-content/80'"
+                @click="setUploadMode('file')"
+                :disabled="uploadLoading"
+              >
+                <FolderUp class="w-3.5 h-3.5" />
+                Pilih File
+              </button>
+
+              <!-- Tab: Foto Kamera -->
+              <button
+                id="upload-tab-camera-photo"
+                type="button"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200"
+                :class="uploadMode === 'camera-photo' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/50 hover:text-base-content/80'"
+                @click="setUploadMode('camera-photo')"
+                :disabled="uploadLoading"
+              >
+                <Camera class="w-3.5 h-3.5" />
+                Foto Kamera
+              </button>
+
+              <!-- Tab: Rekam Video -->
+              <button
+                id="upload-tab-camera-video"
+                type="button"
+                class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200"
+                :class="uploadMode === 'camera-video' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/50 hover:text-base-content/80'"
+                @click="setUploadMode('camera-video')"
+                :disabled="uploadLoading"
+              >
+                <Video class="w-3.5 h-3.5" />
+                Rekam Video
+              </button>
             </div>
 
-            <!-- Preview & Status Selected Files -->
-            <div v-if="uploadItems.length > 0" class="mt-4">
+            <!-- ==========================================
+                 PANEL: PILIH FILE (Default)
+            =========================================== -->
+            <template v-if="uploadMode === 'file'">
+              <!-- Dropzone / Input File -->
+              <label 
+                v-if="uploadItems.length < MAX_UPLOAD_BATCH_LIMIT"
+                class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200"
+                :class="[
+                  isDragging ? 'border-primary bg-primary/10 scale-[1.01]' : 'border-base-content/20 bg-base-200/50 hover:bg-base-200',
+                  uploadLoading ? 'pointer-events-none opacity-50' : ''
+                ]"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleFileDrop"
+              >
+                <div class="flex flex-col items-center justify-center pt-4 pb-4 px-4 text-center">
+                  <UploadCloud class="w-9 h-9 text-base-content/40 mb-2 transition-transform duration-200" :class="isDragging ? 'scale-110 text-primary' : ''" />
+                  <p class="mb-1 text-sm text-base-content/70"><span class="font-semibold text-primary">Klik untuk memilih</span> atau seret file ke sini</p>
+                  <p class="text-xs text-base-content/50">Mendukung Foto (JPG, PNG, WEBP) & Video (MP4, WEBM) maks 500MB (Maks {{ MAX_UPLOAD_BATCH_LIMIT - uploadItems.length }} file lagi)</p>
+                </div>
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/heic,video/mp4,video/webm,video/quicktime" class="hidden" @change="handleFileSelect" :disabled="uploadLoading" />
+              </label>
+              
+              <div v-else class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center text-xs text-amber-600 font-semibold">
+                Batas maksimal {{ MAX_UPLOAD_BATCH_LIMIT }} file per unggahan telah tercapai.
+              </div>
+            </template>
+
+            <!-- ==========================================
+                 PANEL: KAMERA (Foto & Video)
+            =========================================== -->
+            <template v-if="uploadMode === 'camera-photo' || uploadMode === 'camera-video'">
+              <div class="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-base-content/10" style="aspect-ratio: 16/9;">
+                
+                <!-- Video preview stream kamera -->
+                <video
+                  ref="cameraVideoRef"
+                  autoplay
+                  muted
+                  playsinline
+                  class="w-full h-full object-cover"
+                  :class="cameraFacing === 'user' ? 'scale-x-[-1]' : ''"
+                />
+                <!-- Canvas tersembunyi untuk capture foto -->
+                <canvas ref="cameraCanvasRef" class="hidden" />
+
+                <!-- Overlay: Loading kamera -->
+                <div v-if="!isCameraReady && !cameraError" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 text-white gap-3">
+                  <span class="loading loading-spinner loading-lg text-primary"></span>
+                  <p class="text-sm font-semibold">Memulai kamera...</p>
+                </div>
+
+                <!-- Overlay: Error kamera -->
+                <div v-if="cameraError" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 text-white gap-3 px-6 text-center">
+                  <div class="w-14 h-14 rounded-full bg-error/20 text-error flex items-center justify-center">
+                    <Camera class="w-7 h-7" />
+                  </div>
+                  <p class="text-sm font-semibold">{{ cameraError }}</p>
+                  <button @click="startCamera" class="btn btn-sm btn-primary rounded-xl px-5">Coba Lagi</button>
+                </div>
+
+                <!-- Badge rekam: durasi berjalan -->
+                <div v-if="isRecording" class="absolute top-3 left-3 flex items-center gap-1.5 bg-error/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse shadow-lg">
+                  <span class="w-2 h-2 rounded-full bg-white"></span>
+                  REC {{ formatDuration(recordingDuration) }}
+                </div>
+
+                <!-- Tombol Flip kamera (kanan atas) -->
+                <button
+                  v-if="isCameraReady && !isRecording"
+                  type="button"
+                  @click="flipCamera"
+                  class="absolute top-3 right-3 w-9 h-9 rounded-full bg-slate-900/70 backdrop-blur text-white flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all shadow-lg"
+                  title="Ganti Kamera"
+                >
+                  <SwitchCamera class="w-4 h-4" />
+                </button>
+              </div>
+
+              <!-- Kontrol Kamera: Foto -->
+              <div v-if="uploadMode === 'camera-photo'" class="flex items-center justify-center gap-3">
+                <button
+                  id="btn-capture-photo"
+                  type="button"
+                  @click="capturePhoto"
+                  :disabled="!isCameraReady || uploadLoading"
+                  class="btn btn-primary rounded-2xl px-6 gap-2 font-bold shadow-md shadow-primary/25 hover:shadow-lg transition-all active:scale-95 disabled:opacity-40"
+                >
+                  <Camera class="w-5 h-5" />
+                  Ambil Foto
+                </button>
+              </div>
+
+              <!-- Kontrol Kamera: Video -->
+              <div v-if="uploadMode === 'camera-video'" class="flex items-center justify-center gap-3">
+                <!-- Tombol Mulai Rekam -->
+                <button
+                  v-if="!isRecording"
+                  id="btn-start-recording"
+                  type="button"
+                  @click="startRecording"
+                  :disabled="!isCameraReady || uploadLoading"
+                  class="btn btn-error text-white rounded-2xl px-6 gap-2 font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-40"
+                >
+                  <Video class="w-5 h-5" />
+                  Mulai Rekam
+                </button>
+
+                <!-- Tombol Stop Rekam -->
+                <button
+                  v-else
+                  id="btn-stop-recording"
+                  type="button"
+                  @click="stopRecording(true)"
+                  class="btn btn-neutral text-white rounded-2xl px-6 gap-2 font-bold shadow-md hover:shadow-lg transition-all active:scale-95 animate-pulse"
+                >
+                  <StopCircle class="w-5 h-5 text-error" />
+                  Hentikan & Simpan
+                </button>
+              </div>
+
+              <!-- Hint teks panduan -->
+              <p class="text-center text-[11px] text-base-content/40 font-medium -mt-1">
+                <template v-if="uploadMode === 'camera-photo'">
+                  Klik <strong>Ambil Foto</strong> untuk mengambil gambar dari kamera.
+                </template>
+                <template v-else-if="!isRecording">
+                  Klik <strong>Mulai Rekam</strong> untuk merekam video, lalu <strong>Hentikan & Simpan</strong> untuk menyimpannya.
+                </template>
+                <template v-else>
+                  Sedang merekam... Klik <strong>Hentikan & Simpan</strong> jika selesai.
+                </template>
+              </p>
+            </template>
+
+            <!-- Preview & Status Selected Files (selalu tampil di semua mode) -->
+            <div v-if="uploadItems.length > 0" class="mt-2">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="text-xs font-semibold text-base-content/70 uppercase tracking-wider">
                   Daftar Berkas Terpilih ({{ uploadItems.length }})
@@ -1598,7 +1946,7 @@ onMounted(() => {
                 </button>
               </div>
 
-              <div class="max-h-56 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+              <div class="max-h-48 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
                 <div 
                   v-for="item in uploadItems" 
                   :key="item.id" 
@@ -1683,7 +2031,7 @@ onMounted(() => {
           <div class="modal-action gap-2 mt-6">
             <button 
               class="btn btn-ghost hover:bg-base-200 rounded-xl font-bold text-xs" 
-              @click="showUploadModal = false" 
+              @click="closeUploadModal" 
               :disabled="uploadLoading"
             >
               {{ isAllUploadsSuccess ? 'Tutup' : 'Batal' }}
@@ -1693,7 +2041,7 @@ onMounted(() => {
             <button 
               v-if="isAllUploadsSuccess" 
               class="btn btn-success text-white rounded-xl font-bold px-6 shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-xs"
-              @click="showUploadModal = false"
+              @click="closeUploadModal"
             >
               <CheckCircle2 class="w-4 h-4" />
               Selesai (Semua Berhasil)

@@ -54,6 +54,20 @@ export const useChatStore = defineStore('chat', () => {
   const threadMessagesMap = ref<Record<string, ChatMessage[]>>({})
   const isLoadingThread = ref(false)
 
+  // Highlight message ID (digunakan untuk auto-focus pesan dari notifikasi)
+  const highlightedMessageId = ref<string | null>(null)
+  let highlightTimer: any = null
+
+  const setHighlightMessage = (msgId: string | null) => {
+    highlightedMessageId.value = msgId ? String(msgId) : null
+    if (highlightTimer) clearTimeout(highlightTimer)
+    if (msgId) {
+      highlightTimer = setTimeout(() => {
+        highlightedMessageId.value = null
+      }, 4500)
+    }
+  }
+
   /**
    * Timestamp pembukaan thread per message ID.
    * Persisted di localStorage (per user) agar balasan yang sudah dibaca tetap bertipe sudah dibaca saat reload.
@@ -939,6 +953,8 @@ export const useChatStore = defineStore('chat', () => {
     threadMessagesMap,
     isLoadingThread,
     openedThreadTimestamps,
+    highlightedMessageId,
+    setHighlightMessage,
     // Getters
     activeConversation,
     activeMessages,

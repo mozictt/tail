@@ -165,16 +165,35 @@ const setupSocketListeners = () => {
 const route = useRoute()
 
 /**
- * Tangani Deep-Linking dari Query Params URL (misal: /chat?convId=xxx&threadId=yyy)
+ * Tangani Deep-Linking dari Query Params URL (misal: /chat?convId=xxx&threadId=yyy&msgId=zzz)
  */
 const handleDeepLinking = async () => {
-  const { convId, threadId } = route.query
-  if (convId && typeof convId === 'string') {
-    const conv = chatStore.conversations.find((c) => c.id === convId)
+  const convIdStr = route.query.convId ? String(route.query.convId) : null
+  const threadIdStr = route.query.threadId ? String(route.query.threadId) : null
+  const targetMsgId = (route.query.msgId || route.query.messageId)
+    ? String(route.query.msgId || route.query.messageId)
+    : null
+
+  if (targetMsgId) {
+    chatStore.setHighlightMessage(targetMsgId)
+  }
+
+  if (convIdStr) {
+    if (chatStore.conversations.length === 0) {
+      await chatStore.fetchConversations()
+    }
+
+    let conv = chatStore.conversations.find((c) => String(c.id) === convIdStr)
+
+    if (!conv) {
+      await chatStore.fetchConversations()
+      conv = chatStore.conversations.find((c) => String(c.id) === convIdStr)
+    }
+
     if (conv) {
       await selectConversation(conv)
-      if (threadId && typeof threadId === 'string') {
-        await chatStore.openThread(threadId)
+      if (threadIdStr) {
+        await chatStore.openThread(threadIdStr)
       }
     }
   }
@@ -193,16 +212,31 @@ onMounted(async () => {
   // 3. Koneksikan WebSocket (menunggu event 'connect' selesai)
   await chatSocket.connect()
 
-  // 4. Set current user sebagai online langsung
+  // 4. Set current user sebagai online secara optimistic (lokal)
   if (authStore.id_user) {
     chatStore.setUserOnline({ userId: Number(authStore.id_user) })
   }
 
-  // 5. Tangani deep-linking jika ada query parameter convId / threadId
+  // 5. Minta daftar user online dari server secara eksplisit.
+  //    Diberi sedikit jeda agar socket server sudah siap memproses event.
+  setTimeout(() => {
+    chatSocket.getOnlineUsers()
+  }, 500)
+
+  // 6. Tangani deep-linking jika ada query parameter convId / threadId
   await handleDeepLinking()
 
-  // 6. Mulai heartbeat
+  // 7. Mulai heartbeat
   chatSocket.startHeartbeat()
+
+  // 8. Handle reconnect: minta ulang daftar online setelah koneksi kembali.
+  //    Penting agar status tidak tetap stale setelah internet sempat putus.
+  chatSocket.socket.value?.on('connect', () => {
+    setTimeout(() => chatSocket.getOnlineUsers(), 500)
+    if (authStore.id_user) {
+      chatStore.setUserOnline({ userId: Number(authStore.id_user) })
+    }
+  })
 })
 
 watch(
@@ -210,6 +244,7 @@ watch(
   async () => {
     await handleDeepLinking()
   },
+  { deep: true },
 )
 
 onUnmounted(() => {

@@ -44,6 +44,7 @@ const listenerRegistry: Record<string, Set<Function>> = {
   user_online: new Set(),
   user_offline: new Set(),
   conversation_read: new Set(),
+  'notification:new': new Set(),
 }
 
 export const useChatSocket = () => {
@@ -56,12 +57,17 @@ export const useChatSocket = () => {
       listenerRegistry[event] = new Set()
     }
     listenerRegistry[event].add(cb)
-    socket.value?.on(event, cb as any)
+    if (socket.value) {
+      socket.value.off(event, cb as any)
+      socket.value.on(event, cb as any)
+    }
     console.log(`[ChatSocket] Registered listener for event: ${event}`)
 
     return () => {
       listenerRegistry[event]?.delete(cb)
-      socket.value?.off(event, cb as any)
+      if (socket.value) {
+        socket.value.off(event, cb as any)
+      }
       console.log(`[ChatSocket] Removed listener for event: ${event}`)
     }
   }
@@ -77,37 +83,27 @@ export const useChatSocket = () => {
     }
   }
 
-  // Registrasi otomatis listener presence global untuk meng-update Pinia chatStore secara real-time
-  registerListener('initial_online_users', (data: WsInitialOnlineUsersEvent) => {
-    if (data?.userIds) {
-      chatStore.setOnlineUsers(data.userIds)
-    }
-  })
-
-  registerListener('user_online', (data: WsPresenceEvent) => {
-    if (data?.userId != null) {
-      chatStore.setUserOnline(data)
-    }
-  })
-
-  registerListener('user_offline', (data: WsPresenceEvent) => {
-    if (data?.userId != null) {
-      chatStore.setUserOffline(data)
-    }
-  })
+  // CATATAN: Listener presence (initial_online_users, user_online, user_offline)
+  // TIDAK didaftarkan di sini untuk menghindari duplikasi.
+  // Handler presence didaftarkan secara eksplisit dari chat/index.vue
+  // via onInitialOnlineUsers(), onUserOnline(), onUserOffline().
 
   // ─── Derived base URL untuk WebSocket ─────────────────────────────────────
 
   /**
    * apiBase adalah '/api/proxy' untuk HTTP, tapi WebSocket perlu URL absolut
-   * ke backend langsung. Kita baca dari backend runtime config.
-   * Fallback: window.location.origin (untuk development).
+   * ke backend langsung.
    */
   const getWsBaseUrl = (): string => {
     if (typeof window === 'undefined') return ''
 
-    const backendUrl = (config.public as any).wsBase
-      || window.location.origin.replace(/:\d+$/, ':4000')
+    let backendUrl = (config.public as any).wsBase || ''
+
+    if (!backendUrl || backendUrl.includes('localhost')) {
+      const hostname = window.location.hostname
+      const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+      backendUrl = `${protocol}//${hostname}:4000`
+    }
 
     return backendUrl
   }
@@ -260,6 +256,10 @@ export const useChatSocket = () => {
     return registerListener('conversation_read', cb)
   }
 
+  const onNotificationNew = (cb: (data: any) => void) => {
+    return registerListener('notification:new', cb)
+  }
+
   // ─── Heartbeat ───────────────────────────────────────────────────────────
 
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -309,5 +309,6 @@ export const useChatSocket = () => {
     onUserOnline,
     onUserOffline,
     onConversationRead,
+    onNotificationNew,
   }
 }
