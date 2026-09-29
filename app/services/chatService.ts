@@ -236,6 +236,75 @@ export const useChatService = () => {
     await $api(`/chat/contacts/${contactId}`, { method: 'DELETE' })
   }
 
+  // ─── File Upload ─────────────────────────────────────────────────────────────
+
+  /**
+   * Upload attachment file untuk pesan chat.
+   * Menggunakan XHR agar progress upload bisa dilaporkan secara real-time.
+   *
+   * Endpoint: POST /chat/upload
+   * Body: multipart/form-data { file: File }
+   * Response: { url: string, fileName: string, originalName: string, mimeType: string, size: number }
+   */
+  const uploadAttachment = (
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<{ url: string; fileName: string; originalName: string; mimeType: string; size: number }> => {
+    return new Promise((resolve, reject) => {
+      const config = useRuntimeConfig()
+      const authStore = useAuthStore()
+
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const xhr = new XMLHttpRequest()
+
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded * 100) / e.total))
+          }
+        })
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const res = JSON.parse(xhr.responseText)
+            const data = res?.data ?? res
+            resolve(data)
+          } catch {
+            reject(new Error('Gagal memparsing respons upload'))
+          }
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText)
+            reject(new Error(err?.message || `Upload gagal (HTTP ${xhr.status})`))
+          } catch {
+            reject(new Error(`Upload gagal (HTTP ${xhr.status})`))
+          }
+        }
+      })
+
+      xhr.addEventListener('error', () => reject(new Error('Koneksi terputus saat upload')))
+      xhr.addEventListener('abort', () => reject(new Error('Upload dibatalkan')))
+
+      const apiUrl = `${(config.public as any).apiBase}/chat/upload`
+      xhr.open('POST', apiUrl, true)
+
+      if (authStore.token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${authStore.token}`)
+      }
+
+      const targetTenantId = useCookie<string | null>('target_tenant_id').value
+      if (targetTenantId && authStore.isMasterTenant) {
+        xhr.setRequestHeader('X-Target-Tenant-Id', targetTenantId)
+      }
+
+      xhr.send(formData)
+    })
+  }
+
   return {
     // Conversations
     getConversations,
@@ -254,6 +323,8 @@ export const useChatService = () => {
     toggleReaction,
     markMessageRead,
     markThreadRead,
+    // Upload
+    uploadAttachment,
     // Contacts
     getContacts,
     searchUsers,

@@ -8,6 +8,7 @@ export enum ConversationType {
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',
+  VIDEO = 'video',
   FILE = 'file',
   AUDIO = 'audio',
   SYSTEM = 'system',
@@ -157,7 +158,10 @@ export interface SendMessageDto {
 }
 
 export interface UpdateMessageDto {
-  content: string
+  content?: string
+  attachmentName?: string
+  attachmentUrl?: string
+  type?: MessageType
 }
 
 // ─── WebSocket Payloads ───────────────────────────────────────────────────────

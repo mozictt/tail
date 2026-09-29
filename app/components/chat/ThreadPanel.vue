@@ -4,8 +4,12 @@ import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import { useChatService } from '@/services/chatService'
 import { useToast } from '@/composables/useToast'
+import { useApi } from '@/composables/useApi'
 import { MessageType } from '@/types/chat'
 import { useChatSocket } from '@/composables/useChatSocket'
+import ChatAttachmentPreview from '@/components/chat/ChatAttachmentPreview.vue'
+import SecureMedia from '@/components/SecureMedia.vue'
+import { FileText, FileSpreadsheet, FileArchive, FileCode, File, Presentation, Download, Paperclip, Send } from 'lucide-vue-next'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
@@ -17,6 +21,177 @@ const replyContent = ref('')
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 const isSubmitting = ref(false)
+
+// ─── Attachment State (Thread Reply) ──────────────────────────────────────────
+const fileInput = ref<HTMLInputElement | null>(null)
+const pendingFile = ref<File | null>(null)
+const uploadProgress = ref(0)
+const isUploading = ref(false)
+const uploadError = ref<string | null>(null)
+const isDownloadingFile = ref(false)
+
+/** Mengunduh file dokumen langsung via Blob (konsep /pos/dokumen) */
+const handleDownloadFile = async (urlStr?: string, nameStr?: string) => {
+  if (!urlStr) return
+  try {
+    isDownloadingFile.value = true
+    const fileName = nameStr || 'lampiran-dokumen'
+    const api = useApi()
+
+    let cleanPath = urlStr
+    if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+      try {
+        const parsed = new URL(urlStr)
+        cleanPath = parsed.pathname + parsed.search
+      } catch {
+        cleanPath = urlStr
+      }
+    }
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = `/${cleanPath}`
+    }
+
+    const res = await api(cleanPath, { responseType: 'blob' })
+    const blobUrl = window.URL.createObjectURL(res as Blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.setAttribute('download', fileName)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+    toast.success('Dokumen berhasil diunduh')
+  } catch (err) {
+    console.error('Gagal mengunduh dokumen:', err)
+    toast.error('Gagal mengunduh dokumen')
+  } finally {
+    isDownloadingFile.value = false
+  }
+}
+
+/** Mengembalikan ikon komponen dan styling warna badge file berdasarkan ekstensi & mime type */
+const getFileIconConfig = (fileName?: string, mimeType?: string) => {
+  const name = fileName || ''
+  const ext = (name.split('.').pop() || '').toLowerCase()
+  const mime = (mimeType || '').toLowerCase()
+
+  if (['xls', 'xlsx', 'csv', 'et'].includes(ext) || mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('xls')) {
+    return {
+      component: FileSpreadsheet,
+      bgClass: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+    }
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'tgz'].includes(ext) || mime.includes('zip') || mime.includes('compressed') || mime.includes('archive')) {
+    return {
+      component: FileArchive,
+      bgClass: 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+    }
+  }
+  if (['ppt', 'pptx', 'dps'].includes(ext) || mime.includes('powerpoint') || mime.includes('presentation')) {
+    return {
+      component: Presentation,
+      bgClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+    }
+  }
+  if (['txt', 'json', 'xml', 'js', 'ts', 'html', 'css'].includes(ext)) {
+    return {
+      component: FileCode,
+      bgClass: 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+    }
+  }
+  if (ext === 'pdf' || mime.includes('pdf')) {
+    return {
+      component: FileText,
+      bgClass: 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+    }
+  }
+  if (['doc', 'docx', 'wps'].includes(ext) || mime.includes('word') || mime.includes('wordprocessingml')) {
+    return {
+      component: FileText,
+      bgClass: 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+    }
+  }
+
+  return {
+    component: File,
+    bgClass: 'bg-primary/20 text-primary border border-primary/30'
+  }
+}
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/ogg', 'audio/wav',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/wps-office.xls',
+  'application/wps-office.xlsx',
+  'application/wps-office.doc',
+  'application/wps-office.docx',
+  'application/wps-office.ppt',
+  'application/wps-office.pptx',
+  'application/wps-office.wps',
+  'application/wps-office.et',
+  'application/wps-office.dps',
+  'application/wps-office.pdf',
+  'text/plain', 'application/zip',
+]
+
+const ALLOWED_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif',
+  '.mp4', '.webm', '.mov', '.avi',
+  '.mp3', '.ogg', '.wav',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.wps', '.et', '.dps', '.txt', '.zip', '.rar'
+]
+
+const canSendReply = computed(() => {
+  if (isSubmitting.value || isUploading.value) return false
+  if (pendingFile.value) return true
+  return replyContent.value.trim().length > 0
+})
+
+const resolveMessageType = (file: File): MessageType => {
+  if (file.type.startsWith('image/')) return MessageType.IMAGE
+  if (file.type.startsWith('video/')) return MessageType.VIDEO
+  if (file.type.startsWith('audio/')) return MessageType.AUDIO
+  return MessageType.FILE
+}
+
+const openFilePicker = () => fileInput.value?.click()
+
+const onFileSelected = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+  if (file.size > MAX_FILE_SIZE) {
+    toast.error('File terlalu besar. Maksimal 50 MB.')
+    return
+  }
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+  const isAllowedMime = file.type ? ALLOWED_TYPES.includes(file.type) : false
+  const isAllowedExt = ALLOWED_EXTENSIONS.includes(ext)
+
+  if (!isAllowedMime && !isAllowedExt) {
+    toast.error(`Format file tidak didukung: ${file.type || ext}`)
+    return
+  }
+  pendingFile.value = file
+  uploadError.value = null
+}
+
+const removePendingFile = () => {
+  pendingFile.value = null
+  uploadProgress.value = 0
+  uploadError.value = null
+}
 
 const activeMessage = computed(() => chatStore.activeThreadMessage)
 const replies = computed(() => chatStore.activeThreadReplies)
@@ -77,10 +252,55 @@ const scrollToBottom = (smooth = false) => {
   })
 }
 
-/** Kirim balasan thread */
+/** Kirim balasan thread — mendukung teks dan attachment file */
 const sendReply = async () => {
+  if (!canSendReply.value || !conversationId.value || !activeMessage.value) return
+
+  // ─── Kasus 1: Ada file attachment ──────────────────────────────────────────
+  if (pendingFile.value) {
+    isUploading.value = true
+    uploadProgress.value = 0
+    uploadError.value = null
+
+    try {
+      const result = await chatService.uploadAttachment(pendingFile.value, (pct) => {
+        uploadProgress.value = pct
+      })
+
+      const dto: SendMessageDto = {
+        type: resolveMessageType(pendingFile.value),
+        attachmentUrl: result.url,
+        attachmentName: result.originalName || result.fileName,
+        content: replyContent.value.trim() || undefined,
+        parentMessageId: activeMessage.value.id,
+      }
+
+      if (chatSocket.isConnected.value) {
+        chatSocket.sendMessage({ conversationId: conversationId.value, message: dto })
+      } else {
+        const savedMsg = await chatService.sendMessage(conversationId.value, dto)
+        if (savedMsg) chatStore.appendMessage(savedMsg as ChatMessage)
+      }
+
+      replyContent.value = ''
+      pendingFile.value = null
+      uploadProgress.value = 0
+      nextTick(() => {
+        if (textarea.value) textarea.value.style.height = 'auto'
+        scrollToBottom(true)
+      })
+    } catch (err: any) {
+      uploadError.value = err?.message || 'Gagal mengunggah file'
+      toast.error(uploadError.value!)
+    } finally {
+      isUploading.value = false
+    }
+    return
+  }
+
+  // ─── Kasus 2: Pesan teks biasa ─────────────────────────────────────────────
   const text = replyContent.value.trim()
-  if (!text || !conversationId.value || !activeMessage.value || isSubmitting.value) return
+  if (!text) return
 
   const dto: SendMessageDto = {
     content: text,
@@ -372,14 +592,69 @@ onMounted(() => {
                   <Icon name="lucide:ban" class="w-3.5 h-3.5 inline mr-1 opacity-70" />
                   Pesan dihapus
                 </template>
-                <template v-else-if="reply.type === 'IMAGE' && reply.attachmentUrl">
-                  <img
-                    :src="reply.attachmentUrl"
-                    :alt="reply.attachmentName ?? 'gambar'"
-                    class="max-w-[200px] rounded-lg mt-0.5 cursor-pointer hover:opacity-90 transition mb-1"
-                    loading="lazy"
-                  />
-                  <p v-if="reply.content" class="mt-1">{{ reply.content }}</p>
+                <!-- Image (Thread Reply) -->
+                <template v-else-if="(reply.type === MessageType.IMAGE || reply.type === 'image') && reply.attachmentUrl">
+                  <div
+                    class="relative rounded-xl overflow-hidden cursor-pointer group/media max-w-[220px] aspect-[4/3] bg-slate-950 border border-white/10 shadow-md my-1"
+                    @click="chatStore.openLightboxMedia({ url: reply.attachmentUrl, name: reply.attachmentName ?? 'Foto Thread', type: 'photo' })"
+                  >
+                    <SecureMedia
+                      :filename="reply.attachmentUrl"
+                      type="photo"
+                      fit="cover"
+                      class="w-full h-full object-cover transition-transform duration-300 group-hover/media:scale-105"
+                    />
+                  </div>
+                  <p v-if="reply.content" class="mt-1 text-sm">{{ reply.content }}</p>
+                </template>
+
+                <!-- Video (Thread Reply) -->
+                <template v-else-if="(reply.type === MessageType.VIDEO || reply.type === 'video') && reply.attachmentUrl">
+                  <div
+                    class="relative rounded-xl overflow-hidden cursor-pointer group/media max-w-[220px] aspect-video bg-slate-950 border border-white/10 shadow-md my-1"
+                    @click="chatStore.openLightboxMedia({ url: reply.attachmentUrl, name: reply.attachmentName ?? 'Video Thread', type: 'video' })"
+                  >
+                    <SecureMedia
+                      :filename="reply.attachmentUrl"
+                      type="video"
+                      fit="cover"
+                      class="w-full h-full object-cover"
+                    />
+                    <div class="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                      <div class="w-10 h-10 rounded-full bg-primary/90 text-primary-content flex items-center justify-center shadow-lg group-hover/media:scale-110 transition-transform">
+                        <Icon name="lucide:play" class="w-5 h-5 fill-current ml-0.5" />
+                      </div>
+                    </div>
+                  </div>
+                  <p v-if="reply.content" class="mt-1 text-sm">{{ reply.content }}</p>
+                </template>
+
+                <!-- File (Thread Reply) -->
+                <template v-else-if="(reply.type === MessageType.FILE || reply.type === 'file') && reply.attachmentUrl">
+                  <div
+                    class="flex items-center gap-2.5 p-2.5 rounded-lg bg-base-300/40 border border-base-content/10 hover:bg-base-300/70 transition-all my-1 cursor-pointer"
+                    @click="handleDownloadFile(reply.attachmentUrl, reply.attachmentName)"
+                  >
+                    <div
+                      class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm"
+                      :class="getFileIconConfig(reply.attachmentName, reply.mimeType).bgClass"
+                    >
+                      <component :is="getFileIconConfig(reply.attachmentName, reply.mimeType).component" class="w-4 h-4" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-bold truncate">{{ reply.attachmentName ?? 'File' }}</p>
+                      <span class="text-[10px] opacity-60">Klik untuk unduh berkas</span>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost btn-circle text-primary"
+                      title="Unduh Berkas"
+                      :disabled="isDownloadingFile"
+                    >
+                      <Download class="w-4 h-4 text-primary" />
+                    </button>
+                  </div>
+                  <p v-if="reply.content" class="mt-1 text-sm">{{ reply.content }}</p>
                 </template>
                 <template v-else>
                   <span>{{ reply.content }}</span>
@@ -412,26 +687,54 @@ onMounted(() => {
             </span>
           </span>
         </div>
-        <div class="flex items-end gap-2 bg-base-200/50 border border-base-content/10 rounded-2xl px-3.5 py-2.5 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
-          <textarea
-            ref="textarea"
-            v-model="replyContent"
-            placeholder="Ketik balasan... (Enter untuk kirim)"
-            rows="1"
-            class="flex-1 bg-transparent outline-none resize-none text-sm text-base-content placeholder:text-base-content/35 leading-relaxed max-h-[120px] overflow-y-auto scrollbar-thin"
-            @keydown="onKeydown"
-            @input="autoResize"
+
+        <!-- Preview attachment yang dipilih untuk reply -->
+        <div v-if="pendingFile" class="mb-2">
+          <ChatAttachmentPreview
+            :file="pendingFile"
+            :progress="uploadProgress"
+            :uploading="isUploading"
+            :error="uploadError"
+            @remove="removePendingFile"
           />
+        </div>
+
+        <div class="flex items-end gap-2">
+          <!-- Tombol lampirkan file -->
           <button
-            class="btn btn-primary btn-sm btn-circle flex-shrink-0 transition-all duration-150"
-            :class="replyContent.trim() && !isSubmitting ? 'opacity-100 scale-100' : 'opacity-40 scale-95'"
-            :disabled="!replyContent.trim() || isSubmitting"
-            title="Kirim Balasan (Enter)"
-            @click="sendReply"
+            type="button"
+            class="btn btn-ghost btn-xs btn-circle flex-shrink-0 text-base-content/50 hover:text-primary hover:bg-primary/10 transition-all"
+            :disabled="isUploading || !!pendingFile"
+            title="Lampirkan file"
+            @click="openFilePicker"
           >
-            <span v-if="isSubmitting" class="loading loading-spinner loading-xs" />
-            <Icon v-else name="lucide:send" class="w-3.5 h-3.5" />
+            <Paperclip class="w-4 h-4" />
           </button>
+          <input ref="fileInput" type="file" class="hidden" :accept="ALLOWED_TYPES.join(',')" @change="onFileSelected" />
+
+          <!-- Input area -->
+          <div class="flex-1 flex items-end gap-2 bg-base-200/50 border border-base-content/10 rounded-2xl px-3.5 py-2.5 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+            <textarea
+              ref="textarea"
+              v-model="replyContent"
+              :placeholder="pendingFile ? 'Tambahkan caption (opsional)...' : 'Ketik balasan... (Enter untuk kirim)'"
+              rows="1"
+              class="flex-1 bg-transparent outline-none resize-none text-sm text-base-content placeholder:text-base-content/35 leading-relaxed max-h-[120px] overflow-y-auto scrollbar-thin"
+              :disabled="isUploading"
+              @keydown="onKeydown"
+              @input="autoResize"
+            />
+            <button
+              class="btn btn-primary btn-sm btn-circle flex-shrink-0 transition-all duration-150"
+              :class="canSendReply ? 'opacity-100 scale-100' : 'opacity-40 scale-95'"
+              :disabled="!canSendReply"
+              title="Kirim Balasan (Enter)"
+              @click="sendReply"
+            >
+              <span v-if="isSubmitting || isUploading" class="loading loading-spinner loading-xs" />
+              <Send v-else class="w-3.5 h-3.5 ml-0.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

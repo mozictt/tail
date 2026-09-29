@@ -58,6 +58,17 @@ export const useChatStore = defineStore('chat', () => {
   const highlightedMessageId = ref<string | null>(null)
   let highlightTimer: any = null
 
+  // ─── Lightbox Modal State ──────────────────────────────────────────────────
+  const lightboxMedia = ref<{ url: string; name?: string; type: string } | null>(null)
+
+  const openLightboxMedia = (media: { url: string; name?: string; type: string }) => {
+    lightboxMedia.value = media
+  }
+
+  const closeLightboxMedia = () => {
+    lightboxMedia.value = null
+  }
+
   const setHighlightMessage = (msgId: string | null) => {
     highlightedMessageId.value = msgId ? String(msgId) : null
     if (highlightTimer) clearTimeout(highlightTimer)
@@ -955,6 +966,9 @@ export const useChatStore = defineStore('chat', () => {
     openedThreadTimestamps,
     highlightedMessageId,
     setHighlightMessage,
+    lightboxMedia,
+    openLightboxMedia,
+    closeLightboxMedia,
     // Getters
     activeConversation,
     activeMessages,

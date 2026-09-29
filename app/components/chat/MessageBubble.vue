@@ -3,8 +3,29 @@ import { ref, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useChatService } from '@/services/chatService'
 import { useToast } from '@/composables/useToast'
+import { useApi } from '@/composables/useApi'
 import type { ChatMessage } from '@/types/chat'
 import { MessageType } from '@/types/chat'
+import {
+  FileText,
+  FileSpreadsheet,
+  FileArchive,
+  FileCode,
+  File,
+  Presentation,
+  Download,
+  MessageSquareReply,
+  MoreVertical,
+  Smile,
+  Pencil,
+  Trash2,
+  Play,
+  CheckCheck,
+  Upload,
+  RefreshCw,
+  X,
+  Loader2
+} from 'lucide-vue-next'
 
 const props = defineProps<{
   message: ChatMessage
@@ -21,7 +42,106 @@ const toast = useToast()
 const showContextMenu = ref(false)
 const isEditing = ref(false)
 const editContent = ref('')
+const editAttachmentName = ref('')
 const showReactions = ref(false)
+const isDownloadingFile = ref(false)
+
+/** State & ref untuk penggantian file/media saat edit */
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const isUploadingNewFile = ref(false)
+const uploadProgress = ref(0)
+const newAttachmentUrl = ref('')
+const newAttachmentName = ref('')
+const newMessageType = ref<MessageType | null>(null)
+const newMimeType = ref('')
+
+/** Mengunduh file dokumen langsung via Blob (konsep /pos/dokumen) */
+const handleDownloadFile = async (urlStr?: string, nameStr?: string) => {
+  if (!urlStr) return
+  try {
+    isDownloadingFile.value = true
+    const fileName = nameStr || 'lampiran-dokumen'
+    const api = useApi()
+
+    let cleanPath = urlStr
+    if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+      try {
+        const parsed = new URL(urlStr)
+        cleanPath = parsed.pathname + parsed.search
+      } catch {
+        cleanPath = urlStr
+      }
+    }
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = `/${cleanPath}`
+    }
+
+    const res = await api(cleanPath, { responseType: 'blob' })
+    const blobUrl = window.URL.createObjectURL(res as Blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.setAttribute('download', fileName)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+    toast.showToast('Dokumen berhasil diunduh', 'success')
+  } catch (err) {
+    console.error('Gagal mengunduh dokumen:', err)
+    toast.showToast('Gagal mengunduh dokumen', 'error')
+  } finally {
+    isDownloadingFile.value = false
+  }
+}
+
+/** Mengembalikan ikon komponen dan styling warna badge file berdasarkan ekstensi & mime type */
+const getFileIconConfig = (fileName?: string, mimeType?: string) => {
+  const name = fileName || ''
+  const ext = (name.split('.').pop() || '').toLowerCase()
+  const mime = (mimeType || '').toLowerCase()
+
+  if (['xls', 'xlsx', 'csv', 'et'].includes(ext) || mime.includes('excel') || mime.includes('spreadsheet') || mime.includes('xls')) {
+    return {
+      component: FileSpreadsheet,
+      bgClass: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+    }
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'tgz'].includes(ext) || mime.includes('zip') || mime.includes('compressed') || mime.includes('archive')) {
+    return {
+      component: FileArchive,
+      bgClass: 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+    }
+  }
+  if (['ppt', 'pptx', 'dps'].includes(ext) || mime.includes('powerpoint') || mime.includes('presentation')) {
+    return {
+      component: Presentation,
+      bgClass: 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+    }
+  }
+  if (['txt', 'json', 'xml', 'js', 'ts', 'html', 'css'].includes(ext)) {
+    return {
+      component: FileCode,
+      bgClass: 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+    }
+  }
+  if (ext === 'pdf' || mime.includes('pdf')) {
+    return {
+      component: FileText,
+      bgClass: 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+    }
+  }
+  if (['doc', 'docx', 'wps'].includes(ext) || mime.includes('word') || mime.includes('wordprocessingml')) {
+    return {
+      component: FileText,
+      bgClass: 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+    }
+  }
+
+  return {
+    component: File,
+    bgClass: 'bg-primary/20 text-primary border border-primary/30'
+  }
+}
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🙏']
 
@@ -165,21 +285,93 @@ const groupedReactions = computed(() => {
   return Object.entries(map).map(([emoji, data]) => ({ emoji, ...data }))
 })
 
+/** Deteksi tipe pesan dari file baru */
+const getMessageTypeFromFile = (file: File): MessageType => {
+  if (file.type.startsWith('image/')) return MessageType.IMAGE
+  if (file.type.startsWith('video/')) return MessageType.VIDEO
+  if (file.type.startsWith('audio/')) return MessageType.AUDIO
+  return MessageType.FILE
+}
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+const handleReplaceFile = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+
+  const file = target.files[0]
+  try {
+    isUploadingNewFile.value = true
+    uploadProgress.value = 0
+
+    const uploaded = await chatService.uploadAttachment(file, (pct) => {
+      uploadProgress.value = pct
+    })
+
+    newAttachmentUrl.value = uploaded.url || uploaded.fileName
+    newAttachmentName.value = uploaded.originalName || file.name
+    newMessageType.value = getMessageTypeFromFile(file)
+    newMimeType.value = uploaded.mimeType || file.type
+    editAttachmentName.value = uploaded.originalName || file.name
+    toast.success('Berkas pengganti berhasil diunggah')
+  } catch (err: any) {
+    toast.error(err?.message || 'Gagal mengunggah berkas pengganti')
+  } finally {
+    isUploadingNewFile.value = false
+    target.value = ''
+  }
+}
+
+const removeReplacementFile = () => {
+  newAttachmentUrl.value = ''
+  newAttachmentName.value = ''
+  newMessageType.value = null
+  newMimeType.value = ''
+  editAttachmentName.value = props.message.attachmentName ?? ''
+}
+
 /** Edit pesan */
 const startEdit = () => {
   editContent.value = props.message.content ?? ''
+  editAttachmentName.value = props.message.attachmentName ?? ''
+  newAttachmentUrl.value = ''
+  newAttachmentName.value = ''
+  newMessageType.value = null
+  newMimeType.value = ''
   isEditing.value = true
   showContextMenu.value = false
 }
 
 const submitEdit = async () => {
-  if (!editContent.value.trim()) return
+  const trimmedContent = editContent.value.trim()
+  const trimmedAttachmentName = editAttachmentName.value.trim()
+
+  const payload: UpdateMessageDto = {}
+
+  if (newAttachmentUrl.value) {
+    payload.attachmentUrl = newAttachmentUrl.value
+    payload.attachmentName = newAttachmentName.value || trimmedAttachmentName
+    if (newMessageType.value) {
+      payload.type = newMessageType.value
+    }
+    payload.content = trimmedContent
+  } else if (props.message.type === MessageType.TEXT) {
+    if (!trimmedContent) return
+    payload.content = trimmedContent
+  } else {
+    payload.content = trimmedContent
+    if (props.message.attachmentName !== undefined || trimmedAttachmentName) {
+      payload.attachmentName = trimmedAttachmentName || (props.message.attachmentName ?? '')
+    }
+  }
+
   try {
-    const updated = await chatService.updateMessage(props.conversationId, props.message.id, {
-      content: editContent.value.trim(),
-    })
+    const updated = await chatService.updateMessage(props.conversationId, props.message.id, payload)
     chatStore.updateMessage(updated as ChatMessage)
     isEditing.value = false
+    newAttachmentUrl.value = ''
   } catch {
     toast.error('Gagal mengedit pesan')
   }
@@ -187,6 +379,10 @@ const submitEdit = async () => {
 
 const cancelEdit = () => {
   isEditing.value = false
+  newAttachmentUrl.value = ''
+  newAttachmentName.value = ''
+  newMessageType.value = null
+  newMimeType.value = ''
 }
 
 /** Hapus pesan */
@@ -198,6 +394,14 @@ const deleteMsg = async () => {
   } catch {
     toast.error('Gagal menghapus pesan')
   }
+}
+
+/** Buka picker reaksi tanpa bentrokan event click */
+const openReactions = () => {
+  showContextMenu.value = false
+  setTimeout(() => {
+    showReactions.value = true
+  }, 10)
 }
 
 /** Toggle reaksi */
@@ -258,7 +462,7 @@ const senderDisplayName = computed(() => {
       <div v-if="false" class="hidden" />
 
       <!-- Bubble -->
-      <div class="relative">
+      <div class="relative" :class="{ 'z-50': showContextMenu || showReactions }">
         <div
           class="rounded-2xl px-3.5 pt-2 pb-2 text-[14.5px] leading-relaxed break-words shadow-sm min-w-[80px] transition-all duration-300"
           :class="[
@@ -278,43 +482,224 @@ const senderDisplayName = computed(() => {
 
           <!-- Editing mode -->
           <template v-else-if="isEditing">
-            <textarea
-              v-model="editContent"
-              class="w-full bg-transparent outline-none resize-none min-w-[200px]"
-              rows="2"
-              autofocus
-              @keydown.enter.ctrl="submitEdit"
-              @keydown.escape="cancelEdit"
-            />
-            <div class="flex gap-2 mt-2 justify-end">
-              <button class="btn btn-ghost btn-xs" @click="cancelEdit">Batal</button>
-              <button class="btn btn-primary btn-xs text-primary-content" @click="submitEdit">Simpan</button>
+            <div class="space-y-2.5 min-w-[240px] max-w-[320px]">
+              <!-- Hidden file input for replacing media/document -->
+              <input
+                ref="fileInputRef"
+                type="file"
+                class="hidden"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar"
+                @change="handleReplaceFile"
+              />
+
+              <!-- Preview: Replacement file uploaded -->
+              <div v-if="newAttachmentUrl" class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <span class="text-[11px] font-bold flex items-center gap-1">
+                    <CheckCheck class="w-3.5 h-3.5 text-emerald-500" />
+                    Berkas Pengganti Terpilih
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-circle btn-xs text-error"
+                    title="Batal Ganti Berkas"
+                    @click="removeReplacementFile"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <!-- Image Preview if new file is image -->
+                <div v-if="newMessageType === MessageType.IMAGE" class="relative rounded-lg overflow-hidden max-w-[200px] aspect-[4/3] bg-slate-950 my-1">
+                  <SecureMedia :filename="newAttachmentUrl" type="photo" fit="cover" class="w-full h-full object-cover" />
+                </div>
+                <!-- File name input -->
+                <div class="mt-1">
+                  <label class="text-[10px] opacity-80 block font-semibold mb-0.5">Nama Berkas</label>
+                  <input
+                    v-model="editAttachmentName"
+                    type="text"
+                    class="w-full text-xs font-bold bg-base-100 text-base-content border border-emerald-500/40 rounded px-2 py-1 outline-none focus:border-emerald-500"
+                    placeholder="Nama berkas..."
+                  />
+                </div>
+              </div>
+
+              <!-- Preview: Existing original attachment (if no new replacement file yet) -->
+              <template v-else-if="message.attachmentUrl">
+                <div v-if="message.type === MessageType.IMAGE" class="relative rounded-xl overflow-hidden max-w-[240px] aspect-[4/3] bg-slate-950 border border-white/10 shadow mb-1">
+                  <SecureMedia :filename="message.attachmentUrl" type="photo" fit="cover" class="w-full h-full object-cover" />
+                </div>
+                <div v-else-if="message.type === MessageType.VIDEO" class="relative rounded-xl overflow-hidden max-w-[240px] aspect-video bg-slate-950 border border-white/10 shadow mb-1">
+                  <SecureMedia :filename="message.attachmentUrl" type="video" fit="cover" class="w-full h-full object-cover" />
+                </div>
+                <div v-else-if="message.type === MessageType.AUDIO" class="w-full max-w-[240px] bg-base-300/40 rounded-xl p-2 mb-1 border border-base-content/10">
+                  <audio :src="message.attachmentUrl" controls class="w-full h-8 rounded" />
+                </div>
+                <div v-else-if="message.type === MessageType.FILE" class="p-2.5 rounded-xl bg-base-300/40 border border-base-content/10 mb-1">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <div class="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 shadow-sm" :class="getFileIconConfig(message.attachmentName, message.mimeType).bgClass">
+                      <component :is="getFileIconConfig(message.attachmentName, message.mimeType).component" class="w-4 h-4" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <label class="text-[10px] opacity-70 block font-semibold">Nama Berkas</label>
+                      <input
+                        v-model="editAttachmentName"
+                        type="text"
+                        class="w-full text-xs font-bold bg-base-100 text-base-content border border-base-content/20 rounded px-2 py-1 outline-none focus:border-primary"
+                        placeholder="Nama berkas..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Uploading progress state -->
+              <div v-if="isUploadingNewFile" class="p-2 rounded-xl bg-base-200 border border-base-content/10 flex items-center gap-2">
+                <Loader2 class="w-4 h-4 animate-spin text-primary flex-shrink-0" />
+                <div class="flex-1 min-w-0">
+                  <div class="flex justify-between text-[11px] font-semibold mb-1">
+                    <span>Mengunggah berkas baru...</span>
+                    <span>{{ uploadProgress }}%</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-base-300 rounded-full overflow-hidden">
+                    <div class="h-full bg-primary transition-all duration-200" :style="{ width: `${uploadProgress}%` }" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Button: Replace Media / File -->
+              <div class="flex items-center justify-between pt-0.5">
+                <button
+                  type="button"
+                  class="btn btn-xs btn-outline border-base-content/20 hover:bg-base-200 hover:border-base-content/30 gap-1.5 text-[11px] normal-case"
+                  :disabled="isUploadingNewFile"
+                  @click="triggerFileInput"
+                >
+                  <Upload class="w-3.5 h-3.5 text-primary" />
+                  <span>{{ newAttachmentUrl ? 'Ganti Berkas Lain' : message.attachmentUrl ? 'Ganti Berkas / Media' : 'Tambah Berkas / Media' }}</span>
+                </button>
+              </div>
+
+              <!-- Content / Caption Textarea -->
+              <div>
+                <label v-if="message.type !== MessageType.TEXT || newAttachmentUrl" class="text-[10px] opacity-70 block font-semibold mb-1">
+                  Keterangan (Caption)
+                </label>
+                <textarea
+                  v-model="editContent"
+                  class="w-full bg-base-100 text-base-content border border-base-content/20 rounded-xl p-2 text-xs outline-none focus:border-primary resize-none min-h-[60px]"
+                  :placeholder="message.type === MessageType.TEXT && !newAttachmentUrl ? 'Tulis pesan...' : 'Tambah/edit keterangan...'"
+                  rows="2"
+                  autofocus
+                  @keydown.enter.ctrl="submitEdit"
+                  @keydown.escape="cancelEdit"
+                />
+              </div>
+
+              <div class="flex gap-2 justify-end pt-1">
+                <button class="btn btn-ghost btn-xs" :disabled="isUploadingNewFile" @click="cancelEdit">Batal</button>
+                <button class="btn btn-primary btn-xs text-primary-content font-semibold" :disabled="isUploadingNewFile" @click="submitEdit">Simpan</button>
+              </div>
             </div>
           </template>
 
-          <!-- Image -->
+          <!-- Image (Tampilan Galeri + Click to Lightbox) -->
           <template v-else-if="message.type === MessageType.IMAGE && message.attachmentUrl">
-            <img
-              :src="message.attachmentUrl"
-              :alt="message.attachmentName ?? 'gambar'"
-              class="max-w-[200px] rounded-lg cursor-pointer hover:opacity-90 transition mb-1"
-              loading="lazy"
-            />
-            <span v-if="message.content">{{ message.content }}</span>
+            <div
+              class="relative rounded-2xl overflow-hidden cursor-pointer group/media max-w-[260px] aspect-[4/3] bg-slate-950 border border-white/10 shadow-lg mb-1.5 transition-transform duration-300 hover:shadow-2xl"
+              @click="chatStore.openLightboxMedia({ url: message.attachmentUrl, name: message.attachmentName ?? 'Foto Chat', type: 'photo' })"
+            >
+              <SecureMedia
+                :filename="message.attachmentUrl"
+                type="photo"
+                fit="cover"
+                class="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-105"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 group-hover/media:opacity-100 transition-opacity flex items-end p-2.5 pointer-events-none">
+                <span class="text-[11px] font-semibold text-white truncate shadow-sm">
+                  {{ message.attachmentName ?? 'Lihat Foto Fullscreen' }}
+                </span>
+              </div>
+            </div>
+            <span v-if="message.content" class="block mt-1 text-sm leading-snug">
+              {{ message.content }}
+              <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
+            </span>
+            <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
+          </template>
+
+          <!-- Video (Tampilan Galeri + Play Overlay Badge + Click to Lightbox) -->
+          <template v-else-if="message.type === MessageType.VIDEO && message.attachmentUrl">
+            <div
+              class="relative rounded-2xl overflow-hidden cursor-pointer group/media max-w-[280px] aspect-video bg-slate-950 border border-white/10 shadow-lg mb-1.5 transition-transform duration-300 hover:shadow-2xl"
+              @click="chatStore.openLightboxMedia({ url: message.attachmentUrl, name: message.attachmentName ?? 'Video Chat', type: 'video' })"
+            >
+              <SecureMedia
+                :filename="message.attachmentUrl"
+                type="video"
+                fit="cover"
+                class="w-full h-full object-cover"
+              />
+              <div class="absolute inset-0 bg-black/40 group-hover/media:bg-black/25 transition-colors flex items-center justify-center pointer-events-none">
+                <div class="w-12 h-12 rounded-full bg-primary/95 text-primary-content flex items-center justify-center shadow-xl group-hover/media:scale-110 transition-transform">
+                  <Play class="w-6 h-6 fill-current ml-0.5" />
+                </div>
+              </div>
+            </div>
+            <span v-if="message.content" class="block mt-1 text-sm leading-snug">
+              {{ message.content }}
+              <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
+            </span>
+            <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
+          </template>
+
+          <!-- Audio -->
+          <template v-else-if="message.type === MessageType.AUDIO && message.attachmentUrl">
+            <div class="w-full max-w-[260px] bg-base-300/40 rounded-xl p-2 mb-1 border border-base-content/10">
+              <audio
+                :src="message.attachmentUrl"
+                controls
+                preload="metadata"
+                class="w-full h-9 rounded-lg"
+              />
+            </div>
+            <span v-if="message.content" class="block mt-1 text-sm leading-snug">
+              {{ message.content }}
+              <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
+            </span>
+            <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
           </template>
 
           <!-- File -->
           <template v-else-if="message.type === MessageType.FILE && message.attachmentUrl">
-            <a
-              :href="message.attachmentUrl"
-              target="_blank"
-              rel="noopener"
-              class="flex items-center gap-2 hover:underline mb-1"
+            <div
+              class="flex items-center gap-3 p-3 rounded-xl bg-base-300/40 border border-base-content/10 hover:bg-base-300/70 transition-all mb-1 cursor-pointer"
+              @click="handleDownloadFile(message.attachmentUrl, message.attachmentName)"
             >
-              <Icon name="lucide:file" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate max-w-[150px]">{{ message.attachmentName ?? 'File' }}</span>
-              <Icon name="lucide:download" class="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-            </a>
+              <div
+                class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm"
+                :class="getFileIconConfig(message.attachmentName, message.mimeType).bgClass"
+              >
+                <component :is="getFileIconConfig(message.attachmentName, message.mimeType).component" class="w-5 h-5" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold truncate">{{ message.attachmentName ?? 'Lampiran File' }}</p>
+                <span class="text-[10px] opacity-60">Klik untuk unduh berkas</span>
+              </div>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost btn-circle text-primary"
+                title="Unduh Berkas"
+                :disabled="isDownloadingFile"
+              >
+                <Download class="w-4 h-4 text-primary" />
+              </button>
+            </div>
+            <span v-if="message.content" class="block mt-1 text-sm leading-snug">
+              {{ message.content }}
+              <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
+            </span>
+            <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
           </template>
 
           <!-- Text -->
@@ -329,9 +714,8 @@ const senderDisplayName = computed(() => {
             :class="isSelf ? 'text-primary-content/80' : 'text-base-content/50'"
           >
             <span class="text-[10px] leading-none">{{ timeStr }}</span>
-            <Icon
+            <CheckCheck
               v-if="isSelf"
-              name="lucide:check-check"
               class="w-3.5 h-3.5 leading-none"
               :class="isReadByAll ? (isSelf ? 'text-info-content' : 'text-info') : 'opacity-70'"
             />
@@ -342,83 +726,101 @@ const senderDisplayName = computed(() => {
         <!-- Action buttons trigger (hover) -->
         <div
           v-if="!message.isDeleted"
-          class="absolute top-1/2 -translate-y-1/2 opacity-0 group-hover/msg:opacity-100 transition-all duration-150 z-20 flex items-center gap-1 bg-base-100 shadow-md border border-base-content/20 rounded-full px-2 py-1"
-          :class="isSelf ? 'right-full mr-2' : 'left-full ml-2'"
+          class="absolute top-1/2 -translate-y-1/2 transition-all duration-150 flex items-center gap-1 bg-base-100 shadow-md border border-base-content/20 rounded-full px-2.5 py-1"
+          :class="[
+            isSelf ? 'right-full mr-2' : 'left-full ml-2',
+            (showContextMenu || showReactions) ? 'opacity-100 z-50' : 'opacity-0 group-hover/msg:opacity-100 z-20'
+          ]"
         >
           <!-- Quick Thread Reply button -->
           <button
-            class="flex items-center gap-1 text-xs font-medium text-primary hover:bg-primary/10 px-1.5 py-0.5 rounded-full transition"
+            class="flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/10 px-2 py-0.5 rounded-full transition"
             title="Balas di Thread"
             @click="chatStore.openThread(message.id, message)"
           >
-            <Icon name="lucide:message-square-reply" class="w-4 h-4 text-primary flex-shrink-0" />
-            <span class="text-[11px] font-bold text-primary whitespace-nowrap">Balas</span>
+            <MessageSquareReply class="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <span class="text-[11px] font-bold text-primary whitespace-nowrap">Thread</span>
           </button>
 
-          <div class="w-px h-3 bg-base-content/20 flex-shrink-0"></div>
+          <div class="w-px h-3.5 bg-base-content/20 flex-shrink-0"></div>
+
+          <!-- Quick Reaction button -->
+          <button
+            class="p-1 rounded-full text-amber-500 hover:bg-amber-500/10 transition flex items-center justify-center"
+            title="Tambah Reaksi"
+            @click.stop="openReactions"
+          >
+            <Smile class="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          </button>
 
           <!-- More options button -->
           <button
-            class="p-0.5 rounded-full text-base-content/70 hover:text-base-content hover:bg-base-200 transition flex items-center justify-center"
+            class="p-1 rounded-full text-base-content/70 hover:text-base-content hover:bg-base-200 transition flex items-center justify-center"
             title="Opsi Lainnya"
-            @click="showContextMenu = !showContextMenu"
+            @click.stop="showContextMenu = !showContextMenu"
           >
-            <Icon name="lucide:more-vertical" class="w-4 h-4 text-base-content flex-shrink-0" />
+            <MoreVertical class="w-3.5 h-3.5 text-base-content flex-shrink-0" />
           </button>
-        </div>
 
-        <!-- Context menu dropdown -->
-        <div
-          v-if="showContextMenu"
-          class="absolute z-20 bg-base-100 border border-base-content/10 rounded-xl shadow-xl py-1 min-w-[150px]"
-          :class="isSelf ? 'right-0 bottom-8' : 'left-0 bottom-8'"
-        >
-          <button
-            class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition text-primary font-medium"
-            @click="chatStore.openThread(message.id, message); showContextMenu = false"
-          >
-            <Icon name="lucide:message-square-reply" class="w-4 h-4" />
-            Balas di Thread
-          </button>
-          <button
-            class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition"
-            @click="showReactions = !showReactions; showContextMenu = false"
-          >
-            <Icon name="lucide:smile" class="w-4 h-4 text-amber-500" />
-            Reaksi
-          </button>
-          <button
-            v-if="isSelf"
-            class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition"
-            @click="startEdit"
-          >
-            <Icon name="lucide:pencil" class="w-4 h-4 text-blue-500" />
-            Edit
-          </button>
-          <button
-            v-if="isSelf"
-            class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition text-error"
-            @click="deleteMsg"
-          >
-            <Icon name="lucide:trash-2" class="w-4 h-4" />
-            Hapus
-          </button>
-        </div>
+          <!-- Context menu dropdown -->
+          <template v-if="showContextMenu">
+            <!-- Backdrop overlay to close menu on click outside -->
+            <div class="fixed inset-0 z-40" @click.stop="showContextMenu = false" />
 
-        <!-- Emoji picker -->
-        <div
-          v-if="showReactions"
-          class="absolute z-20 bg-base-100 border border-base-content/10 rounded-2xl shadow-xl p-2 flex gap-1.5"
-          :class="isSelf ? 'right-0 bottom-8' : 'left-0 bottom-8'"
-        >
-          <button
-            v-for="emoji in EMOJI_LIST"
-            :key="emoji"
-            class="text-xl hover:scale-125 transition-transform duration-100 leading-none"
-            @click="toggleEmoji(emoji)"
-          >
-            {{ emoji }}
-          </button>
+            <div
+              class="absolute z-50 bg-base-100 border border-base-content/15 rounded-2xl shadow-2xl p-1.5 min-w-[160px] top-full mt-1.5"
+              :class="isSelf ? 'right-0' : 'left-0'"
+            >
+              <button
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-primary hover:bg-primary/10 transition"
+                @click="chatStore.openThread(message.id, message); showContextMenu = false"
+              >
+                <MessageSquareReply class="w-4 h-4 text-primary" />
+                <span>Balas di Thread</span>
+              </button>
+              <button
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-base-content hover:bg-base-200 transition"
+                @click.stop="openReactions"
+              >
+                <Smile class="w-4 h-4 text-amber-500" />
+                <span>Reaksi</span>
+              </button>
+              <button
+                v-if="isSelf"
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-base-content hover:bg-base-200 transition"
+                @click="startEdit"
+              >
+                <Pencil class="w-4 h-4 text-blue-500" />
+                <span>Edit</span>
+              </button>
+              <button
+                v-if="isSelf"
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl text-error hover:bg-error/10 transition"
+                @click="deleteMsg"
+              >
+                <Trash2 class="w-4 h-4 text-error" />
+                <span>Hapus</span>
+              </button>
+            </div>
+          </template>
+
+          <!-- Emoji picker -->
+          <template v-if="showReactions">
+            <div class="fixed inset-0 z-40" @click.stop="showReactions = false" />
+            <div
+              class="absolute z-50 bg-base-100 border border-base-content/10 rounded-2xl shadow-xl p-2 flex gap-1.5 top-full mt-1.5"
+              :class="isSelf ? 'right-0' : 'left-0'"
+            >
+              <button
+                v-for="emoji in EMOJI_LIST"
+                :key="emoji"
+                class="text-xl hover:scale-125 transition-transform duration-100 leading-none"
+                @click="toggleEmoji(emoji); showReactions = false"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 

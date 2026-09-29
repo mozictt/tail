@@ -213,62 +213,72 @@ watch(
   { immediate: true }
 );
 
+/**
+ * Utility resolusi URL terpusat (mendukung Galeri, Chat, WhatsApp, dan URL Absolut)
+ */
+const resolveMediaUrl = (filename: string, isOriginal: boolean, isThumbnailOnly: boolean = false): string => {
+  if (!filename) return '';
+
+  const token = authStore.token;
+  const appendToken = (url: string) => {
+    if (!token || url.includes('token=')) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+  };
+
+  // 1. Jika URL sudah absolut (http://, https://, blob:, data:)
+  if (/^(http|https|blob|data):/i.test(filename)) {
+    return appendToken(filename);
+  }
+
+  const cleanPath = filename.replace(/^\/+/, '');
+
+  // 2. Path relatif chat atau whatsapp (/chat/media/..., /whatsapp/media/...)
+  if (cleanPath.startsWith('chat/media/') || cleanPath.startsWith('whatsapp/media/')) {
+    const baseUrl = `${config.public.apiBase}/${cleanPath}`;
+    return appendToken(baseUrl);
+  }
+
+  // 3. Fallback Galeri (/gallery/thumbnail/... vs /gallery/media/...)
+  const galPath = cleanPath.replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
+  const isThumb = isThumbnailOnly || (!isOriginal && !isFallbackToOriginal.value);
+  const endpoint = isThumb ? `/gallery/thumbnail/${galPath}` : `/gallery/media/${galPath}`;
+  return appendToken(`${config.public.apiBase}${endpoint}`);
+};
+
 // URL Thumbnail WebP ringan (~30KB) untuk Instant Placeholder foto
 const thumbnailUrl = computed(() => {
   if (!props.filename || !isPhoto.value) return '';
-
-  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
-  const baseUrl = `${config.public.apiBase}/gallery/thumbnail/${cleanPath}`;
-  const token = authStore.token;
-
-  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  return resolveMediaUrl(props.filename, false, true);
 });
 
 /**
  * URL Thumbnail statis (.webp ~15KB) untuk video di mode grid (useOriginal = false).
- * Mengakses endpoint backend /gallery/thumbnail/... yang mengembalikan static WebP image!
  */
 const videoThumbnailUrl = computed(() => {
   if (!props.filename || !isVideo.value) return '';
-  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
-  const baseUrl = `${config.public.apiBase}/gallery/thumbnail/${cleanPath}`;
-  const token = authStore.token;
-  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  return resolveMediaUrl(props.filename, false, true);
 });
 
 // URL HD Original Foto
 const photoUrl = computed(() => {
   if (!props.filename || !isPhoto.value) return '';
-
-  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '').replace(/^gallery\/thumbnail\//, '');
-  const isThumb = !props.useOriginal && !isFallbackToOriginal.value;
-  const endpoint = isThumb ? `/gallery/thumbnail/${cleanPath}` : `/gallery/media/${cleanPath}`;
-  const baseUrl = `${config.public.apiBase}${endpoint}`;
-  const token = authStore.token;
-
-  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  return resolveMediaUrl(props.filename, props.useOriginal);
 });
 
 /**
  * URL Streaming Video — hanya dipakai di mode lightbox (useOriginal = true).
- * Di mode grid, URL ini tidak dipakai sehingga tidak ada request ke backend.
  */
 const videoStreamingUrl = computed(() => {
   if (!props.filename || !isVideo.value) return '';
-  const cleanPath = props.filename.replace(/^\/+/, '').replace(/^gallery\/media\//, '');
-  const baseUrl = `${config.public.apiBase}/gallery/media/${cleanPath}`;
-  const token = authStore.token;
-  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  return resolveMediaUrl(props.filename, true);
 });
 
 /**
  * Lazy load src video hanya saat elemen masuk viewport (Intersection Observer).
- * Ini mencegah browser otomatis preload video yang belum terlihat pengguna.
  */
 const setupVideoLazyLoad = () => {
   if (!videoRef.value || !props.useOriginal) return;
 
-  // Cleanup observer lama
   if (videoObserver) {
     videoObserver.disconnect();
     videoObserver = null;
@@ -295,7 +305,6 @@ const setupVideoLazyLoad = () => {
   videoObserver.observe(videoRef.value);
 };
 
-// Pasang lazy load saat lightbox dibuka
 onMounted(() => {
   if (isVideo.value && props.useOriginal) {
     nextTick(() => setupVideoLazyLoad());
@@ -307,7 +316,6 @@ onUnmounted(() => {
     videoObserver.disconnect();
     videoObserver = null;
   }
-  // Bersihkan src video agar tidak linger di memory
   if (videoRef.value) {
     videoRef.value.pause();
     videoRef.value.src = '';
@@ -329,7 +337,6 @@ const handleImageError = () => {
   }
 };
 
-// Jika thumbnail .webp statis backend belum ada / gagal, alihkan ke video frame fallback (#t=0.5)
 const handleVideoThumbnailError = () => {
   videoThumbnailFailed.value = true;
 };

@@ -9,6 +9,7 @@ import MessageArea from '@/components/chat/MessageArea.vue'
 import MessageInput from '@/components/chat/MessageInput.vue'
 import ThreadPanel from '@/components/chat/ThreadPanel.vue'
 import NewConversationModal from '@/components/chat/NewConversationModal.vue'
+import ChatMediaLightboxModal from '@/components/chat/ChatMediaLightboxModal.vue'
 import type { ChatConversation, SendMessageDto } from '@/types/chat'
 import { ConversationType } from '@/types/chat'
 
@@ -409,6 +410,9 @@ onUnmounted(() => {
       @close="showNewModal = false"
       @created="onConversationCreated"
     />
+
+    <!-- ─── Modal Lightbox Media Fullscreen (Galeri Style) ──────────────── -->
+    <ChatMediaLightboxModal />
   </div>
 </template>
 
