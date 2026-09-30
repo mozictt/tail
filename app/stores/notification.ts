@@ -18,11 +18,11 @@ export const useNotificationStore = defineStore('notification', () => {
   )
 
   /** Fetch riwayat notifikasi dari backend */
-  const fetchNotifications = async (unreadOnly = false) => {
+  const fetchNotifications = async (unreadOnly = false, page = 1, limit = 100) => {
     isLoading.value = true
     try {
       const res = await api.get<any>('/notifications', {
-        params: { unreadOnly },
+        params: { unreadOnly, page, limit },
       })
       const data = res?.data ?? res
       if (data) {

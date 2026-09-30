@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import * as icons from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useSlugRoute } from '@/composables/useSlugRoute'
@@ -10,7 +10,7 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 
-useHead({ title: 'Notifikasi Chat' })
+useHead({ title: 'Data Tabel Notifikasi Chat' })
 definePageMeta({ layout: 'admin' })
 
 const router = useRouter()
@@ -20,19 +20,44 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 const toast = useToast()
 
-const filterTab = ref<'all' | 'unread'>('all')
+// State Filters & Pagination Data Tables
+const filterTab = ref<'all' | 'unread' | 'read'>('all')
 const filterType = ref<string>('ALL')
 const searchQuery = ref('')
+const itemsPerPage = ref<number>(10)
+const currentPage = ref<number>(1)
+const isRefreshing = ref<boolean>(false)
+
+// Sorting State
+const sortField = ref<'createdAt' | 'isRead' | 'title' | 'type'>('createdAt')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// Selection State for Bulk Actions
+const selectedIds = ref<string[]>([])
 
 const loadData = async () => {
   authStore.syncCookies()
   if (authStore.token) {
     await Promise.all([
-      notifStore.fetchNotifications(false),
+      notifStore.fetchNotifications(false, 1, 100),
       notifStore.fetchUnreadCount(),
       chatStore.fetchConversations(),
     ])
+
+    // Load recent messages for each conversation to render all individual notifications
+    if (chatStore.conversations.length > 0) {
+      await Promise.all(
+        chatStore.conversations.map((c) => chatStore.fetchMessages(c.id).catch(() => {})),
+      )
+    }
   }
+}
+
+const handleRefresh = async () => {
+  isRefreshing.value = true
+  await loadData()
+  isRefreshing.value = false
+  toast.success('Data notifikasi berhasil diperbarui')
 }
 
 onMounted(async () => {
@@ -48,70 +73,97 @@ watch(
   },
 )
 
-const handleTabChange = async (tab: 'all' | 'unread') => {
-  filterTab.value = tab
-  if (notifStore.notifications.length === 0) {
-    await loadData()
-  }
-}
+// Reset pagination when filter/search changes
+watch([filterTab, filterType, searchQuery, itemsPerPage], () => {
+  currentPage.value = 1
+  selectedIds.value = []
+})
 
-/** Konversi percakapan /chat/conversations menjadi notifikasi tampilan */
+/** Konversi pesan percakapan menjadi notifikasi individual (tanpa grouping per percakapan) */
 const conversationNotifications = computed<AppNotification[]>(() => {
   if (!chatStore.conversations.length) return []
 
-  return chatStore.conversations
-    .filter((c) => c.lastMessage || (c.unreadCount ?? 0) > 0)
-    .map((c) => {
+  const items: AppNotification[] = []
+
+  for (const c of chatStore.conversations) {
+    const isGroup = c.type === 'GROUP' || Boolean(c.name)
+
+    // Ambil seluruh pesan terdaftar di messagesMap jika ada, atau fallback ke lastMessage
+    const messagesList: any[] = []
+    if (chatStore.messagesMap[c.id] && chatStore.messagesMap[c.id].length > 0) {
+      messagesList.push(...chatStore.messagesMap[c.id])
+    } else if (c.lastMessage) {
+      messagesList.push(c.lastMessage)
+    }
+
+    for (const msg of messagesList) {
+      if (!msg || !msg.id) continue
+
       const senderName =
-        c.lastMessage?.sender?.pegawai?.name ||
-        c.lastMessage?.sender?.username ||
-        (c.type === 'GROUP' ? c.name : 'Pengguna')
-      const isGroup = c.type === 'GROUP' || Boolean(c.name)
+        msg.sender?.pegawai?.name ||
+        msg.sender?.username ||
+        (msg as any).senderUsername ||
+        (isGroup ? c.name : 'Pengguna')
       const title = isGroup ? `${senderName} @ ${c.name || 'Grup'}` : senderName
 
-      return {
-        id: `conv-${c.id}`,
+      items.push({
+        id: `msg-${msg.id}`,
         userId: Number(authStore.id_user ?? 0),
         tenantId: (c.tenantId as any) ?? null,
         type: isGroup ? ('CHAT_GROUP' as any) : ('CHAT_DIRECT' as any),
         title: title || 'Pesan Percakapan',
-        body: c.lastMessage?.content || (c.lastMessage?.attachmentUrl ? '[Lampiran File]' : 'Ada pesan percakapan'),
-        actionUrl: `/chat?convId=${c.id}`,
-        payload: { conversationId: c.id, messageId: c.lastMessage?.id },
+        body: msg.content || (msg.attachmentUrl ? '[Lampiran File]' : 'Ada pesan percakapan'),
+        actionUrl: `/chat?convId=${c.id}&msgId=${msg.id}`,
+        payload: { conversationId: c.id, messageId: msg.id },
         isRead: (c.unreadCount ?? 0) === 0,
         readAt: null,
-        createdAt: c.lastMessage?.createdAt || c.lastActivityAt || new Date().toISOString(),
-      }
-    })
+        createdAt: msg.createdAt || c.lastActivityAt || new Date().toISOString(),
+      })
+    }
+  }
+
+  return items
 })
 
-/** Gabungkan riwayat notifikasi DB + percakapan chat aktif */
+/** Gabungkan riwayat notifikasi DB + percakapan (Deduplikasi berbasis Message ID, Konsisten Sebelum & Sesudah Refresh) */
 const allCombinedNotifications = computed<AppNotification[]>(() => {
   const dbNotifs = notifStore.notifications
   const convNotifs = conversationNotifications.value
 
   const result: AppNotification[] = [...dbNotifs]
-  const existingConvIds = new Set(
-    dbNotifs.map((n) => n.payload?.conversationId).filter(Boolean),
-  )
+
+  // Deduplikasi menggunakan set ID pesan individual
+  const existingMessageIds = new Set<string>()
+  for (const n of dbNotifs) {
+    if (n.id) existingMessageIds.add(String(n.id))
+    if (n.payload?.messageId) existingMessageIds.add(String(n.payload.messageId))
+  }
 
   for (const convNotif of convNotifs) {
-    if (!existingConvIds.has(convNotif.payload?.conversationId)) {
+    const msgId = String(convNotif.payload?.messageId || convNotif.id)
+    if (!existingMessageIds.has(msgId) && !existingMessageIds.has(`msg-${msgId}`)) {
       result.push(convNotif)
+      existingMessageIds.add(msgId)
     }
   }
 
-  return result.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
+  return result
 })
 
-/** Filtered list berdasarkan pencarian & kategori */
+/** Counter statistik */
+const countUnread = computed(() => allCombinedNotifications.value.filter((n) => !n.isRead).length)
+const countRead = computed(() => allCombinedNotifications.value.filter((n) => n.isRead).length)
+const countAll = computed(() => allCombinedNotifications.value.length)
+
+/** Filtered list berdasarkan pencarian & kategori & tab */
 const filteredList = computed(() => {
-  let list =
-    filterTab.value === 'unread'
-      ? allCombinedNotifications.value.filter((n) => !n.isRead)
-      : allCombinedNotifications.value
+  let list = [...allCombinedNotifications.value]
+
+  if (filterTab.value === 'unread') {
+    list = list.filter((n) => !n.isRead)
+  } else if (filterTab.value === 'read') {
+    list = list.filter((n) => n.isRead)
+  }
 
   if (filterType.value !== 'ALL') {
     list = list.filter((n) => String(n.type) === filterType.value)
@@ -120,14 +172,101 @@ const filteredList = computed(() => {
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(
-      (n) => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q),
+      (n) =>
+        n.title.toLowerCase().includes(q) ||
+        n.body.toLowerCase().includes(q) ||
+        String(n.type).toLowerCase().includes(q),
     )
   }
 
   return list
 })
 
-/** Aksi tandai semua dibaca */
+/** Sorted list berdasarkan sortField & sortOrder */
+const sortedList = computed(() => {
+  const list = [...filteredList.value]
+  list.sort((a, b) => {
+    let compA: any
+    let compB: any
+
+    if (sortField.value === 'createdAt') {
+      compA = new Date(a.createdAt).getTime()
+      compB = new Date(b.createdAt).getTime()
+    } else if (sortField.value === 'isRead') {
+      compA = a.isRead ? 1 : 0
+      compB = b.isRead ? 1 : 0
+    } else if (sortField.value === 'title') {
+      compA = a.title.toLowerCase()
+      compB = b.title.toLowerCase()
+    } else if (sortField.value === 'type') {
+      compA = String(a.type).toLowerCase()
+      compB = String(b.type).toLowerCase()
+    }
+
+    if (compA < compB) return sortOrder.value === 'asc' ? -1 : 1
+    if (compA > compB) return sortOrder.value === 'asc' ? 1 : -1
+    return 0
+  })
+  return list
+})
+
+/** Data Paginated Data Tables */
+const totalItems = computed(() => sortedList.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / itemsPerPage.value)))
+
+const paginatedList = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  return sortedList.value.slice(start, start + itemsPerPage.value)
+})
+
+const startEntryIndex = computed(() => (totalItems.value === 0 ? 0 : (currentPage.value - 1) * itemsPerPage.value + 1))
+const endEntryIndex = computed(() => Math.min(currentPage.value * itemsPerPage.value, totalItems.value))
+
+// Header Sort Toggle
+const toggleSort = (field: 'createdAt' | 'isRead' | 'title' | 'type') => {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'desc'
+  }
+}
+
+// Bulk Checkbox Selection Logic
+const isAllPageSelected = computed(() => {
+  if (paginatedList.value.length === 0) return false
+  return paginatedList.value.every((item) => selectedIds.value.includes(item.id))
+})
+
+const toggleSelectAllPage = () => {
+  if (isAllPageSelected.value) {
+    const pageIds = new Set(paginatedList.value.map((item) => item.id))
+    selectedIds.value = selectedIds.value.filter((id) => !pageIds.has(id))
+  } else {
+    const newIds = new Set([...selectedIds.value, ...paginatedList.value.map((item) => item.id)])
+    selectedIds.value = Array.from(newIds)
+  }
+}
+
+const toggleSelectItem = (id: string) => {
+  if (selectedIds.value.includes(id)) {
+    selectedIds.value = selectedIds.value.filter((i) => i !== id)
+  } else {
+    selectedIds.value.push(id)
+  }
+}
+
+/** Bulk action: Tandai notifikasi terpilih sebagai dibaca */
+const handleBulkMarkAsRead = async () => {
+  if (selectedIds.value.length === 0) return
+  for (const id of selectedIds.value) {
+    await notifStore.markAsRead(id)
+  }
+  toast.success(`${selectedIds.value.length} notifikasi berhasil ditandai sebagai dibaca`)
+  selectedIds.value = []
+}
+
+/** Tandai semua notifikasi sebagai dibaca */
 const handleMarkAllRead = async () => {
   await notifStore.markAllAsRead()
   toast.success('Semua notifikasi berhasil ditandai sebagai dibaca')
@@ -154,15 +293,31 @@ const handleOpenNotif = async (item: AppNotification) => {
 
 /** Format tanggal & waktu lengkap */
 const formatFullDate = (dateStr: string) => {
-  if (!dateStr) return ''
+  if (!dateStr) return '-'
   return new Date(dateStr).toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+    day: '2-digit',
+    month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+/** Relative time display */
+const formatRelativeTime = (dateStr: string) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffMinutes < 1) return 'Baru saja'
+  if (diffMinutes < 60) return `${diffMinutes}m yang lalu`
+  if (diffHours < 24) return `${diffHours}j yang lalu`
+  if (diffDays < 7) return `${diffDays}h yang lalu`
+  return formatFullDate(dateStr)
 }
 
 /** Label kategori */
@@ -179,230 +334,518 @@ const getKategoriLabel = (type: string) => {
 }
 
 /** Warna badge kategori */
-const getKategoriColor = (type: string) => {
+const getKategoriBadgeStyle = (type: string) => {
   switch (type) {
-    case 'CHAT_THREAD_REPLY': return 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-purple-200'
-    case 'CHAT_GROUP': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200'
-    case 'CHAT_DIRECT': return 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200'
-    case 'CHAT_MENTION': return 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200'
-    case 'WA_INCOMING': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200'
-    default: return 'bg-base-200 text-base-content/70 border-base-content/10'
+    case 'CHAT_THREAD_REPLY':
+      return 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+    case 'CHAT_GROUP':
+      return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+    case 'CHAT_DIRECT':
+      return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+    case 'CHAT_MENTION':
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+    case 'WA_INCOMING':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+    case 'DOC_SHARED':
+      return 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300 border-teal-200 dark:border-teal-800'
+    default:
+      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
   }
 }
 </script>
 
 <template>
-  <div class="space-y-6 max-w-6xl mx-auto pb-12">
+  <div class="space-y-6 max-w-7xl mx-auto pb-12">
     <!-- ─── Header Halaman ─────────────────────────────────────────────── -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-base-100 p-6 rounded-3xl border border-base-content/10 shadow-xs">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-base-100 p-6 rounded-3xl border border-base-content/10 shadow-xs">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-2xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
           <icons.Bell class="w-6 h-6" />
         </div>
         <div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2.5 flex-wrap">
             <h1 class="text-xl sm:text-2xl font-bold text-base-content tracking-tight">
-              Notifikasi Chat & Balasan
+              Data Tabel Notifikasi Chat
             </h1>
             <span
-              v-if="notifStore.unreadCount > 0"
-              class="badge badge-error text-white font-bold text-xs"
+              v-if="countUnread > 0"
+              class="badge badge-error text-white font-bold text-xs gap-1.5 animate-pulse"
             >
-              {{ notifStore.unreadCount }} Belum Dibaca
+              <icons.BellRing class="w-3 h-3" />
+              {{ countUnread }} Belum Dibaca
+            </span>
+            <span class="badge badge-ghost text-xs font-semibold">
+              Total {{ countAll }} Notifikasi
             </span>
           </div>
           <p class="text-xs sm:text-sm text-base-content/60 mt-0.5">
-            Kelola dan tinjau seluruh pesan masuk, balasan thread, dan notifikasi aktivitas Anda.
+            Tinjau seluruh riwayat notifikasi pesan masuk, balasan thread, dan aktivitas sistem dalam format Data Tables.
           </p>
         </div>
       </div>
 
-      <!-- Action Button Top -->
-      <div class="flex items-center gap-2 shrink-0">
+      <!-- Action Button Header Top -->
+      <div class="flex items-center gap-2 shrink-0 flex-wrap">
         <button
-          v-if="notifStore.unreadCount > 0"
+          @click="handleRefresh"
+          :disabled="isRefreshing || notifStore.isLoading"
+          class="btn btn-ghost btn-sm rounded-xl font-bold gap-1.5 text-base-content/70 hover:text-base-content"
+          title="Perbarui Data Notifikasi"
+        >
+          <icons.RefreshCw class="w-4 h-4" :class="{ 'animate-spin': isRefreshing || notifStore.isLoading }" />
+          <span>Segarkan</span>
+        </button>
+        <button
+          v-if="countUnread > 0"
           @click="handleMarkAllRead"
           class="btn btn-outline btn-primary btn-sm rounded-xl font-bold gap-1.5"
         >
           <icons.CheckCheck class="w-4 h-4" />
-          Tandai Semua Dibaca
+          <span>Tandai Semua Dibaca</span>
         </button>
         <button
           @click="router.push(slugPath('/chat'))"
-          class="btn btn-primary btn-sm rounded-xl font-bold gap-1.5"
+          class="btn btn-primary btn-sm rounded-xl font-bold gap-1.5 shadow-sm"
         >
           <icons.MessageSquare class="w-4 h-4" />
-          Buka Chat Room
+          <span>Buka Chat Room</span>
         </button>
       </div>
     </div>
 
-    <!-- ─── Filter Bar & Search ───────────────────────────────────────── -->
+    <!-- ─── Control Bar Data Tables (Filter Tabs, Search & Per Page) ─── -->
     <div class="bg-base-100 p-4 sm:p-5 rounded-2xl border border-base-content/10 shadow-xs space-y-4">
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         
-        <!-- Tab Navigation (Belum Dibaca vs Semua) -->
-        <div class="flex bg-base-200/60 p-1 rounded-xl shrink-0">
+        <!-- Left: Status Filter Tabs (Semua vs Belum Dibaca vs Sudah Dibaca) -->
+        <div class="flex bg-base-200/60 p-1 rounded-xl shrink-0 overflow-x-auto">
           <button
-            class="px-4 py-1.5 text-xs font-bold rounded-lg transition"
-            :class="filterTab === 'unread' ? 'bg-base-100 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
-            @click="handleTabChange('unread')"
+            class="px-4 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 whitespace-nowrap"
+            :class="filterTab === 'all' ? 'bg-base-100 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+            @click="filterTab = 'all'"
           >
-            Belum Dibaca ({{ notifStore.unreadNotifications.length }})
+            <span>Semua</span>
+            <span class="badge badge-sm border-none bg-base-300 text-base-content/70 font-semibold">{{ countAll }}</span>
           </button>
           <button
-            class="px-4 py-1.5 text-xs font-bold rounded-lg transition"
-            :class="filterTab === 'all' ? 'bg-base-100 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
-            @click="handleTabChange('all')"
+            class="px-4 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 whitespace-nowrap"
+            :class="filterTab === 'unread' ? 'bg-base-100 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+            @click="filterTab = 'unread'"
           >
-            Semua ({{ notifStore.notifications.length }})
+            <span>Belum Dibaca</span>
+            <span
+              class="badge badge-sm border-none font-bold"
+              :class="countUnread > 0 ? 'bg-rose-500 text-white' : 'bg-base-300 text-base-content/60'"
+            >
+              {{ countUnread }}
+            </span>
+          </button>
+          <button
+            class="px-4 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 whitespace-nowrap"
+            :class="filterTab === 'read' ? 'bg-base-100 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+            @click="filterTab = 'read'"
+          >
+            <span>Sudah Dibaca</span>
+            <span class="badge badge-sm border-none bg-base-300 text-base-content/60 font-semibold">{{ countRead }}</span>
           </button>
         </div>
 
-        <!-- Right Filters: Category & Search -->
-        <div class="flex flex-col sm:flex-row items-center gap-2.5 flex-1 max-w-lg">
-          <!-- Kategori Dropdown -->
-          <select
-            v-model="filterType"
-            class="select select-sm w-full sm:w-44 rounded-xl bg-base-200/60 border-base-content/10 text-xs font-semibold"
-          >
-            <option value="ALL">Semua Kategori</option>
-            <option value="CHAT_DIRECT">Pesan Pribadi</option>
-            <option value="CHAT_GROUP">Chat Grup</option>
-            <option value="CHAT_THREAD_REPLY">Balasan Thread</option>
-            <option value="CHAT_MENTION">Mention</option>
-            <option value="WA_INCOMING">WhatsApp</option>
-          </select>
+        <!-- Right: Category Dropdown & Search & Page Selector -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 max-w-2xl justify-end">
+          <!-- Kategori Select -->
+          <div class="relative min-w-[150px]">
+            <select
+              v-model="filterType"
+              class="select select-sm w-full rounded-xl bg-base-200/60 border-base-content/10 text-xs font-semibold"
+            >
+              <option value="ALL">Semua Kategori</option>
+              <option value="CHAT_DIRECT">Pesan Pribadi</option>
+              <option value="CHAT_GROUP">Chat Grup</option>
+              <option value="CHAT_THREAD_REPLY">Balasan Thread</option>
+              <option value="CHAT_MENTION">Mention</option>
+              <option value="WA_INCOMING">WhatsApp</option>
+              <option value="DOC_SHARED">Dokumen</option>
+            </select>
+          </div>
 
           <!-- Input Search -->
-          <div class="relative w-full flex-1">
+          <div class="relative flex-1 min-w-[180px]">
             <icons.Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" />
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Cari kata kunci notifikasi..."
+              placeholder="Cari notifikasi / isi pesan..."
               class="input input-sm w-full rounded-xl pl-9 bg-base-200/60 border-base-content/10 focus:border-primary/40 text-xs"
             />
+            <button
+              v-if="searchQuery"
+              @click="searchQuery = ''"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content text-xs"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Items Per Page Selector -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-xs text-base-content/50 font-medium hidden md:inline">Tampilkan:</span>
+            <select
+              v-model.number="itemsPerPage"
+              class="select select-sm rounded-xl bg-base-200/60 border-base-content/10 text-xs font-bold"
+            >
+              <option :value="10">10</option>
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
           </div>
         </div>
 
+      </div>
+
+      <!-- Bulk Selection Toolbar (tampil jika ada item yang dicentang) -->
+      <div
+        v-if="selectedIds.length > 0"
+        class="flex items-center justify-between gap-3 p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs font-semibold animate-fadeIn"
+      >
+        <div class="flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+          <icons.CheckSquare class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <span>Terpilih <strong>{{ selectedIds.length }}</strong> notifikasi</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            @click="handleBulkMarkAsRead"
+            class="btn btn-xs btn-primary rounded-lg font-bold gap-1"
+          >
+            <icons.CheckCheck class="w-3.5 h-3.5" />
+            Tandai Dibaca
+          </button>
+          <button
+            @click="selectedIds = []"
+            class="btn btn-xs btn-ghost rounded-lg text-base-content/60 hover:text-base-content"
+          >
+            Batal Pilih
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- ─── Daftar Notifikasi ───────────────────────────────────────────── -->
-    <div class="space-y-3">
-      <div v-if="notifStore.isLoading" class="p-12 text-center bg-base-100 rounded-3xl border border-base-content/10">
+    <!-- ─── Data Table Container ────────────────────────────────────────── -->
+    <div class="bg-base-100 rounded-2xl border border-base-content/10 shadow-xs overflow-hidden">
+      <!-- Loading State -->
+      <div v-if="notifStore.isLoading" class="p-16 text-center space-y-3">
         <span class="loading loading-spinner loading-lg text-primary" />
-        <p class="text-xs text-base-content/50 mt-2">Memuat riwayat notifikasi...</p>
+        <p class="text-xs text-base-content/50 font-medium">Memuat tabel data notifikasi...</p>
       </div>
 
-      <template v-else-if="filteredList.length > 0">
-        <div
-          v-for="item in filteredList"
-          :key="item.id"
-          class="bg-base-100 rounded-2xl border transition-all duration-200 p-4 sm:p-5 flex flex-col sm:flex-row items-start justify-between gap-4 group hover:shadow-md"
-          :class="[
-            !item.isRead
-              ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/10'
-              : 'border-base-content/10 hover:border-base-content/20',
-          ]"
-        >
-          <!-- Left Content -->
-          <div class="flex items-start gap-3.5 flex-1 min-w-0">
-            <!-- Icon Avatar / Category -->
-            <div
-              class="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 shadow-xs group-hover:scale-105 transition"
-              :class="getKategoriColor(String(item.type))"
-            >
-              <icons.MessageSquare v-if="String(item.type).startsWith('CHAT')" class="w-5.5 h-5.5" />
-              <icons.PhoneCall v-else-if="String(item.type).startsWith('WA')" class="w-5.5 h-5.5" />
-              <icons.FileText v-else-if="String(item.type).startsWith('DOC')" class="w-5.5 h-5.5" />
-              <icons.Bell v-else class="w-5.5 h-5.5" />
-            </div>
-
-            <!-- Text Preview -->
-            <div class="space-y-1 flex-1 min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <!-- Title -->
-                <h3 class="font-bold text-sm text-base-content tracking-tight">
-                  {{ item.title }}
-                </h3>
-
-                <!-- Badge Kategori -->
-                <span
-                  class="text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0"
-                  :class="getKategoriColor(String(item.type))"
-                >
-                  {{ getKategoriLabel(String(item.type)) }}
-                </span>
-
-                <!-- Unread Indicator Badge -->
-                <span
-                  v-if="!item.isRead"
-                  class="badge badge-primary badge-xs text-[10px] font-bold shrink-0 animate-pulse"
-                >
-                  Belum Dibaca
-                </span>
-              </div>
-
-              <!-- Body / Message Content -->
-              <div class="bg-base-200/40 rounded-xl p-3 border border-base-content/5 mt-1.5">
-                <p class="text-xs text-base-content/80 leading-relaxed break-words font-medium">
-                  {{ item.body }}
-                </p>
-              </div>
-
-              <!-- Timestamp -->
-              <p class="text-[10px] text-base-content/40 flex items-center gap-1 pt-0.5">
-                <icons.Clock class="w-3 h-3" />
-                <span>Diterima pada {{ formatFullDate(item.createdAt) }}</span>
-              </p>
-            </div>
-          </div>
-
-          <!-- Right Action Button -->
-          <div class="flex items-center gap-2 self-end sm:self-center shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-base-content/10">
-            <button
-              v-if="!item.isRead"
-              @click="notifStore.markAsRead(item.id)"
-              class="btn btn-ghost btn-xs text-base-content/60 hover:text-base-content rounded-lg"
-              title="Tandai sebagai dibaca"
-            >
-              <icons.Check class="w-3.5 h-3.5" />
-              <span class="sm:hidden">Tandai Dibaca</span>
-            </button>
-
-            <button
-              @click="handleOpenNotif(item)"
-              class="btn btn-primary btn-sm rounded-xl font-bold gap-1.5 shadow-sm hover:scale-105 transition"
-            >
-              <span>Buka Chat</span>
-              <icons.ArrowRight class="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </template>
-
       <!-- Empty State -->
-      <div v-else class="p-16 text-center bg-base-100 rounded-3xl border border-base-content/10 space-y-3">
+      <div v-else-if="paginatedList.length === 0" class="p-16 text-center space-y-3">
         <div class="w-16 h-16 rounded-full bg-base-200/60 flex items-center justify-center mx-auto text-base-content/30">
           <icons.BellOff class="w-8 h-8" />
         </div>
         <div>
           <h3 class="font-bold text-base text-base-content">
-            Tidak ada notifikasi {{ filterTab === 'unread' ? 'belum dibaca' : '' }}
+            Tidak ada notifikasi yang ditemukan
           </h3>
           <p class="text-xs text-base-content/50 max-w-sm mx-auto mt-1">
-            {{ searchQuery ? 'Tidak ada notifikasi yang cocok dengan kata kunci pencarian Anda.' : 'Seluruh pesan dan notifikasi aktivitas Anda sudah up-to-date!' }}
+            {{ searchQuery ? 'Tidak ada notifikasi yang sesuai dengan pencarian Anda.' : 'Seluruh pesan dan notifikasi aktivitas Anda sudah up-to-date!' }}
           </p>
         </div>
         <button
-          v-if="filterTab === 'unread' && notifStore.notifications.length > 0"
-          @click="handleTabChange('all')"
+          v-if="filterTab !== 'all' || searchQuery || filterType !== 'ALL'"
+          @click="filterTab = 'all'; searchQuery = ''; filterType = 'ALL'"
           class="btn btn-ghost btn-xs text-primary font-bold mt-2"
         >
-          Lihat Semua Notifikasi
+          Reset Filter & Lihat Semua
         </button>
+      </div>
+
+      <!-- Data Table View -->
+      <div v-else class="overflow-x-auto">
+        <table class="table w-full text-xs">
+          <thead>
+            <tr class="bg-base-200/50 border-b border-base-content/10 text-base-content/70">
+              <!-- Select All Checkbox -->
+              <th class="py-3.5 pl-4 w-10 text-center">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-xs checkbox-primary rounded"
+                  :checked="isAllPageSelected"
+                  @change="toggleSelectAllPage"
+                  title="Pilih semua data pada halaman ini"
+                />
+              </th>
+
+              <!-- Status Header -->
+              <th
+                class="py-3.5 font-bold cursor-pointer hover:text-base-content transition select-none w-36"
+                @click="toggleSort('isRead')"
+              >
+                <div class="flex items-center gap-1.5">
+                  <span>STATUS</span>
+                  <icons.ArrowUpDown v-if="sortField !== 'isRead'" class="w-3.5 h-3.5 opacity-40" />
+                  <component :is="sortOrder === 'asc' ? icons.ArrowUp : icons.ArrowDown" v-else class="w-3.5 h-3.5 text-primary" />
+                </div>
+              </th>
+
+              <!-- Kategori Header -->
+              <th
+                class="py-3.5 font-bold cursor-pointer hover:text-base-content transition select-none w-36"
+                @click="toggleSort('type')"
+              >
+                <div class="flex items-center gap-1.5">
+                  <span>KATEGORI</span>
+                  <icons.ArrowUpDown v-if="sortField !== 'type'" class="w-3.5 h-3.5 opacity-40" />
+                  <component :is="sortOrder === 'asc' ? icons.ArrowUp : icons.ArrowDown" v-else class="w-3.5 h-3.5 text-primary" />
+                </div>
+              </th>
+
+              <!-- Judul / Pengirim Header -->
+              <th
+                class="py-3.5 font-bold cursor-pointer hover:text-base-content transition select-none min-w-[200px]"
+                @click="toggleSort('title')"
+              >
+                <div class="flex items-center gap-1.5">
+                  <span>PENGIRIM / JUDUL</span>
+                  <icons.ArrowUpDown v-if="sortField !== 'title'" class="w-3.5 h-3.5 opacity-40" />
+                  <component :is="sortOrder === 'asc' ? icons.ArrowUp : icons.ArrowDown" v-else class="w-3.5 h-3.5 text-primary" />
+                </div>
+              </th>
+
+              <!-- Isi Notifikasi -->
+              <th class="py-3.5 font-bold min-w-[280px]">
+                ISI PESAN NOTIFIKASI
+              </th>
+
+              <!-- Waktu Diterima Header -->
+              <th
+                class="py-3.5 font-bold cursor-pointer hover:text-base-content transition select-none w-44"
+                @click="toggleSort('createdAt')"
+              >
+                <div class="flex items-center gap-1.5">
+                  <span>WAKTU DITERIMA</span>
+                  <icons.ArrowUpDown v-if="sortField !== 'createdAt'" class="w-3.5 h-3.5 opacity-40" />
+                  <component :is="sortOrder === 'asc' ? icons.ArrowUp : icons.ArrowDown" v-else class="w-3.5 h-3.5 text-primary" />
+                </div>
+              </th>
+
+              <!-- Aksi -->
+              <th class="py-3.5 pr-6 font-bold text-right w-36">
+                AKSI
+              </th>
+            </tr>
+          </thead>
+
+          <tbody class="divide-y divide-base-content/5">
+            <tr
+              v-for="item in paginatedList"
+              :key="item.id"
+              class="transition-colors duration-150 group"
+              :class="[
+                !item.isRead
+                  ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-l-4 border-l-indigo-600 dark:border-l-indigo-400 font-semibold'
+                  : 'bg-base-100 hover:bg-base-200/40 text-base-content/70 border-l-4 border-l-transparent'
+              ]"
+            >
+              <!-- Checkbox Selection -->
+              <td class="py-3.5 pl-4 text-center">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-xs checkbox-primary rounded"
+                  :checked="selectedIds.includes(item.id)"
+                  @change="toggleSelectItem(item.id)"
+                />
+              </td>
+
+              <!-- Status (Belum Dibaca vs Sudah Dibaca - PEMBEDA VISUAL JELAS) -->
+              <td class="py-3.5 whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                  <!-- Indicator Badge for UNREAD -->
+                  <span
+                    v-if="!item.isRead"
+                    class="bg-rose-500 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs animate-pulse"
+                  >
+                    <icons.BellRing class="w-3 h-3 shrink-0" />
+                    Belum Dibaca
+                  </span>
+
+                  <!-- Indicator Badge for READ -->
+                  <span
+                    v-else
+                    class="bg-base-200/80 text-base-content/60 font-medium text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 border border-base-content/10"
+                  >
+                    <icons.CheckCheck class="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    Sudah Dibaca
+                  </span>
+                </div>
+              </td>
+
+              <!-- Kategori Badge -->
+              <td class="py-3.5 whitespace-nowrap">
+                <span
+                  class="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1"
+                  :class="getKategoriBadgeStyle(String(item.type))"
+                >
+                  <icons.MessageSquare v-if="String(item.type).startsWith('CHAT')" class="w-3 h-3" />
+                  <icons.PhoneCall v-else-if="String(item.type).startsWith('WA')" class="w-3 h-3" />
+                  <icons.FileText v-else-if="String(item.type).startsWith('DOC')" class="w-3 h-3" />
+                  <icons.Bell v-else class="w-3 h-3" />
+                  {{ getKategoriLabel(String(item.type)) }}
+                </span>
+              </td>
+
+              <!-- Pengirim / Judul -->
+              <td class="py-3.5">
+                <div class="flex items-center gap-2.5">
+                  <!-- Small Icon Avatar -->
+                  <div
+                    class="w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border"
+                    :class="[
+                      !item.isRead
+                        ? 'bg-indigo-600 text-white border-indigo-500'
+                        : 'bg-base-200 text-base-content/60 border-base-content/10'
+                    ]"
+                  >
+                    <icons.User v-if="String(item.type) === 'CHAT_DIRECT'" class="w-3.5 h-3.5" />
+                    <icons.Users v-else-if="String(item.type) === 'CHAT_GROUP'" class="w-3.5 h-3.5" />
+                    <icons.MessageSquare v-else class="w-3.5 h-3.5" />
+                  </div>
+
+                  <div class="min-w-0">
+                    <span
+                      class="truncate block max-w-[220px]"
+                      :class="!item.isRead ? 'font-bold text-base-content text-xs' : 'font-medium text-base-content/80 text-xs'"
+                      :title="item.title"
+                    >
+                      {{ item.title }}
+                    </span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Isi Pesan Notifikasi -->
+              <td class="py-3.5 max-w-md">
+                <div
+                  class="rounded-xl px-3 py-1.5 border"
+                  :class="[
+                    !item.isRead
+                      ? 'bg-base-100/90 border-indigo-300/40 text-base-content font-medium'
+                      : 'bg-base-200/40 border-base-content/5 text-base-content/70'
+                  ]"
+                >
+                  <p class="line-clamp-2 text-xs leading-relaxed break-words">
+                    {{ item.body }}
+                  </p>
+                </div>
+              </td>
+
+              <!-- Waktu Diterima -->
+              <td class="py-3.5 whitespace-nowrap">
+                <div class="space-y-0.5">
+                  <div class="flex items-center gap-1 text-xs" :class="!item.isRead ? 'font-bold text-base-content' : 'text-base-content/70'">
+                    <icons.Clock class="w-3 h-3 text-base-content/40" />
+                    <span>{{ formatFullDate(item.createdAt) }}</span>
+                  </div>
+                  <span class="text-[10px] text-base-content/40 block pl-4">
+                    {{ formatRelativeTime(item.createdAt) }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Aksi -->
+              <td class="py-3.5 pr-6 text-right whitespace-nowrap">
+                <div class="flex items-center justify-end gap-1.5">
+                  <!-- Button Tandai Dibaca (jika belum dibaca) -->
+                  <button
+                    v-if="!item.isRead"
+                    @click="notifStore.markAsRead(item.id)"
+                    class="btn btn-ghost btn-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg gap-1"
+                    title="Tandai sebagai dibaca"
+                  >
+                    <icons.Check class="w-3.5 h-3.5" />
+                    <span class="hidden sm:inline">Tandai Dibaca</span>
+                  </button>
+
+                  <!-- Button Buka Chat -->
+                  <button
+                    @click="handleOpenNotif(item)"
+                    class="btn btn-xs rounded-lg font-bold gap-1 transition"
+                    :class="[
+                      !item.isRead
+                        ? 'btn-primary shadow-xs'
+                        : 'btn-outline border-base-content/20 text-base-content/80 hover:btn-primary'
+                    ]"
+                    title="Buka Chat Room"
+                  >
+                    <span>Buka Chat</span>
+                    <icons.ArrowRight class="w-3 h-3" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ─── Data Tables Footer Pagination ──────────────────────────────── -->
+      <div
+        v-if="paginatedList.length > 0"
+        class="p-4 bg-base-200/40 border-t border-base-content/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs"
+      >
+        <!-- Info Entry Range -->
+        <div class="text-base-content/60 font-medium">
+          Menampilkan <span class="font-bold text-base-content">{{ startEntryIndex }}</span> - <span class="font-bold text-base-content">{{ endEntryIndex }}</span> dari <span class="font-bold text-base-content">{{ totalItems }}</span> notifikasi
+        </div>
+
+        <!-- Controls Pagination Buttons -->
+        <div class="flex items-center gap-1.5">
+          <!-- First Page -->
+          <button
+            @click="currentPage = 1"
+            :disabled="currentPage === 1"
+            class="btn btn-ghost btn-xs btn-square rounded-lg"
+            title="Halaman Pertama"
+          >
+            <icons.ChevronsLeft class="w-4 h-4" />
+          </button>
+
+          <!-- Prev Page -->
+          <button
+            @click="currentPage = Math.max(1, currentPage - 1)"
+            :disabled="currentPage === 1"
+            class="btn btn-ghost btn-xs rounded-lg gap-1"
+            title="Halaman Sebelumnya"
+          >
+            <icons.ChevronLeft class="w-4 h-4" />
+            <span class="hidden sm:inline">Sebelumnya</span>
+          </button>
+
+          <!-- Page Indicator Badge -->
+          <div class="px-3 py-1 bg-base-100 rounded-lg border border-base-content/10 font-bold text-xs">
+            Halaman {{ currentPage }} / {{ totalPages }}
+          </div>
+
+          <!-- Next Page -->
+          <button
+            @click="currentPage = Math.min(totalPages, currentPage + 1)"
+            :disabled="currentPage === totalPages"
+            class="btn btn-ghost btn-xs rounded-lg gap-1"
+            title="Halaman Selanjutnya"
+          >
+            <span class="hidden sm:inline">Selanjutnya</span>
+            <icons.ChevronRight class="w-4 h-4" />
+          </button>
+
+          <!-- Last Page -->
+          <button
+            @click="currentPage = totalPages"
+            :disabled="currentPage === totalPages"
+            class="btn btn-ghost btn-xs btn-square rounded-lg"
+            title="Halaman Terakhir"
+          >
+            <icons.ChevronsRight class="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
