@@ -2351,7 +2351,8 @@ onMounted(() => {
                  :type="viewMediaItem.type" 
                  :use-original="true" 
                  fit="contain" 
-                 class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent pointer-events-none" 
+                 class="w-full h-full max-h-[85vh] rounded-lg overflow-hidden bg-transparent" 
+                 :class="viewMediaItem.type === 'photo' ? 'pointer-events-none' : 'pointer-events-auto'"
                />
              </div>
           </div>

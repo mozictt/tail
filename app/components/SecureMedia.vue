@@ -129,7 +129,8 @@
       v-else-if="isVideo && props.useOriginal"
       ref="videoRef"
       :key="'video-' + filename"
-      class="relative z-10 w-full h-full"
+      :src="videoStreamingUrl"
+      class="relative z-10 w-full h-full pointer-events-auto"
       :class="[
         fit === 'contain' ? 'object-contain' : 'object-cover',
         isLoading ? 'opacity-0' : 'opacity-100'
