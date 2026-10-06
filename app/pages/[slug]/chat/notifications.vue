@@ -136,10 +136,19 @@ const conversationNotifications = computed<AppNotification[]>(() => {
         }
       }
 
+      // Deteksi dokumen share (lampiran file/gambar/video/audio/dokumen)
+      const isDocShared = Boolean(
+        msg.attachmentUrl ||
+        msg.attachmentName ||
+        ['file', 'image', 'video', 'audio', 'doc'].includes(String(msg.type).toLowerCase())
+      )
+
       const isThreadReply = Boolean(msg.parentMessageId)
 
       const type = isMentioned
         ? 'CHAT_MENTION'
+        : isDocShared
+        ? 'DOC_SHARED'
         : isThreadReply
         ? 'CHAT_THREAD_REPLY'
         : isGroup
@@ -149,6 +158,8 @@ const conversationNotifications = computed<AppNotification[]>(() => {
       let title = isGroup ? `${senderName} @ ${c.name || 'Grup'}` : senderName
       if (isMentioned) {
         title = `${senderName} menyebut Anda @ ${c.name || 'Grup'}`
+      } else if (isDocShared) {
+        title = `${senderName} membagikan dokumen ${c.name ? '@ ' + c.name : ''}`
       } else if (isThreadReply) {
         title = `Balasan Thread (${senderName})`
       }
@@ -159,13 +170,16 @@ const conversationNotifications = computed<AppNotification[]>(() => {
         tenantId: (c.tenantId as any) ?? null,
         type: type as any,
         title: title || 'Pesan Percakapan',
-        body: msg.content || (msg.attachmentUrl ? '[Lampiran File]' : 'Ada pesan percakapan'),
+        body: msg.content || (msg.attachmentUrl ? `[Lampiran File] ${msg.attachmentName || ''}` : 'Ada pesan percakapan'),
         actionUrl: `/chat?convId=${c.id}&msgId=${msg.id}`,
         payload: {
           conversationId: c.id,
           messageId: msg.id,
           parentMessageId: msg.parentMessageId || null,
           isMention: isMentioned,
+          isDocShared,
+          attachmentUrl: msg.attachmentUrl || null,
+          attachmentName: msg.attachmentName || null,
         },
         isRead: (c.unreadCount ?? 0) === 0,
         readAt: null,
@@ -182,6 +196,9 @@ const allCombinedNotifications = computed<AppNotification[]>(() => {
   const dbNotifs = notifStore.notifications.map((n) => {
     if (n.payload?.isMention && String(n.type) !== 'CHAT_MENTION') {
       return { ...n, type: 'CHAT_MENTION' as any }
+    }
+    if ((n.payload?.isDocShared || n.payload?.attachmentUrl) && String(n.type) !== 'DOC_SHARED') {
+      return { ...n, type: 'DOC_SHARED' as any }
     }
     return n
   })
@@ -383,8 +400,7 @@ const getKategoriLabel = (type: string) => {
     case 'CHAT_THREAD_REPLY': return 'Balasan Thread'
     case 'CHAT_GROUP': return 'Chat Grup'
     case 'CHAT_DIRECT': return 'Pesan Pribadi'
-    case 'CHAT_MENTION': return 'Mention'
-    case 'WA_INCOMING': return 'WhatsApp'
+    case 'CHAT_MENTION': return 'Mention' 
     case 'DOC_SHARED': return 'Dokumen'
     default: return 'Sistem'
   }
@@ -519,8 +535,7 @@ const getKategoriBadgeStyle = (type: string) => {
               <option value="CHAT_DIRECT">Pesan Pribadi</option>
               <option value="CHAT_GROUP">Chat Grup</option>
               <option value="CHAT_THREAD_REPLY">Balasan Thread</option>
-              <option value="CHAT_MENTION">Mention</option>
-              <option value="WA_INCOMING">WhatsApp</option>
+              <option value="CHAT_MENTION">Mention</option> 
               <option value="DOC_SHARED">Dokumen</option>
             </select>
           </div>
@@ -765,6 +780,8 @@ const getKategoriBadgeStyle = (type: string) => {
                   >
                     <icons.User v-if="String(item.type) === 'CHAT_DIRECT'" class="w-3.5 h-3.5" />
                     <icons.Users v-else-if="String(item.type) === 'CHAT_GROUP'" class="w-3.5 h-3.5" />
+                    <icons.AtSign v-else-if="String(item.type) === 'CHAT_MENTION'" class="w-3.5 h-3.5" />
+                    <icons.FileText v-else-if="String(item.type) === 'DOC_SHARED'" class="w-3.5 h-3.5" />
                     <icons.MessageSquare v-else class="w-3.5 h-3.5" />
                   </div>
 

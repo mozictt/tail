@@ -7,7 +7,7 @@ import HeaderSearch from "@/components/header-master.vue";
 import Select2 from "@/components/ui/Select2.vue";
 import SecureMedia from "@/components/SecureMedia.vue";
 import Swal from "sweetalert2";
-import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw, ZoomIn, ZoomOut, Camera, Video, StopCircle, SwitchCamera, FolderUp } from "lucide-vue-next";
+import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, LayoutGrid, Download, Eye, ChevronLeft, ChevronRight, Share2, RotateCcw, CheckCircle2, AlertCircle, Clock, X, RefreshCw, ZoomIn, ZoomOut, Camera, Video, StopCircle, SwitchCamera, FolderUp, Smartphone, Monitor } from "lucide-vue-next";
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useWhatsappShare } from "@/composables/useWhatsappShare";
 import { useAuthStore } from "@/stores/auth";
@@ -154,12 +154,65 @@ const cameraFacing = ref<'user' | 'environment'>('environment');
 const isCameraReady = ref(false);
 const cameraError = ref<string | null>(null);
 
-// Status rekam video
+// Status rekam video & orientasi
 let mediaRecorder: MediaRecorder | null = null;
 const isRecording = ref(false);
 const recordedChunks = ref<BlobPart[]>([]);
 const recordingDuration = ref(0);
 let recordingTimer: any = null;
+
+// Orientasi kamera video: 'landscape' (16:9) | 'portrait' (9:16)
+const videoOrientation = ref<'landscape' | 'portrait'>('landscape');
+
+/** Dapatkan MIME type rekaman MP4 terbaik yang didukung browser */
+const getRecordingMimeType = (): { mimeType: string; fileType: string; ext: string } => {
+  if (typeof MediaRecorder === 'undefined') {
+    return { mimeType: 'video/mp4', fileType: 'video/mp4', ext: 'mp4' };
+  }
+
+  // Uji dukungan MP4 native dengan variasi codec H.264 / AVC
+  const mp4Candidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4;codecs=h264',
+    'video/mp4',
+  ];
+
+  for (const type of mp4Candidates) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return { mimeType: type, fileType: 'video/mp4', ext: 'mp4' };
+    }
+  }
+
+  // Fallback WebM jika browser belum mendukung encoder mp4 langsung
+  const webmCandidates = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+
+  for (const type of webmCandidates) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return { mimeType: type, fileType: 'video/mp4', ext: 'mp4' };
+    }
+  }
+
+  return { mimeType: 'video/mp4', fileType: 'video/mp4', ext: 'mp4' };
+};
+
+/** Set orientasi kamera (Landscape ↔ Portrait) */
+const setOrientation = async (orientation: 'landscape' | 'portrait') => {
+  if (isRecording.value) return;
+  if (videoOrientation.value === orientation) return;
+  videoOrientation.value = orientation;
+  await startCamera();
+};
+
+const toggleOrientation = async () => {
+  const target = videoOrientation.value === 'landscape' ? 'portrait' : 'landscape';
+  await setOrientation(target);
+};
 
 /** Mulai stream kamera */
 const startCamera = async () => {
@@ -168,8 +221,18 @@ const startCamera = async () => {
   stopCamera();
 
   try {
+    const isPortrait = videoOrientation.value === 'portrait';
+    const widthConstraint = isPortrait ? { ideal: 1080 } : { ideal: 1920 };
+    const heightConstraint = isPortrait ? { ideal: 1920 } : { ideal: 1080 };
+    const aspectRatioConstraint = isPortrait ? 9 / 16 : 16 / 9;
+
     const constraints: MediaStreamConstraints = {
-      video: { facingMode: cameraFacing.value, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: {
+        facingMode: cameraFacing.value,
+        width: widthConstraint,
+        height: heightConstraint,
+        aspectRatio: aspectRatioConstraint,
+      },
       audio: uploadMode.value === 'camera-video',
     };
     cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -215,8 +278,10 @@ const capturePhoto = () => {
 
   const video = cameraVideoRef.value;
   const canvas = cameraCanvasRef.value;
-  canvas.width = video.videoWidth || 1280;
-  canvas.height = video.videoHeight || 720;
+  const isPortrait = videoOrientation.value === 'portrait';
+
+  canvas.width = video.videoWidth || (isPortrait ? 1080 : 1920);
+  canvas.height = video.videoHeight || (isPortrait ? 1920 : 1080);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -235,35 +300,36 @@ const capturePhoto = () => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const file = new File([blob], `foto-kamera-${timestamp}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
     processIncomingFiles([file]);
-    pinoLogger.info('[Camera] Foto berhasil diambil', { name: file.name, size: file.size });
+    pinoLogger.info('[Camera] Foto berhasil diambil', { name: file.name, size: file.size, orientation: videoOrientation.value });
   }, 'image/jpeg', 0.92);
 };
 
-/** Mulai rekam video */
+/** Mulai rekam video MP4 */
 const startRecording = () => {
   if (!cameraStream || !isCameraReady.value) return;
 
   recordedChunks.value = [];
   recordingDuration.value = 0;
 
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-    ? 'video/webm;codecs=vp9,opus'
-    : MediaRecorder.isTypeSupported('video/webm')
-    ? 'video/webm'
-    : 'video/mp4';
+  const { mimeType, fileType, ext } = getRecordingMimeType();
 
   try {
-    mediaRecorder = new MediaRecorder(cameraStream, { mimeType });
+    const options: MediaRecorderOptions = {};
+    if (mimeType && typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mimeType)) {
+      options.mimeType = mimeType;
+    }
+
+    mediaRecorder = new MediaRecorder(cameraStream, options);
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) recordedChunks.value.push(e.data);
     };
     mediaRecorder.onstop = () => {
-      const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-      const blob = new Blob(recordedChunks.value, { type: mimeType });
+      const blob = new Blob(recordedChunks.value, { type: fileType });
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const file = new File([blob], `video-kamera-${timestamp}.${ext}`, { type: mimeType, lastModified: Date.now() });
+      const fileName = `video-kamera-${timestamp}.${ext}`;
+      const file = new File([blob], fileName, { type: fileType, lastModified: Date.now() });
       processIncomingFiles([file]);
-      pinoLogger.info('[Camera] Video berhasil direkam', { name: file.name, size: file.size });
+      pinoLogger.info('[Camera] Video MP4 berhasil direkam', { name: file.name, size: file.size, orientation: videoOrientation.value });
     };
     mediaRecorder.start(500); // Kumpulkan chunk setiap 500ms
     isRecording.value = true;
@@ -1827,8 +1893,10 @@ onMounted(() => {
                  PANEL: KAMERA (Foto & Video)
             =========================================== -->
             <template v-if="uploadMode === 'camera-photo' || uploadMode === 'camera-video'">
-              <div class="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-base-content/10" style="aspect-ratio: 16/9;">
-                
+              <div
+                class="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-base-content/10 transition-all duration-300 mx-auto"
+                :style="videoOrientation === 'portrait' ? 'aspect-ratio: 9/16; max-height: 480px; max-width: 300px;' : 'aspect-ratio: 16/9; max-height: 440px;'"
+              >
                 <!-- Video preview stream kamera -->
                 <video
                   ref="cameraVideoRef"
@@ -1856,26 +1924,74 @@ onMounted(() => {
                   <button @click="startCamera" class="btn btn-sm btn-primary rounded-xl px-5">Coba Lagi</button>
                 </div>
 
-                <!-- Badge rekam: durasi berjalan -->
+                <!-- Badge status rekam / mode & orientasi -->
                 <div v-if="isRecording" class="absolute top-3 left-3 flex items-center gap-1.5 bg-error/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse shadow-lg">
                   <span class="w-2 h-2 rounded-full bg-white"></span>
-                  REC {{ formatDuration(recordingDuration) }}
+                  REC {{ formatDuration(recordingDuration) }} (MP4)
+                </div>
+                <div v-else class="absolute top-3 left-3 flex items-center gap-1.5">
+                  <span class="bg-slate-900/80 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-lg border border-white/20 shadow-md">
+                    {{ uploadMode === 'camera-video' ? 'MP4' : 'FOTO' }}
+                  </span>
+                  <span class="bg-slate-900/80 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-lg border border-white/20 shadow-md uppercase">
+                    {{ videoOrientation }}
+                  </span>
                 </div>
 
-                <!-- Tombol Flip kamera (kanan atas) -->
-                <button
-                  v-if="isCameraReady && !isRecording"
-                  type="button"
-                  @click="flipCamera"
-                  class="absolute top-3 right-3 w-9 h-9 rounded-full bg-slate-900/70 backdrop-blur text-white flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all shadow-lg"
-                  title="Ganti Kamera"
-                >
-                  <SwitchCamera class="w-4 h-4" />
-                </button>
+                <!-- Control Buttons (Top Right): Orientasi & Flip Kamera -->
+                <div class="absolute top-3 right-3 flex items-center gap-1.5">
+                  <!-- Toggle Orientasi (Landscape ↔ Portrait) -->
+                  <button
+                    v-if="isCameraReady && !isRecording"
+                    type="button"
+                    @click="toggleOrientation"
+                    class="h-8 px-2.5 rounded-full bg-slate-900/70 backdrop-blur text-white text-xs font-semibold flex items-center gap-1 hover:bg-slate-700 active:scale-95 transition-all shadow-lg border border-white/10"
+                    :title="`Ganti Orientasi (Saat ini: ${videoOrientation})`"
+                  >
+                    <Monitor v-if="videoOrientation === 'landscape'" class="w-3.5 h-3.5 text-primary" />
+                    <Smartphone v-else class="w-3.5 h-3.5 text-emerald-400" />
+                    <span class="capitalize text-[11px]">{{ videoOrientation }}</span>
+                  </button>
+
+                  <!-- Flip Camera Button -->
+                  <button
+                    v-if="isCameraReady && !isRecording"
+                    type="button"
+                    @click="flipCamera"
+                    class="w-8 h-8 rounded-full bg-slate-900/70 backdrop-blur text-white flex items-center justify-center hover:bg-slate-700 active:scale-95 transition-all shadow-lg border border-white/10"
+                    title="Ganti Kamera (Depan/Belakang)"
+                  >
+                    <SwitchCamera class="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <!-- Kontrol Kamera: Foto -->
-              <div v-if="uploadMode === 'camera-photo'" class="flex items-center justify-center gap-3">
+              <div v-if="uploadMode === 'camera-photo'" class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <!-- Orientasi Selector Buttons -->
+                <div class="flex bg-base-200/80 p-1 rounded-2xl border border-base-content/10">
+                  <button
+                    type="button"
+                    @click="setOrientation('landscape')"
+                    class="px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    :class="videoOrientation === 'landscape' ? 'bg-base-100 text-primary shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+                    :disabled="!isCameraReady"
+                  >
+                    <Monitor class="w-3.5 h-3.5" />
+                    <span>Landscape (16:9)</span>
+                  </button>
+                  <button
+                    type="button"
+                    @click="setOrientation('portrait')"
+                    class="px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    :class="videoOrientation === 'portrait' ? 'bg-base-100 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+                    :disabled="!isCameraReady"
+                  >
+                    <Smartphone class="w-3.5 h-3.5" />
+                    <span>Portrait (9:16)</span>
+                  </button>
+                </div>
+
                 <button
                   id="btn-capture-photo"
                   type="button"
@@ -1889,7 +2005,31 @@ onMounted(() => {
               </div>
 
               <!-- Kontrol Kamera: Video -->
-              <div v-if="uploadMode === 'camera-video'" class="flex items-center justify-center gap-3">
+              <div v-if="uploadMode === 'camera-video'" class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <!-- Orientasi Selector Buttons -->
+                <div v-if="!isRecording" class="flex bg-base-200/80 p-1 rounded-2xl border border-base-content/10">
+                  <button
+                    type="button"
+                    @click="setOrientation('landscape')"
+                    class="px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    :class="videoOrientation === 'landscape' ? 'bg-base-100 text-primary shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+                    :disabled="!isCameraReady"
+                  >
+                    <Monitor class="w-3.5 h-3.5" />
+                    <span>Landscape (16:9)</span>
+                  </button>
+                  <button
+                    type="button"
+                    @click="setOrientation('portrait')"
+                    class="px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+                    :class="videoOrientation === 'portrait' ? 'bg-base-100 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-base-content/60 hover:text-base-content'"
+                    :disabled="!isCameraReady"
+                  >
+                    <Smartphone class="w-3.5 h-3.5" />
+                    <span>Portrait (9:16)</span>
+                  </button>
+                </div>
+
                 <!-- Tombol Mulai Rekam -->
                 <button
                   v-if="!isRecording"
@@ -1900,7 +2040,7 @@ onMounted(() => {
                   class="btn btn-error text-white rounded-2xl px-6 gap-2 font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-40"
                 >
                   <Video class="w-5 h-5" />
-                  Mulai Rekam
+                  Mulai Rekam (MP4)
                 </button>
 
                 <!-- Tombol Stop Rekam -->
@@ -1912,20 +2052,20 @@ onMounted(() => {
                   class="btn btn-neutral text-white rounded-2xl px-6 gap-2 font-bold shadow-md hover:shadow-lg transition-all active:scale-95 animate-pulse"
                 >
                   <StopCircle class="w-5 h-5 text-error" />
-                  Hentikan & Simpan
+                  Hentikan & Simpan (MP4)
                 </button>
               </div>
 
               <!-- Hint teks panduan -->
               <p class="text-center text-[11px] text-base-content/40 font-medium -mt-1">
                 <template v-if="uploadMode === 'camera-photo'">
-                  Klik <strong>Ambil Foto</strong> untuk mengambil gambar dari kamera.
+                  Pilih orientasi <strong>Landscape (16:9)</strong> atau <strong>Portrait (9:16)</strong>, lalu klik <strong>Ambil Foto</strong>.
                 </template>
                 <template v-else-if="!isRecording">
-                  Klik <strong>Mulai Rekam</strong> untuk merekam video, lalu <strong>Hentikan & Simpan</strong> untuk menyimpannya.
+                  Pilih orientasi <strong>Landscape (16:9)</strong> atau <strong>Portrait (9:16)</strong>, lalu klik <strong>Mulai Rekam (MP4)</strong>.
                 </template>
                 <template v-else>
-                  Sedang merekam... Klik <strong>Hentikan & Simpan</strong> jika selesai.
+                  Sedang merekam dalam orientasi <strong>{{ videoOrientation }}</strong>... Klik <strong>Hentikan & Simpan</strong> jika selesai.
                 </template>
               </p>
             </template>
