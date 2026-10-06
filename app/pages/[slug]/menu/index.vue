@@ -156,7 +156,10 @@ const loadMoreIcons = () => {
 };
 
 // Common Resource Key suggestions
-const resourcePresets = ["Menu", "User", "Role", "Barang", "Gallery", "Album"];
+const resourcePresets = [
+  "Menu", "User", "Role", "Barang", "Gallery", "Album",
+  "rumah-tangga.dashboard", "rumah-tangga.transaksi", "rumah-tangga.kategori", "rumah-tangga.anggaran", "rumah-tangga.laporan"
+];
 
 /* =========================
    COMPUTED & FILTERING

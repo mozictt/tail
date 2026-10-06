@@ -65,5 +65,97 @@ details[open] > ul {
   z-index: 999999 !important;
 }
 
+/* Custom VueDatePicker styling to perfectly match DaisyUI input input-bordered input-sm rounded-xl */
+.dp-custom-styled {
+  width: 100% !important;
+  --dp-font-family: inherit;
+  --dp-border-radius: 0.75rem;
+  --dp-cell-border-radius: 0.5rem;
+  --dp-primary-color: var(--fallback-p, oklch(var(--p) / 1));
+  --dp-primary-text-color: #ffffff;
+  --dp-border-color: var(--fallback-bc, oklch(var(--bc) / 0.2));
+  --dp-menu-border-color: var(--fallback-bc, oklch(var(--bc) / 0.15));
+  --dp-background-color: var(--fallback-b1, oklch(var(--b1) / 1));
+  --dp-text-color: var(--fallback-bc, oklch(var(--bc) / 1));
+}
+
+.dp-custom-styled .dp__input_wrap {
+  height: 2rem !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.dp-custom-styled .dp__input {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+  line-height: 2rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: 0.75rem !important;
+  border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.2)) !important;
+  background-color: var(--fallback-b1, oklch(var(--b1) / 1)) !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 2.25rem !important;
+  padding-right: 2rem !important;
+  box-shadow: none !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.dp-custom-styled .dp__input::placeholder {
+  color: var(--fallback-bc, oklch(var(--bc) / 0.4)) !important;
+  opacity: 1 !important;
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+}
+
+.dp-custom-styled .dp__input:focus,
+.dp-custom-styled .dp__input_focus {
+  border-color: var(--fallback-p, oklch(var(--p) / 1)) !important;
+  box-shadow: 0 0 0 2px var(--fallback-p, oklch(var(--p) / 0.15)) !important;
+  outline: none !important;
+}
+
+.dp-custom-styled .dp__input_icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  left: 0.6rem !important;
+}
+
+.dp-custom-styled .dp__icon {
+  width: 0.9rem !important;
+  height: 0.9rem !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 0.5)) !important;
+}
+
+.dp-custom-styled .dp__clear_icon {
+  width: 0.85rem !important;
+  height: 0.85rem !important;
+  right: 0.6rem !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 0.4)) !important;
+}
+
+.dp-custom-styled .dp__menu {
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.15)) !important;
+  background-color: var(--fallback-b1, oklch(var(--b1) / 1)) !important;
+  color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+}
+
+.dp-custom-styled .dp__cell_inner {
+  border-radius: 0.5rem !important;
+  font-size: 0.8rem !important;
+}
+
+.dp-custom-styled .dp__active_date {
+  background-color: var(--fallback-p, oklch(var(--p) / 1)) !important;
+  color: #ffffff !important;
+}
+
+
 
 

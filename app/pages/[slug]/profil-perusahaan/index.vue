@@ -648,11 +648,26 @@
                   <label class="block text-xs font-semibold text-base-content mb-1">
                     Tanggal Berdiri
                   </label>
-                  <input
-                    v-model="form.foundedAt"
-                    type="date"
-                    class="input input-bordered w-full rounded-xl focus:border-primary text-sm"
-                  />
+                  <ClientOnly>
+                    <VueDatePicker
+                      v-model="foundedAtPicker"
+                      @update:model-value="onFoundedAtSelected"
+                      :enable-time-picker="false"
+                      :teleport="true"
+                      locale="id"
+                      format="dd/MM/yyyy"
+                      auto-apply
+                      placeholder="Pilih Tanggal Berdiri..."
+                      class="dp-custom-styled"
+                    />
+                    <template #fallback>
+                      <input
+                        v-model="form.foundedAt"
+                        type="date"
+                        class="input input-bordered w-full rounded-xl focus:border-primary text-sm"
+                      />
+                    </template>
+                  </ClientOnly>
                 </div>
 
                 <!-- File Upload Logo -->
@@ -952,6 +967,8 @@
 import { ref, computed, onMounted, reactive } from "vue";
 import * as icons from "lucide-vue-next";
 import Swal from "sweetalert2";
+import VueDatePicker from "@vuepic/vue-datepicker";
+import "@vuepic/vue-datepicker/dist/main.css";
 import { CompanyProfileService, type CompanyProfile } from "@/services/company-profile.service";
 import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useSlugRoute } from "@/composables/useSlugRoute";
@@ -978,6 +995,22 @@ const isEditMode = ref(false);
 
 const showLogoModal = ref(false);
 const selectedLogoFile = ref<File | null>(null);
+
+const foundedAtPicker = ref<Date | null>(null);
+
+const onFoundedAtSelected = (val: Date | null) => {
+  if (val) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      form.foundedAt = `${year}-${month}-${day}`;
+    }
+  } else {
+    form.foundedAt = '';
+  }
+};
 const logoPreviewUrl = ref<string | null>(null);
 
 const selectedLogoModalFile = ref<File | null>(null);
@@ -1102,6 +1135,7 @@ const openEditModal = () => {
   form.npwp = profile.value.npwp || "";
   form.nib = profile.value.nib || "";
   form.foundedAt = profile.value.foundedAt ? profile.value.foundedAt.substring(0, 10) : "";
+  foundedAtPicker.value = form.foundedAt ? new Date(form.foundedAt) : null;
   form.instagram = profile.value.instagram || "";
   form.facebook = profile.value.facebook || "";
   form.twitter = profile.value.twitter || "";
@@ -1139,6 +1173,7 @@ const resetForm = () => {
   form.npwp = "";
   form.nib = "";
   form.foundedAt = "";
+  foundedAtPicker.value = null;
   form.instagram = "";
   form.facebook = "";
   form.twitter = "";

@@ -128,28 +128,4 @@ const applyPreset = (presetDate: Date) => {
   </div>
 </template>
 
-<style>
-/* Kustomisasi Tema @vuepic/vue-datepicker agar selaras dengan Tailwind & DaisyUI */
-.dp__theme_light, .dp__theme_dark {
-  --dp-font-family: inherit;
-  --dp-border-radius: 0.75rem;
-  --dp-cell-border-radius: 0.5rem;
-  --dp-primary-color: #7c3aed;
-  --dp-primary-text-color: #ffffff;
-  --dp-border-color: rgba(156, 163, 175, 0.3);
-  --dp-menu-border-color: rgba(156, 163, 175, 0.2);
-}
 
-.dp__input {
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
-  border-radius: 0.75rem !important;
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
-}
-
-.dp__menu {
-  border-radius: 1rem !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
-}
-</style>

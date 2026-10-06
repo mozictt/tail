@@ -2,6 +2,8 @@
 import { ref, onMounted, watch } from "vue";
 import EasyDataTable from "vue3-easy-data-table";
 import "vue3-easy-data-table/dist/style.css";
+import VueDatePicker from "@vuepic/vue-datepicker";
+import "@vuepic/vue-datepicker/dist/main.css";
 import { AlbumService, type Album } from "@/services/album.service";
 import HeaderSearch from "@/components/header-master.vue";
 import Swal from "sweetalert2";
@@ -56,6 +58,22 @@ const form = ref<Partial<Album>>({
   description: "",
   date: new Date().toISOString().split('T')[0],
 });
+
+const pickerDate = ref<Date | null>(new Date());
+
+const onPickerDateSelected = (val: Date | null) => {
+  if (val) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      form.value.date = `${year}-${month}-${day}`;
+    }
+  } else {
+    form.value.date = "";
+  }
+};
 
 const formErrors = ref({
   name: "",
@@ -134,6 +152,7 @@ const resetForm = () => {
     description: "",
     date: new Date().toISOString().split('T')[0],
   };
+  pickerDate.value = new Date();
   formErrors.value = {
     name: "",
     date: "",
@@ -153,11 +172,13 @@ const editAlbum = async (item: Album) => {
   modalLoading.value = true;
   try {
     const res = await albumService.getAlbumById(item.id);
+    const dateStr = res.date ? new Date(res.date).toISOString().split('T')[0] : "";
     form.value = {
       name: res.name,
       description: res.description || "",
-      date: res.date ? new Date(res.date).toISOString().split('T')[0] : "",
+      date: dateStr,
     };
+    pickerDate.value = dateStr ? new Date(dateStr) : new Date();
     selectedId.value = item.id;
     isEdit.value = true;
   } catch (err) {
@@ -407,7 +428,22 @@ const formatDate = (dateStr?: string | Date) => {
             
             <div>
               <label class="block text-base-content/80 text-xs font-bold uppercase tracking-wider mb-2">Tanggal Kegiatan <span class="text-error">*</span></label>
-              <input v-model="form.date" type="date" class="input input-bordered w-full rounded-2xl h-12 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 bg-base-100 font-medium" :class="{'border-error': formErrors.date}" />
+              <ClientOnly>
+                <VueDatePicker
+                  v-model="pickerDate"
+                  @update:model-value="onPickerDateSelected"
+                  :enable-time-picker="false"
+                  :teleport="true"
+                  locale="id"
+                  format="dd/MM/yyyy"
+                  auto-apply
+                  placeholder="Pilih Tanggal Kegiatan..."
+                  class="dp-custom-styled"
+                />
+                <template #fallback>
+                  <input v-model="form.date" type="date" class="input input-bordered w-full rounded-2xl h-12 focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all duration-300 bg-base-100 font-medium" :class="{'border-error': formErrors.date}" />
+                </template>
+              </ClientOnly>
               <span v-if="formErrors.date" class="text-xs text-error font-semibold mt-1.5 block">{{ formErrors.date }}</span>
             </div>
 
