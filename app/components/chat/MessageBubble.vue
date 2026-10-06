@@ -27,6 +27,8 @@ import {
   Loader2
 } from 'lucide-vue-next'
 
+import { useAuthStore } from '@/stores/auth'
+
 const props = defineProps<{
   message: ChatMessage
   isSelf: boolean
@@ -36,8 +38,88 @@ const props = defineProps<{
 }>()
 
 const chatStore = useChatStore()
+const authStore = useAuthStore()
 const chatService = useChatService()
 const toast = useToast()
+
+interface TextToken {
+  type: 'text' | 'mention'
+  value: string
+  isSelfMention?: boolean
+}
+
+/** Parse teks pesan untuk mendeteksi sebutan @mention dan merender badge visual */
+const parsedTokens = computed<TextToken[]>(() => {
+  const text = props.message.content
+  if (!text) return []
+
+  const myUsername = authStore.username ? authStore.username.toLowerCase() : ''
+  const myName = authStore.pegawai?.name ? authStore.pegawai.name.toLowerCase() : ''
+  const myId = authStore.id_user ? String(authStore.id_user) : ''
+
+  const mentionRegex = /(^|\s)(@\[\d+:?[^\]]+\]|@\[[^\]]+\]|@[a-zA-Z0-9_\-\.]+)/g
+  const tokens: TextToken[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = mentionRegex.exec(text)) !== null) {
+    const fullMatch = match[0]
+    const leadingSpace = match[1]
+    const rawMention = match[2]
+
+    if (match.index > lastIndex) {
+      tokens.push({
+        type: 'text',
+        value: text.slice(lastIndex, match.index),
+      })
+    }
+    if (leadingSpace) {
+      tokens.push({
+        type: 'text',
+        value: leadingSpace,
+      })
+    }
+
+    let cleanHandle = rawMention
+    let isSelfMention = false
+
+    if (rawMention.startsWith('@[') && rawMention.endsWith(']')) {
+      const inner = rawMention.slice(2, -1)
+      const parts = inner.split(':')
+      const targetId = parts[0]
+      const targetName = parts[1] || parts[0]
+      cleanHandle = '@' + targetName
+      if ((myId && targetId === myId) || (myUsername && targetName.toLowerCase() === myUsername)) {
+        isSelfMention = true
+      }
+    } else {
+      const handleLower = rawMention.slice(1).toLowerCase()
+      if (
+        (myUsername && handleLower === myUsername) ||
+        (myName && (handleLower === myName || myName.includes(handleLower)))
+      ) {
+        isSelfMention = true
+      }
+    }
+
+    tokens.push({
+      type: 'mention',
+      value: cleanHandle,
+      isSelfMention,
+    })
+
+    lastIndex = match.index + fullMatch.length
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({
+      type: 'text',
+      value: text.slice(lastIndex),
+    })
+  }
+
+  return tokens
+})
 
 const showContextMenu = ref(false)
 const isEditing = ref(false)
@@ -622,7 +704,20 @@ const senderDisplayName = computed(() => {
               </div>
             </div>
             <span v-if="message.content" class="block mt-1 text-sm leading-snug">
-              {{ message.content }}
+              <template v-for="(token, tIdx) in parsedTokens" :key="tIdx">
+                <span v-if="token.type === 'text'">{{ token.value }}</span>
+                <span
+                  v-else-if="token.type === 'mention'"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold transition-all mx-0.5"
+                  :class="token.isSelfMention
+                    ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-2 ring-amber-500/20'
+                    : isSelf
+                    ? 'bg-primary-content/25 text-primary-content border border-primary-content/30'
+                    : 'bg-primary/15 text-primary dark:text-primary-content border border-primary/30'"
+                >
+                  {{ token.value }}
+                </span>
+              </template>
               <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
             </span>
             <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
@@ -647,7 +742,20 @@ const senderDisplayName = computed(() => {
               </div>
             </div>
             <span v-if="message.content" class="block mt-1 text-sm leading-snug">
-              {{ message.content }}
+              <template v-for="(token, tIdx) in parsedTokens" :key="tIdx">
+                <span v-if="token.type === 'text'">{{ token.value }}</span>
+                <span
+                  v-else-if="token.type === 'mention'"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold transition-all mx-0.5"
+                  :class="token.isSelfMention
+                    ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-2 ring-amber-500/20'
+                    : isSelf
+                    ? 'bg-primary-content/25 text-primary-content border border-primary-content/30'
+                    : 'bg-primary/15 text-primary dark:text-primary-content border border-primary/30'"
+                >
+                  {{ token.value }}
+                </span>
+              </template>
               <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
             </span>
             <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
@@ -664,7 +772,20 @@ const senderDisplayName = computed(() => {
               />
             </div>
             <span v-if="message.content" class="block mt-1 text-sm leading-snug">
-              {{ message.content }}
+              <template v-for="(token, tIdx) in parsedTokens" :key="tIdx">
+                <span v-if="token.type === 'text'">{{ token.value }}</span>
+                <span
+                  v-else-if="token.type === 'mention'"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold transition-all mx-0.5"
+                  :class="token.isSelfMention
+                    ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-2 ring-amber-500/20'
+                    : isSelf
+                    ? 'bg-primary-content/25 text-primary-content border border-primary-content/30'
+                    : 'bg-primary/15 text-primary dark:text-primary-content border border-primary/30'"
+                >
+                  {{ token.value }}
+                </span>
+              </template>
               <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
             </span>
             <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
@@ -696,7 +817,20 @@ const senderDisplayName = computed(() => {
               </button>
             </div>
             <span v-if="message.content" class="block mt-1 text-sm leading-snug">
-              {{ message.content }}
+              <template v-for="(token, tIdx) in parsedTokens" :key="tIdx">
+                <span v-if="token.type === 'text'">{{ token.value }}</span>
+                <span
+                  v-else-if="token.type === 'mention'"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold transition-all mx-0.5"
+                  :class="token.isSelfMention
+                    ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-2 ring-amber-500/20'
+                    : isSelf
+                    ? 'bg-primary-content/25 text-primary-content border border-primary-content/30'
+                    : 'bg-primary/15 text-primary dark:text-primary-content border border-primary/30'"
+                >
+                  {{ token.value }}
+                </span>
+              </template>
               <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
             </span>
             <span v-else-if="message.isEdited" class="text-[10px] opacity-60 block mt-1">(diedit)</span>
@@ -704,7 +838,22 @@ const senderDisplayName = computed(() => {
 
           <!-- Text -->
           <template v-else>
-            <span>{{ message.content }}</span>
+            <span v-if="message.content">
+              <template v-for="(token, tIdx) in parsedTokens" :key="tIdx">
+                <span v-if="token.type === 'text'">{{ token.value }}</span>
+                <span
+                  v-else-if="token.type === 'mention'"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold transition-all mx-0.5"
+                  :class="token.isSelfMention
+                    ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-2 ring-amber-500/20'
+                    : isSelf
+                    ? 'bg-primary-content/25 text-primary-content border border-primary-content/30'
+                    : 'bg-primary/15 text-primary dark:text-primary-content border border-primary/30'"
+                >
+                  {{ token.value }}
+                </span>
+              </template>
+            </span>
             <span v-if="message.isEdited" class="text-[10px] opacity-60 ml-1">(diedit)</span>
           </template>
 

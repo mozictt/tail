@@ -84,9 +84,15 @@ const conversationNotifications = computed<AppNotification[]>(() => {
   if (!chatStore.conversations.length) return []
 
   const items: AppNotification[] = []
+  const currentUserId = Number(authStore.id_user ?? 0)
 
   for (const c of chatStore.conversations) {
     const isGroup = c.type === 'GROUP' || Boolean(c.name)
+
+    const myParticipant = c.participants?.find((p) => Number(p.userId) === currentUserId)
+    const myUsername = (authStore.username || myParticipant?.username || myParticipant?.user?.username || '').toLowerCase()
+    const myName = (myParticipant?.user?.pegawai?.name || '').toLowerCase()
+    const myNameUnderscore = myName.replace(/\s+/g, '_')
 
     // Ambil seluruh pesan terdaftar di messagesMap jika ada, atau fallback ke lastMessage
     const messagesList: any[] = []
@@ -99,22 +105,68 @@ const conversationNotifications = computed<AppNotification[]>(() => {
     for (const msg of messagesList) {
       if (!msg || !msg.id) continue
 
+      const senderId = Number(msg.senderId || msg.sender?.id || 0)
+      const isSenderSelf = senderId === currentUserId
+
       const senderName =
         msg.sender?.pegawai?.name ||
         msg.sender?.username ||
         (msg as any).senderUsername ||
         (isGroup ? c.name : 'Pengguna')
-      const title = isGroup ? `${senderName} @ ${c.name || 'Grup'}` : senderName
+
+      // Deteksi pesan mention untuk pengguna aktif
+      let isMentioned = false
+      if (!isSenderSelf && msg.content) {
+        const contentLower = msg.content.toLowerCase()
+        const mentionedIds = (msg as any).mentionedUserIds || []
+
+        if (Array.isArray(mentionedIds) && mentionedIds.map(Number).includes(currentUserId)) {
+          isMentioned = true
+        } else if (
+          contentLower.includes(`@[${currentUserId}]`) ||
+          contentLower.includes(`@[${currentUserId}:`)
+        ) {
+          isMentioned = true
+        } else if (myUsername && contentLower.includes(`@${myUsername}`)) {
+          isMentioned = true
+        } else if (myName && contentLower.includes(`@${myName}`)) {
+          isMentioned = true
+        } else if (myNameUnderscore && contentLower.includes(`@${myNameUnderscore}`)) {
+          isMentioned = true
+        }
+      }
+
+      const isThreadReply = Boolean(msg.parentMessageId)
+
+      const type = isMentioned
+        ? 'CHAT_MENTION'
+        : isThreadReply
+        ? 'CHAT_THREAD_REPLY'
+        : isGroup
+        ? 'CHAT_GROUP'
+        : 'CHAT_DIRECT'
+
+      let title = isGroup ? `${senderName} @ ${c.name || 'Grup'}` : senderName
+      if (isMentioned) {
+        title = `${senderName} menyebut Anda @ ${c.name || 'Grup'}`
+      } else if (isThreadReply) {
+        title = `Balasan Thread (${senderName})`
+      }
 
       items.push({
         id: `msg-${msg.id}`,
-        userId: Number(authStore.id_user ?? 0),
+        userId: currentUserId,
         tenantId: (c.tenantId as any) ?? null,
-        type: isGroup ? ('CHAT_GROUP' as any) : ('CHAT_DIRECT' as any),
+        type: type as any,
         title: title || 'Pesan Percakapan',
         body: msg.content || (msg.attachmentUrl ? '[Lampiran File]' : 'Ada pesan percakapan'),
         actionUrl: `/chat?convId=${c.id}&msgId=${msg.id}`,
-        payload: { conversationId: c.id, messageId: msg.id },
+        payload: {
+          conversationId: c.id,
+          messageId: msg.id,
+          parentMessageId: msg.parentMessageId || null,
+          isMention: isMentioned,
+        },
         isRead: (c.unreadCount ?? 0) === 0,
         readAt: null,
         createdAt: msg.createdAt || c.lastActivityAt || new Date().toISOString(),
@@ -127,7 +179,12 @@ const conversationNotifications = computed<AppNotification[]>(() => {
 
 /** Gabungkan riwayat notifikasi DB + percakapan (Deduplikasi berbasis Message ID, Konsisten Sebelum & Sesudah Refresh) */
 const allCombinedNotifications = computed<AppNotification[]>(() => {
-  const dbNotifs = notifStore.notifications
+  const dbNotifs = notifStore.notifications.map((n) => {
+    if (n.payload?.isMention && String(n.type) !== 'CHAT_MENTION') {
+      return { ...n, type: 'CHAT_MENTION' as any }
+    }
+    return n
+  })
   const convNotifs = conversationNotifications.value
 
   const result: AppNotification[] = [...dbNotifs]
@@ -166,7 +223,7 @@ const filteredList = computed(() => {
   }
 
   if (filterType.value !== 'ALL') {
-    list = list.filter((n) => String(n.type) === filterType.value)
+    list = list.filter((n) => String(n.type).toUpperCase() === filterType.value.toUpperCase())
   }
 
   if (searchQuery.value.trim()) {

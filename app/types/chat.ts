@@ -155,6 +155,7 @@ export interface SendMessageDto {
   parentMessageId?: string
   attachmentUrl?: string
   attachmentName?: string
+  mentionedUserIds?: number[]
 }
 
 export interface UpdateMessageDto {
