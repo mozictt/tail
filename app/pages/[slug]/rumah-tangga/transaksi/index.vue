@@ -18,12 +18,12 @@
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
-        <select v-model="selectedMonth" class="select select-bordered select-sm rounded-xl">
+        <select v-model="selectedMonth" @change="onMonthYearChange" class="select select-bordered select-sm rounded-xl">
           <option v-for="(name, idx) in monthsList" :key="idx" :value="idx + 1">
             {{ name }}
           </option>
         </select>
-        <select v-model="selectedYear" class="select select-bordered select-sm rounded-xl">
+        <select v-model="selectedYear" @change="onMonthYearChange" class="select select-bordered select-sm rounded-xl">
           <option v-for="y in yearsList" :key="y" :value="y">
             {{ y }}
           </option>
@@ -450,7 +450,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import * as lucide from 'lucide-vue-next';
 import Swal from 'sweetalert2';
@@ -586,11 +586,23 @@ const onSearchInput = () => {
   }, 400);
 };
 
+const onMonthYearChange = () => {
+  meta.currentPage = 1;
+  fetchData();
+};
+
+watch([selectedMonth, selectedYear], () => {
+  meta.currentPage = 1;
+  fetchData();
+});
+
 const resetFilters = () => {
   filters.search = '';
   filters.type = undefined;
   filters.categoryId = undefined;
   filters.familyMemberId = undefined;
+  selectedMonth.value = new Date().getMonth() + 1;
+  selectedYear.value = new Date().getFullYear();
   meta.currentPage = 1;
   fetchData();
 };
@@ -603,6 +615,13 @@ const changePage = (page: number) => {
 const fetchData = async () => {
   loading.value = true;
   try {
+    const year = selectedYear.value;
+    const month = selectedMonth.value;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthStr = String(month).padStart(2, '0');
+    const startDate = `${year}-${monthStr}-01`;
+    const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
     const res = await service.getTransactions({
       page: meta.currentPage,
       limit: meta.itemsPerPage,
@@ -610,6 +629,10 @@ const fetchData = async () => {
       type: filters.type,
       categoryId: filters.categoryId,
       familyMemberId: filters.familyMemberId,
+      startDate,
+      endDate,
+      month,
+      year,
       sortBy: 'transactionDate',
       sortType: 'desc',
     });

@@ -399,7 +399,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import * as lucide from 'lucide-vue-next';
 import { RumahTanggaService } from '@/services/rumah-tangga.service';
@@ -556,16 +556,35 @@ const axisTickDays = computed(() => {
   return chartPoints.value.filter(p => p.day === 1 || p.day % 5 === 0 || p.day === chartPoints.value.length);
 });
 
+watch([selectedMonth, selectedYear], () => {
+  loadDashboard();
+});
+
 const loadDashboard = async () => {
   loading.value = true;
   try {
+    const year = selectedYear.value;
+    const month = selectedMonth.value;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthStr = String(month).padStart(2, '0');
+    const startDate = `${year}-${monthStr}-01`;
+    const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
     const [sumRes, dailyRes, catRes, memRes, txRes, budgetRes] = await Promise.all([
-      service.getDashboardSummary(selectedYear.value, selectedMonth.value),
-      service.getDailyChart(selectedYear.value, selectedMonth.value),
-      service.getCategoryBreakdown(selectedYear.value, selectedMonth.value),
-      service.getMemberBreakdown(selectedYear.value, selectedMonth.value),
-      service.getTransactions({ limit: 5, sortBy: 'transactionDate', sortType: 'desc' }),
-      service.getBudgets(selectedYear.value, selectedMonth.value),
+      service.getDashboardSummary(year, month),
+      service.getDailyChart(year, month),
+      service.getCategoryBreakdown(year, month),
+      service.getMemberBreakdown(year, month),
+      service.getTransactions({
+        limit: 5,
+        startDate,
+        endDate,
+        month,
+        year,
+        sortBy: 'transactionDate',
+        sortType: 'desc',
+      }),
+      service.getBudgets(year, month),
     ]);
 
     if (sumRes) summary.value = sumRes;

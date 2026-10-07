@@ -74,6 +74,8 @@ export interface TransactionFilterQuery {
   search?: string;
   startDate?: string;
   endDate?: string;
+  month?: number;
+  year?: number;
   categoryId?: number;
   familyMemberId?: number;
   type?: TransactionType;
