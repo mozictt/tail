@@ -3,6 +3,7 @@ import { useRuntimeConfig, navigateTo, useCookie } from "#app";
 import { useTenantMasterStore } from "@/stores/tenantMaster";
 import { useMenuStore } from "@/stores/menu";
 import { useCompanyProfileStore } from "@/stores/company-profile";
+import { isSuperAdminRole } from "@/utils/role.util";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 hari dalam detik
 
@@ -41,6 +42,7 @@ export const useAuthStore = defineStore("auth", {
     userRole: (state) => state.role || "guest",
     userName: (state) => state.username || "",
     isLoggedIn: (state) => !!state.token,
+    isSuperAdmin: (state) => isSuperAdminRole(state.role),
   },
 
   actions: {

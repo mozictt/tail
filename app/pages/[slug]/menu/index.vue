@@ -23,11 +23,13 @@ import {
 } from "lucide-vue-next";
 import { useToast } from "@/composables/useToast";
 import { useMenuStore } from "@/stores/menu";
+import { useAuthStore } from "@/stores/auth";
 import Select2 from "@/components/ui/Select2.vue";
 
 definePageMeta({ layout: "admin" });
 
 const { showToast } = useToast();
+const auth = useAuthStore();
 const menuService = MenuService();
 const menuStore = useMenuStore();
 
@@ -401,6 +403,10 @@ const resetForm = () => {
    CRUD ACTIONS
 ========================= */
 const openCreateModal = (parentId?: number) => {
+  if (!auth.isSuperAdmin) {
+    showToast("Hanya Super Admin yang diizinkan menambah menu", "error");
+    return;
+  }
   resetForm();
   if (parentId) {
     form.value.parent_id = parentId;
@@ -409,6 +415,10 @@ const openCreateModal = (parentId?: number) => {
 };
 
 const openEditModal = async (item: MenuItem) => {
+  if (!auth.isSuperAdmin) {
+    showToast("Hanya Super Admin yang diizinkan mengubah menu", "error");
+    return;
+  }
   if (!item.id) return;
   showModal.value = true;
   modalLoading.value = true;
@@ -436,6 +446,10 @@ const openEditModal = async (item: MenuItem) => {
 };
 
 const submitMenu = async () => {
+  if (!auth.isSuperAdmin) {
+    showToast("Hanya Super Admin yang diizinkan menyimpan menu", "error");
+    return;
+  }
   if (!validateForm()) return;
 
   submitLoading.value = true;
@@ -474,6 +488,10 @@ const submitMenu = async () => {
 };
 
 const deleteMenu = async (item: MenuItem) => {
+  if (!auth.isSuperAdmin) {
+    showToast("Hanya Super Admin yang diizinkan menghapus menu", "error");
+    return;
+  }
   if (!item.id) return;
 
   const hasChildren = item.children && item.children.length > 0;
@@ -525,7 +543,18 @@ onMounted(() => {
       v-model:search="search"
       @search="() => {}"
       @add="openCreateModal()"
-    />
+    >
+      <template #actions>
+        <button
+          v-if="auth.isSuperAdmin"
+          class="btn btn-primary rounded-xl font-bold shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 self-start sm:self-auto flex items-center gap-1.5"
+          @click="openCreateModal()"
+        >
+          <Plus class="w-4 h-4 stroke-[2.5]" />
+          <span>Tambah Menu</span>
+        </button>
+      </template>
+    </HeaderSearch>
 
     <!-- CONTENT CARD -->
     <div class="bg-base-100 border border-base-content/10 rounded-3xl p-6 shadow-premium min-h-[500px]">
@@ -546,7 +575,11 @@ onMounted(() => {
         <p class="text-base-content/60 text-sm max-w-md mx-auto mb-6">
           Tambahkan menu navigasi pertama Anda untuk mengatur struktur halaman sistem.
         </p>
-        <button class="btn btn-primary rounded-xl px-8 shadow-md shadow-primary/20" @click="openCreateModal()">
+        <button
+          v-if="auth.isSuperAdmin"
+          class="btn btn-primary rounded-xl px-8 shadow-md shadow-primary/20"
+          @click="openCreateModal()"
+        >
           + Tambah Menu Baru
         </button>
       </div>
@@ -561,7 +594,7 @@ onMounted(() => {
               <th class="py-3 px-4">Resource Key</th>
               <th class="py-3 px-4 text-center">Urutan</th>
               <th class="py-3 px-4 text-center">Status</th>
-              <th class="py-3 px-4 text-right">Aksi</th>
+              <th v-if="auth.isSuperAdmin" class="py-3 px-4 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -664,7 +697,7 @@ onMounted(() => {
               </td>
 
               <!-- Status -->
-              <td class="py-3.5 px-4 text-center">
+              <td class="py-3.5 px-4 text-center" :class="{ 'rounded-r-2xl': !auth.isSuperAdmin }">
                 <div class="flex items-center justify-center gap-1.5">
                   <span
                     class="px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1"
@@ -676,8 +709,8 @@ onMounted(() => {
                 </div>
               </td>
 
-              <!-- Actions -->
-              <td class="py-3.5 px-4 text-right rounded-r-2xl">
+              <!-- Actions (Khusus Super Admin) -->
+              <td v-if="auth.isSuperAdmin" class="py-3.5 px-4 text-right rounded-r-2xl">
                 <div class="flex items-center justify-end gap-1.5">
                   <button
                     class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 rounded-lg font-bold gap-1 text-[11px]"

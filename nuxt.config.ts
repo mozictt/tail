@@ -36,9 +36,6 @@ export default defineNuxtConfig({
     }
   },
 
-  experimental: {
-    scanPageMeta: false
-  },
 
   vite: {
     server: {

@@ -21,6 +21,7 @@ import {
   UserCheck
 } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
+import { isSuperAdminRole } from "@/utils/role.util";
 
 definePageMeta({
   layout: 'admin'
@@ -91,8 +92,13 @@ const fetchUsers = async () => {
       count = res.length;
     }
 
+    // 🛡️ User Super Admin hanya tampil jika pengguna yang login adalah Super Admin
+    if (!auth.isSuperAdmin) {
+      rawData = rawData.filter((u) => !isSuperAdminRole(u.role?.name));
+    }
+
     users.value = rawData;
-    totalItems.value = count;
+    totalItems.value = auth.isSuperAdmin ? count : rawData.length;
   } catch (err: any) {
     console.error("Gagal mengambil data user:", err);
     showToast("Gagal memuat data pengguna", "error");
@@ -128,6 +134,16 @@ watch(statusFilter, () => {
 ========================= */
 const roleOptions = ref<Role[]>([]);
 const roleLoading = ref(false);
+
+/**
+ * Filter role options: Role Super Admin hanya tersedia jika pengguna yang login adalah Super Admin
+ */
+const availableRoleOptions = computed(() => {
+  if (auth.isSuperAdmin) {
+    return roleOptions.value;
+  }
+  return roleOptions.value.filter((r) => !isSuperAdminRole(r.name));
+});
 
 const fetchRoleOptions = async () => {
   roleLoading.value = true;
@@ -192,7 +208,7 @@ const openCreateModal = async () => {
   userForm.value = {
     username: "",
     password: "",
-    role_id: roleOptions.value.length > 0 ? roleOptions.value[0].id || null : null,
+    role_id: availableRoleOptions.value.length > 0 ? availableRoleOptions.value[0].id || null : null,
     is_active: true,
     pegawai_id: null,
     pegawai_name: "",
@@ -215,6 +231,12 @@ const openCreateModal = async () => {
 };
 
 const openEditModal = (user: any) => {
+  // 🛡️ Cegah user non-super-admin membuka modal edit untuk akun Super Admin
+  if (isSuperAdminRole(user.role?.name) && !auth.isSuperAdmin) {
+    showToast("Anda tidak memiliki hak akses untuk mengedit akun Super Admin", "error");
+    return;
+  }
+
   isEdit.value = true;
   selectedUserId.value = user.id;
   userForm.value = {
@@ -307,6 +329,12 @@ const submitUser = async () => {
    TOGGLE STATUS & DELETE USER
 ========================= */
 const handleToggleStatus = async (user: UserItem) => {
+  // 🛡️ Cegah user non-super-admin mengubah status akun Super Admin
+  if (isSuperAdminRole(user.role?.name) && !auth.isSuperAdmin) {
+    showToast("Anda tidak memiliki hak akses untuk mengubah status akun Super Admin", "error");
+    return;
+  }
+
   const newStatus = !user.is_active;
   const statusText = newStatus ? "Mengaktifkan" : "Menonaktifkan";
 
@@ -336,6 +364,12 @@ const handleToggleStatus = async (user: UserItem) => {
 };
 
 const handleDeleteUser = async (user: UserItem) => {
+  // 🛡️ Cegah user non-super-admin menghapus akun Super Admin
+  if (isSuperAdminRole(user.role?.name) && !auth.isSuperAdmin) {
+    showToast("Anda tidak memiliki hak akses untuk menghapus akun Super Admin", "error");
+    return;
+  }
+
   const confirmResult = await Swal.fire({
     title: "Hapus Pengguna?",
     text: `Apakah Anda yakin ingin menghapus akun "${user.username}"? Tindakan ini bersifat Soft Delete.`,
@@ -362,6 +396,12 @@ const handleDeleteUser = async (user: UserItem) => {
 };
 
 const handleResetPassword = async (user: UserItem) => {
+  // 🛡️ Cegah user non-super-admin mereset password akun Super Admin
+  if (isSuperAdminRole(user.role?.name) && !auth.isSuperAdmin) {
+    showToast("Anda tidak memiliki hak akses untuk mereset password akun Super Admin", "error");
+    return;
+  }
+
   const confirmResult = await Swal.fire({
     title: "Reset Password Pengguna?",
     html: `Apakah Anda yakin ingin mereset password pengguna <strong>"${user.username}"</strong>?<br/><br/><span class="text-warning font-bold">Password akan di-reset menjadi default: <code>password123</code></span>`,
@@ -433,6 +473,14 @@ const handleSwitchUser = async (targetUser: UserItem) => {
 /* =========================
    HELPER FORMATTING & STYLES
 ========================= */
+const canManageUser = (user?: UserItem | null) => {
+  if (!user) return false;
+  if (isSuperAdminRole(user.role?.name)) {
+    return auth.isSuperAdmin;
+  }
+  return true;
+};
+
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return "-";
   return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -618,6 +666,7 @@ onMounted(() => {
                 </button>
 
                 <button 
+                  v-if="canManageUser(item)"
                   class="btn btn-ghost btn-xs btn-circle text-base-content/70 hover:text-warning hover:bg-warning/10 rounded-xl"
                   @click="handleResetPassword(item)"
                   title="Reset Password (default: password123)"
@@ -626,6 +675,7 @@ onMounted(() => {
                 </button>
 
                 <button 
+                  v-if="canManageUser(item)"
                   class="btn btn-ghost btn-xs btn-circle text-base-content/70 hover:text-primary hover:bg-primary/10 rounded-xl"
                   @click="openEditModal(item)"
                   title="Edit User"
@@ -634,6 +684,7 @@ onMounted(() => {
                 </button>
 
                 <button 
+                  v-if="canManageUser(item)"
                   class="btn btn-ghost btn-xs btn-circle text-base-content/70 hover:text-error hover:bg-error/10 rounded-xl"
                   @click="handleDeleteUser(item)"
                   title="Hapus User"
@@ -750,7 +801,7 @@ onMounted(() => {
               </label>
               <Select2
                 v-model="userForm.role_id"
-                :options="roleOptions"
+                :options="availableRoleOptions"
                 label-key="name"
                 value-key="id"
                 placeholder="Pilih Role Pengguna..."

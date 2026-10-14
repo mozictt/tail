@@ -31,7 +31,7 @@ export const logger = pino({
     options: {
       file: path.join(logDir, 'app-log'),
       frequency: 'daily', // Rotasi log harian
-      dateFormat: 'YYYY-MM-DD', // Format nama file log berdasarkan tanggal (contoh: app-log.2026-09-06.log)
+      dateFormat: 'yyyy-MM-dd', // Format nama file log berdasarkan tanggal (contoh: app-log.2026-09-06.log)
       mkdir: true,
       extension: '.log',
     },

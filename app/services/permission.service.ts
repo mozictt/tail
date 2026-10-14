@@ -80,10 +80,24 @@ export const PermissionService = () => {
     });
   };
 
+  /**
+   * Bulk Sync / Upsert seluruh permissions untuk sebuah Role sekaligus
+   */
+  const syncPermissions = async (payload: {
+    role_id: number;
+    permissions: Array<{ resource: string; accessLevel: string }>;
+  }) => {
+    return await api('/permissions/sync', {
+      method: 'PUT',
+      body: payload,
+    });
+  };
+
   return {
     getResources,
     deletePermissionById,
     updatePermissionById,
     copyPermissions,
+    syncPermissions,
   };
 };
