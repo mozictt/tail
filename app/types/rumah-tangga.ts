@@ -95,6 +95,20 @@ export interface TransactionListResponse {
   };
 }
 
+export interface TransactionSuggestionItem {
+  description: string;
+  categoryId?: number;
+  categoryName?: string;
+  type?: TransactionType;
+  frequency: number;
+}
+
+export interface TransactionSuggestionQuery {
+  search?: string;
+  type?: TransactionType;
+  limit?: number;
+}
+
 export interface CreateTransactionPayload {
   categoryId: number;
   familyMemberId?: number;

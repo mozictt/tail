@@ -9,6 +9,8 @@ import type {
   CreateTransactionPayload,
   TransactionFilterQuery,
   TransactionListResponse,
+  TransactionSuggestionItem,
+  TransactionSuggestionQuery,
   BudgetPlan,
   CreateBudgetPayload,
   DashboardSummary,
@@ -181,6 +183,18 @@ export const RumahTanggaService = () => {
     } catch (err) {
       console.error("getTransactions error:", err);
       throw err;
+    }
+  };
+
+  const getTransactionSuggestions = async (
+    params?: TransactionSuggestionQuery
+  ): Promise<TransactionSuggestionItem[]> => {
+    try {
+      const res = await api("/rumah-tangga/transactions/suggestions", { params });
+      return handleResponse(res) || [];
+    } catch (err) {
+      console.error("getTransactionSuggestions error:", err);
+      return [];
     }
   };
 
@@ -441,6 +455,7 @@ export const RumahTanggaService = () => {
     updateFamilyMember,
     deleteFamilyMember,
     getTransactions,
+    getTransactionSuggestions,
     getTransactionById,
     createTransaction,
     updateTransaction,

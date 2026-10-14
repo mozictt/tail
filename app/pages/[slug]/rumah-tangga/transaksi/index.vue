@@ -268,15 +268,19 @@
               </div>
             </div>
 
-            <!-- Judul Transaksi -->
+            <!-- Judul Transaksi (Bisa pilih dari riwayat autocomplete atau ketik manual) -->
             <div class="form-control">
-              <label class="label text-xs font-semibold">Judul Transaksi <span class="text-error">*</span></label>
-              <input
+              <label class="label text-xs font-semibold flex items-center justify-between pb-1">
+                <span>Judul Transaksi <span class="text-error">*</span></span>
+                <span class="text-[10px] text-base-content/40 font-normal">Pilih riwayat atau ketik bebas</span>
+              </label>
+              <UiInputAutocomplete
                 v-model="form.title"
-                type="text"
+                :fetch-suggestions="fetchTitleSuggestions"
+                @select="onSuggestionSelected"
                 required
                 placeholder="Contoh: Belanja Bulanan Supermarket"
-                class="input input-bordered input-sm rounded-xl w-full"
+                input-class="input input-bordered input-sm rounded-xl w-full"
               />
             </div>
 
@@ -562,6 +566,35 @@ const activeReceiptUrl = ref('');
 const filteredCategoriesForForm = computed(() => {
   return categories.value.filter(c => c.type === form.type);
 });
+
+// Mengambil saran judul/deskripsi transaksi dari API berdasarkan riwayat rt_transactions
+const fetchTitleSuggestions = async (search: string) => {
+  try {
+    const txType = (form.type as string) === 'PEMASUKAN' ? TransactionType.INCOME : TransactionType.EXPENSE;
+    const res = await service.getTransactionSuggestions({
+      search: search || undefined,
+      type: txType,
+      limit: 15,
+    });
+    return res;
+  } catch (err) {
+    console.error('Error fetching title suggestions:', err);
+    return [];
+  }
+};
+
+// Handler saat salah satu opsi riwayat dipilih
+const onSuggestionSelected = (item: any) => {
+  // Jika opsi yang dipilih memiliki kategori yang cocok, otomatis arahkan form categoryId
+  if (item?.categoryId) {
+    const isCategoryMatched = categories.value.some(
+      c => c.id === item.categoryId && c.type === form.type
+    );
+    if (isCategoryMatched) {
+      form.categoryId = item.categoryId;
+    }
+  }
+};
 
 const formatRupiah = (val: number) => {
   return new Intl.NumberFormat('id-ID', {
