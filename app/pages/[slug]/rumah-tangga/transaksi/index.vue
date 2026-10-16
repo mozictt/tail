@@ -63,8 +63,8 @@
         <!-- Tipe dropdown -->
         <select v-model="filters.type" @change="fetchData" class="select select-bordered select-sm rounded-xl">
           <option :value="undefined">Semua Tipe</option>
-          <option value="PENGELUARAN">Pengeluaran</option>
-          <option value="PEMASUKAN">Pemasukan</option>
+          <option :value="TransactionType.EXPENSE">Pengeluaran</option>
+          <option :value="TransactionType.INCOME">Pemasukan</option>
         </select>
 
         <!-- Kategori dropdown -->
@@ -251,17 +251,17 @@
               <div class="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  @click="form.type = 'PENGELUARAN'"
-                  class="btn btn-sm rounded-xl"
-                  :class="form.type === 'PENGELUARAN' ? 'btn-error text-white' : 'btn-outline'"
+                  @click="setTransactionType(CategoryType.PENGELUARAN)"
+                  class="btn btn-sm rounded-xl transition"
+                  :class="form.type === CategoryType.PENGELUARAN ? 'btn-error text-white shadow-sm' : 'btn-outline'"
                 >
                   💸 Pengeluaran
                 </button>
                 <button
                   type="button"
-                  @click="form.type = 'PEMASUKAN'"
-                  class="btn btn-sm rounded-xl"
-                  :class="form.type === 'PEMASUKAN' ? 'btn-success text-white' : 'btn-outline'"
+                  @click="setTransactionType(CategoryType.PEMASUKAN)"
+                  class="btn btn-sm rounded-xl transition"
+                  :class="form.type === CategoryType.PEMASUKAN ? 'btn-success text-white shadow-sm' : 'btn-outline'"
                 >
                   💰 Pemasukan
                 </button>
@@ -462,11 +462,11 @@ import VueDatePicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css';
 import { RumahTanggaService } from '@/services/rumah-tangga.service';
 import {
+  CategoryType,
   TransactionType,
   type Transaction,
   type ExpenseCategory,
   type FamilyMember,
-  type CategoryType,
 } from '@/types/rumah-tangga';
 
 definePageMeta({ layout: 'admin' });
@@ -511,7 +511,7 @@ const meta = reactive({
 
 const filters = reactive<{
   search: string;
-  type?: CategoryType;
+  type?: TransactionType;
   categoryId?: number;
   familyMemberId?: number;
 }>({
@@ -545,7 +545,7 @@ const onPickerDateSelected = (val: Date | null) => {
 const form = reactive({
   title: '',
   amount: 0,
-  type: 'PENGELUARAN' as CategoryType,
+  type: CategoryType.PENGELUARAN,
   transactionDate: new Date().toISOString().split('T')[0],
   categoryId: 0,
   familyMemberId: undefined as number | undefined,
@@ -553,6 +553,16 @@ const form = reactive({
   isRecurring: false,
   recurringFrequency: 'BULANAN',
 });
+
+// Helper untuk mengubah tipe transaksi di form dan menyesuaikan categoryId jika tidak cocok
+const setTransactionType = (type: CategoryType) => {
+  if (form.type === type) return;
+  form.type = type;
+  const validCats = categories.value.filter(c => c.type === type);
+  if (!validCats.some(c => c.id === form.categoryId)) {
+    form.categoryId = validCats[0]?.id || 0;
+  }
+};
 
 // Upload Receipt State
 const showUploadModal = ref(false);
@@ -701,7 +711,7 @@ const openCreateModal = () => {
   currentEditingId.value = null;
   form.title = '';
   form.amount = 0;
-  form.type = 'PENGELUARAN';
+  form.type = CategoryType.PENGELUARAN;
   const todayStr = new Date().toISOString().split('T')[0];
   form.transactionDate = todayStr;
   pickerDate.value = new Date();
@@ -718,7 +728,16 @@ const openEditModal = (tx: Transaction) => {
   currentEditingId.value = tx.id;
   form.title = tx.title || tx.description || '';
   form.amount = tx.amount;
-  form.type = tx.type;
+
+  // Normalisasi jenis transaksi agar sinkron dengan enum CategoryType di form
+  const isIncome =
+    tx.type === TransactionType.INCOME ||
+    (tx.type as string) === 'INCOME' ||
+    (tx.type as string) === 'PEMASUKAN' ||
+    tx.category?.type === CategoryType.PEMASUKAN;
+
+  form.type = isIncome ? CategoryType.PEMASUKAN : CategoryType.PENGELUARAN;
+
   const dateStr = tx.transactionDate ? tx.transactionDate.split('T')[0] : '';
   form.transactionDate = dateStr;
   pickerDate.value = dateStr ? new Date(dateStr) : new Date();
@@ -742,7 +761,7 @@ const submitForm = async () => {
 
   saving.value = true;
   try {
-    const txType = (form.type as string) === 'PEMASUKAN' ? TransactionType.INCOME : TransactionType.EXPENSE;
+    const txType = form.type === CategoryType.PEMASUKAN ? TransactionType.INCOME : TransactionType.EXPENSE;
     const payload = {
       description: form.title,
       amount: Number(form.amount),
