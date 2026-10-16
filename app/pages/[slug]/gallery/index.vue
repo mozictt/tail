@@ -11,6 +11,7 @@ import { Trash2, UploadCloud, Film, Image as ImageIcon, ArrowLeft, FolderOpen, L
 import { useSlugRoute } from "@/composables/useSlugRoute";
 import { useWhatsappShare } from "@/composables/useWhatsappShare";
 import { useAuthStore } from "@/stores/auth";
+import { useUploadQueueStore } from "@/stores/uploadQueue";
 
 definePageMeta({
   layout: "admin",
@@ -129,7 +130,18 @@ export interface UploadFileItem {
 }
 
 const auth = useAuthStore();
+const uploadQueue = useUploadQueueStore();
 const config = useRuntimeConfig();
+
+// Pantau jika ada berkas yang selesai diunggah di latar belakang, otomatis perbarui galeri
+watch(
+  () => uploadQueue.successCount,
+  (newVal, oldVal) => {
+    if (newVal > (oldVal || 0)) {
+      refreshGalleries();
+    }
+  }
+);
 
 const showUploadModal = ref(false);
 const uploadLoading = ref(false);
@@ -1295,7 +1307,7 @@ const uploadSingleItem = async (item: UploadFileItem): Promise<boolean> => {
   });
 };
 
-const submitUpload = async () => {
+const submitUpload = () => {
   const itemsToUpload = uploadItems.value.filter(
     (item) => item.status === 'pending' || item.status === 'failed'
   );
@@ -1310,38 +1322,13 @@ const submitUpload = async () => {
     return;
   }
 
-  uploadLoading.value = true;
-  console.log(`[Batch Upload Start] Memulai batch upload untuk ${itemsToUpload.length} berkas.`);
+  // Daftarkan semua berkas ke Pinia Background Queue Store
+  const files = itemsToUpload.map((item) => item.file);
+  uploadQueue.addFilesToQueue(files, uploadAlbumId.value);
+  uploadQueue.isWidgetOpen = true; // Munculkan popover detail unggahan di pojok kanan bawah
 
-  const CONCURRENCY_LIMIT = 2;
-  const queue = [...itemsToUpload];
-
-  const worker = async () => {
-    while (queue.length > 0) {
-      const item = queue.shift();
-      if (item) {
-        await uploadSingleItem(item);
-      }
-    }
-  };
-
-  const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, itemsToUpload.length) }, () => worker());
-  await Promise.all(workers);
-
-  uploadLoading.value = false;
-
-  const updatedFailed = uploadItems.value.filter((i) => i.status === 'failed').length;
-  const updatedSuccess = uploadItems.value.filter((i) => i.status === 'success').length;
-
-  console.log(`[Batch Upload Finished] Hasil batch: ${updatedSuccess} Berhasil, ${updatedFailed} Gagal.`);
-
-  if (updatedFailed === 0) {
-    showToast(`Berhasil mengunggah ${updatedSuccess} file`, "success");
-    refreshGalleries();
-  } else {
-    showToast(`${updatedSuccess} file berhasil, ${updatedFailed} file gagal diunggah. Silakan klik 'Coba Lagi'`, "warning");
-    refreshGalleries();
-  }
+  showToast(`${files.length} file ditambahkan ke antrean unggah latar belakang`, "info");
+  closeUploadModal();
 };
 
 const retrySingleItem = async (item: UploadFileItem) => {
@@ -2383,15 +2370,15 @@ onMounted(() => {
               Coba Lagi ({{ failedUploadsCount }} File Gagal)
             </button>
 
-            <!-- Submit Upload Button -->
+            <!-- Submit Upload Button (Background Processing) -->
             <button 
               v-else 
               class="btn btn-primary rounded-xl font-bold px-6 shadow-md shadow-primary/25 hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-xs" 
               @click="submitUpload" 
-              :disabled="uploadLoading || uploadItems.length === 0 || pendingOrFailedUploadsCount === 0"
+              :disabled="uploadItems.length === 0 || pendingOrFailedUploadsCount === 0"
             >
-              <span v-if="uploadLoading" class="loading loading-spinner loading-xs"></span>
-              {{ uploadLoading ? `Mengunggah (${successUploadsCount}/${totalUploadsCount})...` : `Unggah Sekarang (${pendingOrFailedUploadsCount} File)` }}
+              <UploadCloud class="w-4 h-4" />
+              Unggah di Latar Belakang ({{ pendingOrFailedUploadsCount }} Berkas)
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import * as icons from "lucide-vue-next";
 import Sidebar from "@/components/Sidebar.vue"; 
+import GlobalUploadWidget from "@/components/ui/GlobalUploadWidget.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
 import Swal from "sweetalert2";
@@ -108,6 +109,9 @@ const handleLogout = async () => {
     <WhatsappNotificationListener />
     <WhatsappContactSelectorModal />
     <GlobalWhatsappChatModal />
+
+    <!-- Global Background Upload Widget -->
+    <GlobalUploadWidget />
   </div>
 </template>
 
