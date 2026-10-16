@@ -233,8 +233,8 @@
     <!-- Modal Form Create/Edit Transaksi -->
     <Teleport to="body">
       <input type="checkbox" class="modal-toggle" :checked="showModal" />
-      <div v-if="showModal" class="modal modal-open backdrop-blur-md bg-slate-950/40" @click.self="!saving && closeModal()">
-        <div class="modal-box rounded-3xl max-w-lg bg-base-100 border border-base-content/10 p-6 shadow-2xl relative text-base-content">
+      <div v-if="showModal" class="modal modal-open modal-bottom sm:modal-middle backdrop-blur-md bg-slate-950/40" @click.self="!saving && closeModal()">
+        <div class="modal-box rounded-t-3xl sm:rounded-3xl max-w-lg bg-base-100 border border-base-content/10 p-5 sm:p-6 shadow-2xl relative text-base-content max-h-[90dvh] overflow-y-auto">
           <button type="button" class="btn btn-sm btn-circle btn-ghost absolute top-4 right-4 text-base-content/40 hover:text-error transition" @click="closeModal">
             ✕
           </button>
@@ -277,7 +277,7 @@
               <UiInputAutocomplete
                 v-model="form.title"
                 :fetch-suggestions="fetchTitleSuggestions"
-                @select="onSuggestionSelected"
+                @select="onSuggestionSelected"  
                 required
                 placeholder="Contoh: Belanja Bulanan Supermarket"
                 input-class="input input-bordered input-sm rounded-xl w-full"

@@ -21,6 +21,9 @@ const props = withDefaults(
     labelKey?: string;
     minChars?: number;
     debounceMs?: number;
+    allowCustom?: boolean;           // Default: true (Izinkan teks kustom/bebas)
+    mustSelectExisting?: boolean;    // Default: false (Wajib memilih pilihan yang ada)
+    emptyText?: string;
     fetchSuggestions?: (query: string) => Promise<SuggestionOption[]>;
   }>(),
   {
@@ -32,6 +35,9 @@ const props = withDefaults(
     labelKey: 'description',
     minChars: 0,
     debounceMs: 300,
+    allowCustom: true,
+    mustSelectExisting: false,
+    emptyText: 'Pilihan tidak ditemukan',
   }
 );
 
@@ -48,6 +54,25 @@ const isOpen = ref(false);
 const loading = ref(false);
 const options = ref<SuggestionOption[]>([]);
 const highlightedIndex = ref(-1);
+const lastValidSelection = ref<string>('');
+
+// Status apakah wajib memilih dari pilihan yang ada
+const isStrictSelection = computed(() => {
+  return props.mustSelectExisting === true || props.allowCustom === false;
+});
+
+// Watch modelValue untuk inisialisasi lastValidSelection
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (!val) {
+      lastValidSelection.value = '';
+    } else if (!lastValidSelection.value) {
+      lastValidSelection.value = val;
+    }
+  },
+  { immediate: true }
+);
 
 let debounceTimer: any = null;
 
@@ -101,11 +126,63 @@ const onFocus = () => {
   if (options.value.length === 0) {
     loadSuggestions(props.modelValue || '');
   }
+  // Berikan jeda agar virtual keyboard mobile selesai membuka viewport, lalu scroll ke area pandang yang nyaman
+  setTimeout(() => {
+    inputRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 250);
+};
+
+// Handler saat input kehilangan fokus (blur)
+const onBlur = () => {
+  // Beri sedikit jeda agar pemilihan klik item di dropdown sempat tertrigger
+  setTimeout(() => {
+    if (isStrictSelection.value) {
+      const currentVal = (props.modelValue || '').trim().toLowerCase();
+      if (!currentVal) {
+        lastValidSelection.value = '';
+        return;
+      }
+      // Cek apakah teks yang diketik persis cocok dengan salah satu pilihan yang tersedia
+      const matched = options.value.find(
+        opt => getItemLabel(opt).trim().toLowerCase() === currentVal
+      );
+      if (matched) {
+        const exactLabel = getItemLabel(matched);
+        lastValidSelection.value = exactLabel;
+        emit('update:modelValue', exactLabel);
+        emit('select', matched);
+      } else {
+        // Jika wajib pilih dari yang ada dan tidak cocok, kembalikan ke pilihan valid sebelumnya atau kosongkan
+        emit('update:modelValue', lastValidSelection.value || '');
+        if (!lastValidSelection.value) {
+          emit('clear');
+        }
+      }
+    }
+  }, 250);
+};
+
+// Deteksi apakah teks input sudah persis ada di riwayat opsi
+const hasExactMatch = computed(() => {
+  const query = (props.modelValue || '').trim().toLowerCase();
+  if (!query) return false;
+  return options.value.some(opt => getItemLabel(opt).trim().toLowerCase() === query);
+});
+
+// Handler saat pengguna memilih teks kustom manual (hanya jika allowCustom)
+const selectCustomText = (text: string) => {
+  if (isStrictSelection.value) return;
+  lastValidSelection.value = text;
+  emit('update:modelValue', text);
+  isOpen.value = false;
+  highlightedIndex.value = -1;
+  inputRef.value?.blur();
 };
 
 // Handler pemilihan item dari dropdown
 const selectOption = (item: SuggestionOption) => {
   const label = getItemLabel(item);
+  lastValidSelection.value = label;
   emit('update:modelValue', label);
   emit('select', item);
   isOpen.value = false;
@@ -114,6 +191,7 @@ const selectOption = (item: SuggestionOption) => {
 
 // Bersihkan input
 const clearInput = () => {
+  lastValidSelection.value = '';
   emit('update:modelValue', '');
   emit('clear');
   options.value = [];
@@ -148,8 +226,24 @@ const onKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       selectOption(options.value[highlightedIndex.value]);
     } else {
-      // Jika menekan enter tanpa memilih opsi, biarkan ketikan manual tersimpan dan tutup dropdown
-      isOpen.value = false;
+      e.preventDefault();
+      if (!isStrictSelection.value && props.modelValue && props.modelValue.trim()) {
+        selectCustomText(props.modelValue.trim());
+      } else if (isStrictSelection.value) {
+        // Jika wajib pilih, periksa apakah teks cocok eksak dengan salah satu opsi
+        const current = (props.modelValue || '').trim().toLowerCase();
+        const exact = options.value.find(
+          opt => getItemLabel(opt).trim().toLowerCase() === current
+        );
+        if (exact) {
+          selectOption(exact);
+        } else {
+          emit('update:modelValue', lastValidSelection.value || '');
+          isOpen.value = false;
+        }
+      } else {
+        isOpen.value = false;
+      }
     }
   } else if (e.key === 'Escape') {
     isOpen.value = false;
@@ -157,8 +251,8 @@ const onKeyDown = (e: KeyboardEvent) => {
   }
 };
 
-// Click outside handler
-const handleClickOutside = (e: MouseEvent) => {
+// Outside click / touch handler untuk desktop & mobile
+const handleOutsideInteraction = (e: Event) => {
   if (containerRef.value && !containerRef.value.contains(e.target as Node)) {
     isOpen.value = false;
     highlightedIndex.value = -1;
@@ -166,11 +260,11 @@ const handleClickOutside = (e: MouseEvent) => {
 };
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
+  document.addEventListener('pointerdown', handleOutsideInteraction);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('pointerdown', handleOutsideInteraction);
   clearTimeout(debounceTimer);
 });
 </script>
@@ -184,6 +278,7 @@ onUnmounted(() => {
         :value="modelValue"
         @input="onInput"
         @focus="onFocus"
+        @blur="onBlur"
         @keydown="onKeyDown"
         :placeholder="placeholder"
         :required="required"
@@ -249,16 +344,43 @@ onUnmounted(() => {
         v-if="isOpen && (options.length > 0 || loading || modelValue.trim().length > 0)"
         class="absolute left-0 right-0 top-full mt-1.5 z-[100] bg-base-100 border border-base-content/10 rounded-2xl shadow-xl overflow-hidden max-h-64 flex flex-col backdrop-blur-md"
       >
-        <!-- Header Info -->
-        <div class="px-3.5 py-1.5 bg-base-200/50 border-b border-base-content/5 flex items-center justify-between text-[11px] font-medium text-base-content/60">
-          <span>Pilih riwayat transaksi atau ketik manual</span>
-          <span v-if="options.length > 0" class="badge badge-xs badge-ghost font-mono">
-            {{ options.length }} saran
-          </span>
+        <!-- Header Info & Tombol Tutup -->
+        <div class="px-3.5 py-1.5 bg-base-200/60 border-b border-base-content/5 flex items-center justify-between text-[11px] font-medium text-base-content/60">
+          <div class="flex items-center gap-1.5">
+            <span>{{ isStrictSelection ? 'Wajib Pilih Opsi' : 'Pilihan Riwayat' }}</span>
+            <span v-if="options.length > 0" class="badge badge-xs badge-ghost font-mono">
+              {{ options.length }}
+            </span>
+          </div>
+          <button
+            type="button"
+            @click.stop="isOpen = false"
+            class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 h-6 min-h-0 px-2 rounded-lg font-semibold flex items-center gap-1"
+          >
+            <span>Tutup</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <!-- Options List -->
-        <ul class="overflow-y-auto p-1 divide-y divide-base-content/5 max-h-52 scrollbar-thin">
+        <ul class="overflow-y-auto p-1.5 divide-y divide-base-content/5 max-h-52 scrollbar-thin">
+          <!-- Custom Creatable Option (Hanya jika allowCustom dan tidak wajib pilih) -->
+          <li
+            v-if="!isStrictSelection && modelValue.trim() && !hasExactMatch && !loading"
+            @click="selectCustomText(modelValue.trim())"
+            class="px-3 py-2.5 rounded-xl cursor-pointer transition bg-primary/10 hover:bg-primary/20 text-primary font-semibold flex items-center justify-between border-b border-base-content/10 mb-1 active:scale-[0.99]"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-bold text-sm shrink-0">+</span>
+              <span class="text-xs truncate">Gunakan Kustom: "{{ modelValue.trim() }}"</span>
+            </div>
+            <span class="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-md font-bold shrink-0">
+              Pilih / Enter ↵
+            </span>
+          </li>
+
           <!-- Suggestion Items -->
           <li
             v-for="(item, idx) in options"
@@ -299,20 +421,22 @@ onUnmounted(() => {
 
           <!-- Empty Suggestions State -->
           <li
-            v-if="!loading && options.length === 0 && modelValue.trim().length > 0"
-            class="px-3.5 py-4 text-center text-xs text-base-content/60 space-y-1"
+            v-if="!loading && options.length === 0"
+            class="px-3.5 py-4 text-center text-xs space-y-1"
           >
-            <div class="text-base-content/40 text-[13px]">✨ Judul Baru</div>
-            <div>
-              Gunakan teks manual:
-              <strong class="text-base-content font-semibold">"{{ modelValue }}"</strong>
+            <div class="text-base-content/40 text-sm">🔍</div>
+            <div v-if="isStrictSelection && modelValue.trim()" class="text-error font-medium">
+              Pilihan tidak ditemukan. Wajib memilih opsi yang tersedia.
+            </div>
+            <div v-else class="text-base-content/50">
+              {{ emptyText }}
             </div>
           </li>
 
           <!-- Loading State Inside Dropdown -->
           <li v-if="loading && options.length === 0" class="px-3.5 py-5 text-center text-xs text-base-content/50 flex flex-col items-center gap-2">
             <span class="loading loading-spinner loading-sm text-primary"></span>
-            <span>Mencari riwayat transaksi...</span>
+            <span>Mencari pilihan...</span>
           </li>
         </ul>
       </div>
