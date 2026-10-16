@@ -111,6 +111,38 @@ export const GalleryService = () => {
     }
   };
 
+  const uploadChunk = async (
+    chunk: Blob,
+    uploadId: string,
+    chunkIndex: number,
+    totalChunks: number,
+    fileName: string,
+    totalSize: number,
+    albumId?: string
+  ) => {
+    try {
+      const formData = new FormData();
+      formData.append("chunk", chunk);
+      formData.append("uploadId", uploadId);
+      formData.append("chunkIndex", String(chunkIndex));
+      formData.append("totalChunks", String(totalChunks));
+      formData.append("fileName", fileName);
+      formData.append("totalSize", String(totalSize));
+      if (albumId) {
+        formData.append("albumId", albumId);
+      }
+
+      const res = await api("/gallery/upload-chunk", {
+        method: "POST",
+        body: formData,
+      });
+      return handleResponse(res);
+    } catch (err) {
+      console.error("uploadChunk error:", err);
+      throw err;
+    }
+  };
+
   const updateGallery = async (id: string, payload: Partial<Gallery>) => {
     try {
       const res = await api(`/gallery/${id}`, {
@@ -204,6 +236,7 @@ export const GalleryService = () => {
     getGalleries,
     getGalleryById,
     uploadBulk,
+    uploadChunk,
     updateGallery,
     deleteGallery,
     deleteBulk,

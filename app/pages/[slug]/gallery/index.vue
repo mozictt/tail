@@ -393,7 +393,11 @@ const closeUploadModal = () => {
 };
 
 const MAX_UPLOAD_BATCH_LIMIT = 100; // Limit per upload batch (maksimal 100 file)
-const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // Limit per file (500 MB)
+// Chunked Upload: Berkas dipotong menjadi 10MB per part agar aman dari hard limit 100MB Cloudflare Tunnel Free
+const CHUNK_SIZE_MB = 10;
+const CHUNK_SIZE_BYTES = CHUNK_SIZE_MB * 1024 * 1024; // 10 MB per potongan
+const MAX_FILE_SIZE_MB = 500; // Maksimal ukuran berkas 500 MB didukung via Chunked Upload
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // 500 MB
 const ALLOWED_MIME_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "image/jfif", "image/heic", "image/heif", "image/avif", "image/pjpeg", "image/x-png",
   "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/avi", "application/octet-stream"
@@ -952,7 +956,7 @@ const processIncomingFiles = (incoming: File[]) => {
     showToast(`Maksimal ${MAX_UPLOAD_BATCH_LIMIT} file per unggahan. ${limitExceededCount} file dilewati.`, "warning");
   }
   if (oversizedCount > 0) {
-    showToast(`${oversizedCount} file melebihi batas maksimal 500MB`, "error");
+    showToast(`${oversizedCount} file melebihi batas maksimal ${MAX_FILE_SIZE_MB}MB`, "error");
   }
   if (invalidTypeCount > 0) {
     showToast(`${invalidTypeCount} file diabaikan karena format tidak didukung`, "warning");
@@ -1004,12 +1008,194 @@ const refreshGalleries = () => {
   }
 };
 
-const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
-  return new Promise((resolve) => {
-    item.status = 'uploading';
-    item.progress = 0;
-    item.errorMsg = undefined;
+/**
+ * Helper untuk mengunggah 1 potongan berkas (Chunk) ke server via API upload-chunk
+ */
+const uploadSingleChunk = (
+  chunkBlob: Blob,
+  uploadId: string,
+  chunkIndex: number,
+  totalChunks: number,
+  fileName: string,
+  totalSize: number,
+  albumId?: string,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("chunk", chunkBlob);
+    formData.append("uploadId", uploadId);
+    formData.append("chunkIndex", String(chunkIndex));
+    formData.append("totalChunks", String(totalChunks));
+    formData.append("fileName", fileName);
+    formData.append("totalSize", String(totalSize));
+    if (albumId) {
+      formData.append("albumId", albumId);
+    }
 
+    const STALL_TIMEOUT_MS = 60000;
+    const SERVER_PROCESS_TIMEOUT_MS = 90000;
+    let timer: any = null;
+
+    const resetTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        xhr.abort();
+        reject(new Error(`Timeout pengiriman data pada potongan ${chunkIndex + 1}/${totalChunks}`));
+      }, STALL_TIMEOUT_MS);
+    };
+
+    const startWaitTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        xhr.abort();
+        reject(new Error(`Server/Cloudflare tidak merespons pada potongan ${chunkIndex + 1}/${totalChunks}`));
+      }, SERVER_PROCESS_TIMEOUT_MS);
+    };
+
+    resetTimer();
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        if (onProgress) onProgress(e.loaded, e.total);
+        if (e.loaded >= e.total) {
+          startWaitTimer();
+        } else {
+          resetTimer();
+        }
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      if (timer) clearTimeout(timer);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          resolve(resp);
+        } catch {
+          resolve({ success: true });
+        }
+      } else {
+        let msg = `Gagal pada potongan ${chunkIndex + 1} (HTTP ${xhr.status})`;
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          msg = resp?.message?.message || resp?.message || msg;
+        } catch {
+          if (xhr.status === 413) {
+            msg = `Potongan ${chunkIndex + 1} ditolak Cloudflare (HTTP 413)`;
+          } else if (xhr.status === 524) {
+            msg = `Cloudflare Timeout pada potongan ${chunkIndex + 1} (HTTP 524)`;
+          }
+        }
+        reject(new Error(msg));
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      if (timer) clearTimeout(timer);
+      reject(new Error(`Koneksi terputus saat mengunggah potongan ${chunkIndex + 1}`));
+    });
+
+    xhr.addEventListener("abort", () => {
+      if (timer) clearTimeout(timer);
+      reject(new Error(`Unggahan potongan ${chunkIndex + 1} dibatalkan`));
+    });
+
+    const apiUrl = `${config.public.apiBase}/gallery/upload-chunk`;
+    xhr.open("POST", apiUrl, true);
+
+    if (auth.token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`);
+    }
+
+    const targetTenantId = useCookie<string | null>("target_tenant_id").value;
+    if (targetTenantId && auth.isMasterTenant) {
+      xhr.setRequestHeader("X-Target-Tenant-Id", targetTenantId);
+    }
+
+    xhr.send(formData);
+  });
+};
+
+const uploadSingleItem = async (item: UploadFileItem): Promise<boolean> => {
+  // Validasi batas mutlak berkas
+  if (item.file.size > MAX_FILE_SIZE_BYTES) {
+    item.status = 'failed';
+    item.progress = 0;
+    item.errorMsg = `Ukuran berkas (${(item.file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal ${MAX_FILE_SIZE_MB} MB.`;
+    showToast(item.errorMsg, "error");
+    return false;
+  }
+
+  item.status = 'uploading';
+  item.progress = 0;
+  item.errorMsg = undefined;
+
+  // Jika berkas berukuran lebih besar dari CHUNK_SIZE_BYTES (10MB), gunakan Chunked Upload
+  if (item.file.size > CHUNK_SIZE_BYTES) {
+    const totalChunks = Math.ceil(item.file.size / CHUNK_SIZE_BYTES);
+    const uploadId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    pinoLogger.info(`[Chunked Upload] Memulai unggah potongan untuk "${item.name}" (Total ${totalChunks} chunks)`, {
+      fileName: item.name,
+      fileSize: item.size,
+      totalChunks,
+      uploadId,
+    });
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * CHUNK_SIZE_BYTES;
+      const end = Math.min(start + CHUNK_SIZE_BYTES, item.file.size);
+      const chunkBlob = item.file.slice(start, end);
+
+      let success = false;
+      let lastErrorMsg = '';
+      const MAX_RETRIES = 3;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await uploadSingleChunk(
+            chunkBlob,
+            uploadId,
+            chunkIndex,
+            totalChunks,
+            item.name,
+            item.file.size,
+            uploadAlbumId.value,
+            (loaded) => {
+              const overallBytes = (chunkIndex * CHUNK_SIZE_BYTES) + loaded;
+              item.progress = Math.min(99, Math.round((overallBytes * 100) / item.file.size));
+            }
+          );
+          success = true;
+          break;
+        } catch (err: any) {
+          lastErrorMsg = err?.message || 'Kesalahan jaringan';
+          pinoLogger.warn(`[Chunked Upload Retry] Berkas "${item.name}" chunk ${chunkIndex + 1}/${totalChunks} percobaan ${attempt} gagal:`, err);
+          if (attempt < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt)); // Delay backoff
+          }
+        }
+      }
+
+      if (!success) {
+        item.status = 'failed';
+        item.errorMsg = lastErrorMsg;
+        pinoLogger.error(`[Chunked Upload Failed] Berkas "${item.name}" gagal pada chunk ${chunkIndex + 1}/${totalChunks}`, {
+          errorMsg: lastErrorMsg,
+        });
+        return false;
+      }
+    }
+
+    item.status = 'success';
+    item.progress = 100;
+    pinoLogger.info(`[Chunked Upload Success] Berkas "${item.name}" berhasil diunggah utuh via chunking.`);
+    return true;
+  }
+
+  // File kecil (<= 10MB): unggah langsung via upload-bulk
+  return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("files", item.file);
@@ -1017,44 +1203,53 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
       formData.append("albumId", uploadAlbumId.value);
     }
 
-    // Proteksi Timeout Cerdas: HANYA timeout jika TIDAK ADA PROGRES sama sekali selama 60 detik (Stalled Connection)
-    // Selama ada progres data berjalan, timer akan terus di-reset sehingga file besar (hingga 500MB) tidak akan terputus.
-    const STALL_TIMEOUT_MS = 60000; // 60 detik tanpa adanya pergerakan progres
-    let stallTimer: any = null;
+    const STALL_TIMEOUT_MS = 60000;
+    const SERVER_PROCESS_TIMEOUT_MS = 90000;
+    let activeTimer: any = null;
 
     const resetStallTimer = () => {
-      if (stallTimer) clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => {
+      if (activeTimer) clearTimeout(activeTimer);
+      activeTimer = setTimeout(() => {
         item.status = 'failed';
-        item.errorMsg = "Koneksi terhenti (Tidak ada progres unggahan selama 60 detik)";
-        pinoLogger.warn(`[Upload Timeout] Berkas "${item.name}" macet / tidak ada progres selama 60 detik.`, { fileName: item.name });
+        item.errorMsg = "Koneksi terhenti (Tidak ada transmisi data selama 60 detik)";
         xhr.abort();
         resolve(false);
       }, STALL_TIMEOUT_MS);
     };
 
-    const clearStallTimer = () => {
-      if (stallTimer) clearTimeout(stallTimer);
+    const startServerWaitTimer = () => {
+      if (activeTimer) clearTimeout(activeTimer);
+      activeTimer = setTimeout(() => {
+        item.status = 'failed';
+        item.errorMsg = "Server/Cloudflare memerlukan waktu terlalu lama untuk merespons (Batas 90 detik)";
+        xhr.abort();
+        resolve(false);
+      }, SERVER_PROCESS_TIMEOUT_MS);
     };
 
-    // Jalankan timer awal saat transmisi dimulai
+    const clearActiveTimer = () => {
+      if (activeTimer) clearTimeout(activeTimer);
+    };
+
     resetStallTimer();
-    pinoLogger.info(`[Upload Process] Memulai unggah berkas "${item.name}"`, { fileName: item.name, fileSize: item.size, type: item.type });
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
-        item.progress = Math.round((e.loaded * 100) / e.total);
+        const percent = Math.round((e.loaded * 100) / e.total);
+        item.progress = percent;
+        if (percent >= 100) {
+          startServerWaitTimer();
+        } else {
+          resetStallTimer();
+        }
       }
-      // Setiap kali ada bytes yang terkirim (ada progres) -> RESET TIMER!
-      resetStallTimer();
     });
 
     xhr.addEventListener("load", () => {
-      clearStallTimer();
+      clearActiveTimer();
       if (xhr.status >= 200 && xhr.status < 300) {
         item.status = 'success';
         item.progress = 100;
-        pinoLogger.info(`[Upload Success] Berkas "${item.name}" berhasil diunggah.`, { fileName: item.name });
         resolve(true);
       } else {
         item.status = 'failed';
@@ -1065,31 +1260,22 @@ const uploadSingleItem = (item: UploadFileItem): Promise<boolean> => {
         } catch {
           item.errorMsg = `Gagal mengunggah (HTTP ${xhr.status})`;
         }
-        pinoLogger.error(`[Upload Error] Berkas "${item.name}" gagal diunggah (HTTP ${xhr.status})`, {
-          fileName: item.name,
-          fileSize: item.size,
-          status: xhr.status,
-          responseText: xhr.responseText,
-          errorMsg: item.errorMsg
-        });
         resolve(false);
       }
     });
 
     xhr.addEventListener("error", () => {
-      clearStallTimer();
+      clearActiveTimer();
       item.status = 'failed';
-      item.errorMsg = "Koneksi terputus / kesalahan jaringan";
-      pinoLogger.error(`[Upload Network Error] Kesalahan jaringan / koneksi terputus saat mengunggah "${item.name}".`, { fileName: item.name });
+      item.errorMsg = "Koneksi terputus / kesalahan jaringan ke server Cloudflare";
       resolve(false);
     });
 
     xhr.addEventListener("abort", () => {
-      clearStallTimer();
+      clearActiveTimer();
       if (!item.errorMsg) {
         item.errorMsg = "Unggahan dibatalkan";
       }
-      pinoLogger.warn(`[Upload Abort] Berkas "${item.name}" dibatalkan oleh pengguna/sistem.`, { fileName: item.name });
       resolve(false);
     });
 
@@ -1879,7 +2065,7 @@ onMounted(() => {
                 <div class="flex flex-col items-center justify-center pt-4 pb-4 px-4 text-center">
                   <UploadCloud class="w-9 h-9 text-base-content/40 mb-2 transition-transform duration-200" :class="isDragging ? 'scale-110 text-primary' : ''" />
                   <p class="mb-1 text-sm text-base-content/70"><span class="font-semibold text-primary">Klik untuk memilih</span> atau seret file ke sini</p>
-                  <p class="text-xs text-base-content/50">Mendukung Foto (JPG, PNG, WEBP) & Video (MP4, WEBM) maks 500MB (Maks {{ MAX_UPLOAD_BATCH_LIMIT - uploadItems.length }} file lagi)</p>
+                  <p class="text-xs text-base-content/50">Mendukung Foto (JPG, PNG, WEBP) & Video (MP4, WEBM) maks {{ MAX_FILE_SIZE_MB }}MB via Chunked Upload (Maks {{ MAX_UPLOAD_BATCH_LIMIT - uploadItems.length }} file lagi)</p>
                 </div>
                 <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/heic,video/mp4,video/webm,video/quicktime" class="hidden" @change="handleFileSelect" :disabled="uploadLoading" />
               </label>
