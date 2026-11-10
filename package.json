@@ -13,6 +13,7 @@
     "@pinia/nuxt": "^0.11.3",
     "@vuepic/vue-datepicker": "^11.0.0",
     "axios": "^1.11.0",
+    "flatpickr": "^4.6.13",
     "lucide-vue-next": "^0.539.0",
     "nuxt": "^4.0.3",
     "nuxt-icon": "^1.0.0-beta.7",
