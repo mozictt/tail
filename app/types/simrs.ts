@@ -664,6 +664,7 @@ export interface QueryDokterParams {
   search?: string;
   jenisDokter?: JenisDokter | "";
   spesialisasi?: string;
+  unitId?: number;
   status?: MasterStatus | "";
   sortBy?: "id" | "kodeDokter" | "jenisDokter" | "spesialisasi" | "createdAt";
   sortType?: "ASC" | "DESC";

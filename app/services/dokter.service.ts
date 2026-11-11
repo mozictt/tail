@@ -34,6 +34,7 @@ export const DokterService = () => {
       search: params?.search,
       jenisDokter: params?.jenisDokter,
       spesialisasi: params?.spesialisasi,
+      unitId: params?.unitId ? Number(params.unitId) : undefined,
       status: params?.status,
       sortBy: params?.sortBy || "id",
       sortType: params?.sortType || "DESC",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   Building,
   CheckCircle2,
@@ -350,6 +350,27 @@ const clearDokterOrJadwal = () => {
   selectedDokterText.value = "";
 };
 
+const openDokterPicker = () => {
+  if (!selectedUnit.value) {
+    errors.value.unitId = "Pilih Unit Tujuan Pelayanan terlebih dahulu";
+    showToast(
+      "Pilih Unit Tujuan Pelayanan terlebih dahulu sebelum memilih jadwal praktik & dokter",
+      "warning",
+    );
+    return;
+  }
+  showDokterPicker.value = true;
+};
+
+watch(
+  () => visitForm.value.tanggalKunjungan,
+  (nextTanggal) => {
+    if (selectedJadwal.value && selectedJadwal.value.tanggal !== nextTanggal) {
+      clearDokterOrJadwal();
+    }
+  },
+);
+
 const validatePasienSection = (next: Record<string, string | undefined>) => {
   const pf = pasienForm.value;
   if (pf.selectedPasienId) return;
@@ -665,9 +686,11 @@ onMounted(() => {
             </div>
             <span v-else class="text-xs text-base-content/55">
               {{
-                isTargetRajal
-                  ? "Klik tombol Pilih Dokter / Jadwal untuk memilih jadwal praktik & antrean..."
-                  : "Klik tombol Pilih Dokter untuk memilih dokter DPJP atau jadwal praktik..."
+                !selectedUnit
+                  ? "Pilih Unit Tujuan Pelayanan terlebih dahulu agar jadwal praktik &amp; dokter tampil sesuai unit."
+                  : isTargetRajal
+                    ? "Klik tombol Pilih Dokter / Jadwal untuk memilih jadwal praktik &amp; antrean pada unit ini..."
+                    : "Klik tombol Pilih Dokter untuk memilih dokter DPJP / dokter jaga pada unit ini..."
               }}
             </span>
 
@@ -684,7 +707,8 @@ onMounted(() => {
               <button
                 type="button"
                 class="btn btn-primary btn-sm rounded-xl gap-1.5 font-bold"
-                @click="showDokterPicker = true"
+                :disabled="!selectedUnit"
+                @click="openDokterPicker"
               >
                 <Search class="w-3.5 h-3.5" />
                 <span>{{ isTargetRajal ? "Pilih Dokter / Jadwal" : "Pilih Dokter" }}</span>

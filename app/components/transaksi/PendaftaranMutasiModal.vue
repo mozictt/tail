@@ -374,9 +374,11 @@ const handleSubmit = async () => {
                   </div>
                   <span v-else class="text-xs text-base-content/50">
                     {{
-                      isTargetRajal
-                        ? "Belum ada jadwal dokter yang dipilih (klik Pilih Dokter / Jadwal)..."
-                        : "Belum ada dokter DPJP yang dipilih..."
+                      !selectedUnit
+                        ? "Pilih Unit Tujuan terlebih dahulu agar jadwal praktik &amp; dokter tampil sesuai unit."
+                        : isTargetRajal
+                          ? "Belum ada jadwal dokter yang dipilih (klik Pilih Jadwal / Dokter)..."
+                          : "Belum ada dokter DPJP yang dipilih..."
                     }}
                   </span>
 
@@ -392,6 +394,7 @@ const handleSubmit = async () => {
                     <button
                       type="button"
                       class="btn btn-primary btn-sm rounded-xl gap-1.5 font-bold"
+                      :disabled="!selectedUnit"
                       @click="showDokterPicker = true"
                     >
                       <Search class="w-3.5 h-3.5" />

@@ -67,6 +67,7 @@ const activeTab = ref<"jadwal" | "dokter">("jadwal");
 const searchQuery = ref("");
 const sesiFilter = ref<SesiPraktik | "">("");
 const jenisDokterFilter = ref<JenisDokter | "">("");
+const filterByUnitDokter = ref(true);
 
 const jadwalList = ref<JadwalDokterTersediaItem[]>([]);
 const jadwalLoading = ref(false);
@@ -93,15 +94,19 @@ const forceDokterOnly = computed(() =>
 );
 
 const showTabSwitcher = computed(
-  () => !forceJadwalOnly.value && !forceDokterOnly.value,
+  () => Boolean(props.unit) && !forceJadwalOnly.value && !forceDokterOnly.value,
 );
 
 const loadSchedules = async () => {
+  if (!props.unit?.id) {
+    jadwalList.value = [];
+    return;
+  }
   jadwalLoading.value = true;
   try {
     jadwalList.value = await pendaftaranService.getJadwalDokterTersedia({
       tanggal: props.tanggal || undefined,
-      unitId: props.unit?.id,
+      unitId: props.unit.id,
       sesi: sesiFilter.value,
       jenisPenjamin: (props.jenisPenjamin as JenisPenjamin) || undefined,
       search: searchQuery.value.trim(),
@@ -115,6 +120,12 @@ const loadSchedules = async () => {
 };
 
 const loadDokter = async () => {
+  if (!props.unit?.id) {
+    dokterList.value = [];
+    dokterTotalItems.value = 0;
+    dokterTotalPages.value = 1;
+    return;
+  }
   dokterLoading.value = true;
   try {
     const res = await dokterService.getDokter({
@@ -122,6 +133,7 @@ const loadDokter = async () => {
       limit: dokterLimit.value,
       search: searchQuery.value.trim(),
       jenisDokter: jenisDokterFilter.value,
+      unitId: filterByUnitDokter.value ? props.unit.id : undefined,
       status: "Y",
       sortBy: "kodeDokter",
       sortType: "ASC",
@@ -141,6 +153,13 @@ const loadDokter = async () => {
 };
 
 const refreshActiveTab = () => {
+  if (!props.unit?.id) {
+    jadwalList.value = [];
+    dokterList.value = [];
+    dokterTotalItems.value = 0;
+    dokterTotalPages.value = 1;
+    return;
+  }
   if (activeTab.value === "jadwal") {
     loadSchedules();
   } else {
@@ -155,6 +174,7 @@ watch(
     searchQuery.value = "";
     sesiFilter.value = "";
     jenisDokterFilter.value = "";
+    filterByUnitDokter.value = true;
     dokterPage.value = 1;
     if (forceDokterOnly.value || unitLayanan.value === JenisLayananPendaftaran.IGD) {
       activeTab.value = "dokter";
@@ -164,6 +184,21 @@ watch(
     refreshActiveTab();
   },
   { immediate: true },
+);
+
+watch(
+  () => [props.unit?.id, props.tanggal, props.jenisPenjamin],
+  () => {
+    if (!props.show) return;
+    filterByUnitDokter.value = true;
+    dokterPage.value = 1;
+    if (forceDokterOnly.value || unitLayanan.value === JenisLayananPendaftaran.IGD) {
+      activeTab.value = "dokter";
+    } else {
+      activeTab.value = "jadwal";
+    }
+    refreshActiveTab();
+  },
 );
 
 watch(activeTab, () => {
@@ -180,7 +215,7 @@ watch(searchQuery, () => {
   }, 350);
 });
 
-watch([sesiFilter, jenisDokterFilter], () => {
+watch([sesiFilter, jenisDokterFilter, filterByUnitDokter], () => {
   if (!props.show) return;
   dokterPage.value = 1;
   refreshActiveTab();
@@ -288,7 +323,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Search & Filter -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
+        <div v-if="unit" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
           <div class="relative sm:col-span-2">
             <Search class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-base-content/40" />
             <input
@@ -332,8 +367,20 @@ onUnmounted(() => {
 
         <!-- Body -->
         <div class="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-3">
+          <!-- WAJIB PILIH UNIT TERLEBIH DAHULU -->
+          <div
+            v-if="!unit"
+            class="py-12 px-4 text-center rounded-2xl bg-amber-500/10 border border-dashed border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs space-y-1.5"
+          >
+            <AlertCircle class="w-7 h-7 mx-auto mb-1" />
+            <p class="font-bold text-sm">Unit tujuan pelayanan belum dipilih</p>
+            <p>
+              Silakan pilih Unit / Poliklinik / Bangsal terlebih dahulu agar jadwal praktik dan dokter yang tampil sesuai unit.
+            </p>
+          </div>
+
           <!-- TAB JADWAL PRAKTIK -->
-          <template v-if="activeTab === 'jadwal'">
+          <template v-else-if="activeTab === 'jadwal'">
             <div v-if="jadwalLoading" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div v-for="i in 4" :key="i" class="h-28 rounded-2xl bg-base-200 animate-pulse"></div>
             </div>
@@ -345,7 +392,7 @@ onUnmounted(() => {
               <AlertCircle class="w-7 h-7 mx-auto mb-1" />
               <p class="font-bold text-sm">Tidak ada jadwal praktik aktif yang tersedia</p>
               <p>
-                Pastikan dokter & poliklinik sudah memiliki jadwal aktif pada hari kunjungan yang dipilih.
+                Pastikan dokter pada unit <strong>{{ unit.nama }}</strong> sudah memiliki jadwal aktif pada hari kunjungan yang dipilih.
               </p>
             </div>
 
@@ -430,15 +477,48 @@ onUnmounted(() => {
 
           <!-- TAB DAFTAR DOKTER DPJP -->
           <template v-else>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-xl bg-base-200/40 border border-base-content/10 text-xs">
+              <span class="text-base-content/75">
+                <template v-if="filterByUnitDokter">
+                  Menampilkan dokter yang memiliki jadwal praktik aktif pada unit
+                  <strong class="text-base-content">{{ unit.nama }}</strong>.
+                </template>
+                <template v-else>
+                  Menampilkan seluruh dokter aktif rumah sakit (lintas unit).
+                </template>
+              </span>
+              <label class="inline-flex items-center gap-2 cursor-pointer font-semibold shrink-0">
+                <input
+                  v-model="filterByUnitDokter"
+                  type="checkbox"
+                  class="checkbox checkbox-xs checkbox-primary"
+                />
+                <span>Filter sesuai unit</span>
+              </label>
+            </div>
+
             <div v-if="dokterLoading" class="space-y-2.5">
               <div v-for="i in 5" :key="i" class="h-16 rounded-xl bg-base-200 animate-pulse"></div>
             </div>
 
             <div
               v-else-if="dokterList.length === 0"
-              class="py-12 px-4 text-center rounded-2xl bg-base-200/25 border border-dashed border-base-content/15 text-xs text-base-content/60"
+              class="py-12 px-4 text-center rounded-2xl bg-base-200/25 border border-dashed border-base-content/15 text-xs text-base-content/60 space-y-3"
             >
-              Dokter aktif tidak ditemukan dengan kata kunci tersebut.
+              <p v-if="filterByUnitDokter">
+                Belum ada dokter yang terjadwal pada unit <strong>{{ unit.nama }}</strong>.
+              </p>
+              <p v-else>
+                Dokter aktif tidak ditemukan dengan kata kunci tersebut.
+              </p>
+              <button
+                v-if="filterByUnitDokter"
+                type="button"
+                class="btn btn-outline btn-primary btn-xs rounded-xl font-bold"
+                @click="filterByUnitDokter = false"
+              >
+                Tampilkan Semua Dokter Aktif (Lintas Unit)
+              </button>
             </div>
 
             <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
