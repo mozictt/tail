@@ -213,6 +213,24 @@ span.flatpickr-weekday {
   color: #ffffff !important;
 }
 
+.flatpickr-time {
+  background: var(--fallback-b1, oklch(var(--b1) / 1)) !important;
+  border-top: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.1)) !important;
+}
+
+.flatpickr-time input,
+.flatpickr-time .flatpickr-time-separator,
+.flatpickr-time .flatpickr-am-pm {
+  color: var(--fallback-bc, oklch(var(--bc) / 1)) !important;
+}
+
+.flatpickr-time input:hover,
+.flatpickr-time .flatpickr-am-pm:hover,
+.flatpickr-time input:focus,
+.flatpickr-time .flatpickr-am-pm:focus {
+  background: var(--fallback-b2, oklch(var(--b2) / 1)) !important;
+}
+
 
 
 

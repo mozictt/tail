@@ -118,6 +118,23 @@ export enum StatusKetersediaanBed {
   PERBAIKAN = "PERBAIKAN",
 }
 
+export enum HariPraktik {
+  SENIN = "SENIN",
+  SELASA = "SELASA",
+  RABU = "RABU",
+  KAMIS = "KAMIS",
+  JUMAT = "JUMAT",
+  SABTU = "SABTU",
+  MINGGU = "MINGGU",
+}
+
+export enum SesiPraktik {
+  PAGI = "PAGI",
+  SIANG = "SIANG",
+  SORE = "SORE",
+  MALAM = "MALAM",
+}
+
 export interface SelectOption<T = string> {
   value: T;
   label: string;
@@ -249,6 +266,23 @@ export function isBedCapableUnitType(jenisUnit: JenisUnit): boolean {
   return BED_CAPABLE_UNIT_TYPES.has(jenisUnit);
 }
 
+export const HARI_PRAKTIK_OPTIONS: SelectOption<HariPraktik>[] = [
+  { value: HariPraktik.SENIN, label: "Senin" },
+  { value: HariPraktik.SELASA, label: "Selasa" },
+  { value: HariPraktik.RABU, label: "Rabu" },
+  { value: HariPraktik.KAMIS, label: "Kamis" },
+  { value: HariPraktik.JUMAT, label: "Jumat" },
+  { value: HariPraktik.SABTU, label: "Sabtu" },
+  { value: HariPraktik.MINGGU, label: "Minggu" },
+];
+
+export const SESI_PRAKTIK_OPTIONS: SelectOption<SesiPraktik>[] = [
+  { value: SesiPraktik.PAGI, label: "Pagi" },
+  { value: SesiPraktik.SIANG, label: "Siang" },
+  { value: SesiPraktik.SORE, label: "Sore" },
+  { value: SesiPraktik.MALAM, label: "Malam" },
+];
+
 /* =========================
    FORMATTER HELPERS
 ========================= */
@@ -315,6 +349,68 @@ export function getJenisPenjaminBadgeClass(jenis?: string | null): string {
     default:
       return "bg-base-200 text-base-content/70 border-base-content/15";
   }
+}
+
+export function getHariPraktikBadgeClass(hari?: string | null): string {
+  switch (hari) {
+    case HariPraktik.SENIN:
+    case HariPraktik.SELASA:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    case HariPraktik.RABU:
+    case HariPraktik.KAMIS:
+      return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25";
+    case HariPraktik.JUMAT:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case HariPraktik.SABTU:
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+    case HariPraktik.MINGGU:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getSesiPraktikBadgeClass(sesi?: string | null): string {
+  switch (sesi) {
+    case SesiPraktik.PAGI:
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+    case SesiPraktik.SIANG:
+      return "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25";
+    case SesiPraktik.SORE:
+      return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25";
+    case SesiPraktik.MALAM:
+      return "bg-slate-600/15 text-slate-700 dark:text-slate-300 border-slate-500/30";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function parseJamKeMenit(jam?: string | null): number | null {
+  if (!jam || typeof jam !== "string") return null;
+  const normalized = jam.trim().slice(0, 5);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalized)) return null;
+  const [hours, minutes] = normalized.split(":").map(Number);
+  if (hours === undefined || minutes === undefined) return null;
+  return hours * 60 + minutes;
+}
+
+export function hitungDurasiSesiMenit(
+  jamMulai?: string | null,
+  jamSelesai?: string | null,
+): number | null {
+  const mulai = parseJamKeMenit(jamMulai);
+  const selesai = parseJamKeMenit(jamSelesai);
+  if (mulai === null || selesai === null || selesai <= mulai) return null;
+  return selesai - mulai;
+}
+
+export function formatDurasiMenitLabel(totalMenit?: number | null): string {
+  if (!totalMenit || totalMenit <= 0) return "-";
+  const jam = Math.floor(totalMenit / 60);
+  const menit = totalMenit % 60;
+  if (jam > 0 && menit > 0) return `${jam} jam ${menit} mnt`;
+  if (jam > 0) return `${jam} jam`;
+  return `${menit} menit`;
 }
 
 export function calculateAgeLabel(tanggalLahir?: string | null): string {
@@ -1007,4 +1103,597 @@ export interface QueryBedParams {
   status?: MasterStatus | "";
   sortBy?: "id" | "kode" | "nama" | "namaKamar" | "statusKetersediaan" | "createdAt";
   sortType?: "ASC" | "DESC";
+}
+
+/* =========================
+   JADWAL DOKTER TYPES
+========================= */
+export interface JadwalDokterDokterSummary {
+  id: number;
+  kodeDokter: string;
+  gelarDepan?: string | null;
+  gelarBelakang?: string | null;
+  namaTampilan?: string;
+  jenisDokter: JenisDokter;
+  spesialisasi?: string | null;
+  kodeBpjs?: string | null;
+  ihsPractitionerId?: string | null;
+  status?: MasterStatus;
+  penduduk?: {
+    id: number;
+    namaLengkap: string;
+  } | null;
+}
+
+export interface JadwalDokterUnitSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisUnit: JenisUnit;
+  kodeBpjsPoli?: string | null;
+  ihsLocationId?: string | null;
+  status?: MasterStatus;
+}
+
+export interface JadwalDokterItem {
+  id: number;
+  dokterId: number;
+  dokter?: JadwalDokterDokterSummary | null;
+  unitId: number;
+  unit?: JadwalDokterUnitSummary | null;
+  hari: HariPraktik;
+  hariLabel?: string;
+  hariUrutan?: number | null;
+  kodeHariBpjs?: number | null;
+  jamMulai: string;
+  jamSelesai: string;
+  sesi?: SesiPraktik | null;
+  ruangan?: string | null;
+  kuotaJkn: number;
+  kuotaNonJkn: number;
+  kuotaTotal: number;
+  durasiPerPasien?: number | null;
+  estimasiSlot?: number | null;
+  kodeJadwalBpjs?: string | null;
+  ihsScheduleId?: string | null;
+  keterangan?: string | null;
+  status: MasterStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface JadwalDokterWeeklyGroup {
+  hari: HariPraktik;
+  label: string;
+  urutan: number;
+  kodeBpjs: number;
+  totalJadwal: number;
+  items: JadwalDokterItem[];
+}
+
+export interface BaseJadwalDokterPayload {
+  dokterId: number;
+  unitId: number;
+  jamMulai: string;
+  jamSelesai: string;
+  sesi?: SesiPraktik;
+  ruangan?: string;
+  kuotaJkn?: number;
+  kuotaNonJkn?: number;
+  kuotaTotal?: number;
+  durasiPerPasien?: number;
+  kodeJadwalBpjs?: string;
+  ihsScheduleId?: string;
+  keterangan?: string;
+  status?: MasterStatus;
+}
+
+export interface CreateJadwalDokterPayload extends BaseJadwalDokterPayload {
+  hari: HariPraktik;
+}
+
+export interface BulkCreateJadwalDokterPayload extends BaseJadwalDokterPayload {
+  hariList: HariPraktik[];
+}
+
+export type UpdateJadwalDokterPayload = Partial<CreateJadwalDokterPayload>;
+
+export interface UpdateStatusJadwalDokterPayload {
+  status: MasterStatus;
+  keterangan?: string;
+}
+
+export type JadwalDokterSortField =
+  | "id"
+  | "hari"
+  | "jamMulai"
+  | "jamSelesai"
+  | "kuotaTotal"
+  | "createdAt";
+
+export interface QueryJadwalDokterParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  dokterId?: number;
+  unitId?: number;
+  hari?: HariPraktik | "";
+  sesi?: SesiPraktik | "";
+  status?: MasterStatus | "";
+  sortBy?: JadwalDokterSortField;
+  sortType?: "ASC" | "DESC";
+}
+
+export interface QueryJadwalDokterOptionsParams {
+  unitId?: number;
+  dokterId?: number;
+  hari?: HariPraktik | "";
+  tanggal?: string;
+  sesi?: SesiPraktik | "";
+  search?: string;
+}
+
+export interface QueryJadwalDokterMingguanParams {
+  unitId?: number;
+  dokterId?: number;
+  sesi?: SesiPraktik | "";
+  search?: string;
+}
+
+/* =========================
+   TRANSAKSI PENDAFTARAN TYPES
+========================= */
+export enum JenisLayananPendaftaran {
+  RAWAT_JALAN = "RAWAT_JALAN",
+  RAWAT_INAP = "RAWAT_INAP",
+  IGD = "IGD",
+  INTENSIVE = "INTENSIVE",
+}
+
+export enum StatusKunjungan {
+  TERDAFTAR = "TERDAFTAR",
+  DALAM_PELAYANAN = "DALAM_PELAYANAN",
+  DIRAWAT = "DIRAWAT",
+  SELESAI = "SELESAI",
+  BATAL = "BATAL",
+}
+
+export enum StatusPenempatanUnit {
+  AKTIF = "AKTIF",
+  SELESAI = "SELESAI",
+  BATAL = "BATAL",
+}
+
+export enum JenisPerpindahanUnit {
+  PENDAFTARAN_AWAL = "PENDAFTARAN_AWAL",
+  MUTASI_RAJAL = "MUTASI_RAJAL",
+  ADMISI_RANAP = "ADMISI_RANAP",
+  MUTASI_RANAP = "MUTASI_RANAP",
+  PINDAH_BED = "PINDAH_BED",
+  GANTI_DPJP = "GANTI_DPJP",
+  BATAL_RANAP = "BATAL_RANAP",
+}
+
+export enum CaraMasukPasien {
+  DATANG_SENDIRI = "DATANG_SENDIRI",
+  RUJUKAN_FKTP = "RUJUKAN_FKTP",
+  RUJUKAN_RS_LAIN = "RUJUKAN_RS_LAIN",
+  IGD = "IGD",
+  KONTROL = "KONTROL",
+  LAINNYA = "LAINNYA",
+}
+
+export enum CaraKeluarPasien {
+  PULANG_SEMBUH = "PULANG_SEMBUH",
+  PULANG_PAKSA = "PULANG_PAKSA",
+  DIRUJUK = "DIRUJUK",
+  MENINGGAL = "MENINGGAL",
+  LAINNYA = "LAINNYA",
+}
+
+export const JENIS_LAYANAN_PENDAFTARAN_OPTIONS: SelectOption<JenisLayananPendaftaran>[] = [
+  { value: JenisLayananPendaftaran.RAWAT_JALAN, label: "Rawat Jalan" },
+  { value: JenisLayananPendaftaran.RAWAT_INAP, label: "Rawat Inap" },
+  { value: JenisLayananPendaftaran.IGD, label: "IGD (Gawat Darurat)" },
+  { value: JenisLayananPendaftaran.INTENSIVE, label: "Intensive (ICU/NICU)" },
+];
+
+export const STATUS_KUNJUNGAN_OPTIONS: SelectOption<StatusKunjungan>[] = [
+  { value: StatusKunjungan.TERDAFTAR, label: "Terdaftar" },
+  { value: StatusKunjungan.DALAM_PELAYANAN, label: "Dalam Pelayanan" },
+  { value: StatusKunjungan.DIRAWAT, label: "Sedang Dirawat" },
+  { value: StatusKunjungan.SELESAI, label: "Selesai / Pulang" },
+  { value: StatusKunjungan.BATAL, label: "Dibatalkan" },
+];
+
+export const CARA_MASUK_PASIEN_OPTIONS: SelectOption<CaraMasukPasien>[] = [
+  { value: CaraMasukPasien.DATANG_SENDIRI, label: "Datang Sendiri" },
+  { value: CaraMasukPasien.RUJUKAN_FKTP, label: "Rujukan FKTP / Puskesmas" },
+  { value: CaraMasukPasien.RUJUKAN_RS_LAIN, label: "Rujukan Rumah Sakit Lain" },
+  { value: CaraMasukPasien.IGD, label: "Masuk Melalui IGD" },
+  { value: CaraMasukPasien.KONTROL, label: "Kontrol Ulang" },
+  { value: CaraMasukPasien.LAINNYA, label: "Lainnya" },
+];
+
+export const CARA_KELUAR_PASIEN_OPTIONS: SelectOption<CaraKeluarPasien>[] = [
+  { value: CaraKeluarPasien.PULANG_SEMBUH, label: "Pulang / Sembuh" },
+  { value: CaraKeluarPasien.PULANG_PAKSA, label: "Pulang Atas Permintaan Sendiri" },
+  { value: CaraKeluarPasien.DIRUJUK, label: "Dirujuk ke Fasilitas Lain" },
+  { value: CaraKeluarPasien.MENINGGAL, label: "Meninggal Dunia" },
+  { value: CaraKeluarPasien.LAINNYA, label: "Lainnya" },
+];
+
+export const JENIS_PERPINDAHAN_UNIT_OPTIONS: SelectOption<JenisPerpindahanUnit>[] = [
+  { value: JenisPerpindahanUnit.PENDAFTARAN_AWAL, label: "Pendaftaran Awal" },
+  { value: JenisPerpindahanUnit.MUTASI_RAJAL, label: "Mutasi Poliklinik" },
+  { value: JenisPerpindahanUnit.ADMISI_RANAP, label: "Admisi Rawat Inap" },
+  { value: JenisPerpindahanUnit.MUTASI_RANAP, label: "Mutasi Ruang Ranap" },
+  { value: JenisPerpindahanUnit.PINDAH_BED, label: "Pindah Tempat Tidur" },
+  { value: JenisPerpindahanUnit.GANTI_DPJP, label: "Ganti DPJP" },
+  { value: JenisPerpindahanUnit.BATAL_RANAP, label: "Batal Rawat Inap" },
+];
+
+export const ACTIVE_KUNJUNGAN_STATUSES: ReadonlySet<string> = new Set([
+  StatusKunjungan.TERDAFTAR,
+  StatusKunjungan.DALAM_PELAYANAN,
+  StatusKunjungan.DIRAWAT,
+]);
+
+export const INPATIENT_LAYANAN_SET: ReadonlySet<string> = new Set([
+  JenisLayananPendaftaran.RAWAT_INAP,
+  JenisLayananPendaftaran.INTENSIVE,
+]);
+
+export const REGISTRABLE_UNIT_JENIS_TO_LAYANAN: Partial<
+  Record<JenisUnit, JenisLayananPendaftaran>
+> = {
+  [JenisUnit.RAWAT_JALAN]: JenisLayananPendaftaran.RAWAT_JALAN,
+  [JenisUnit.RAWAT_INAP]: JenisLayananPendaftaran.RAWAT_INAP,
+  [JenisUnit.IGD]: JenisLayananPendaftaran.IGD,
+  [JenisUnit.INTENSIVE]: JenisLayananPendaftaran.INTENSIVE,
+};
+
+export function isActiveKunjunganStatus(status?: string | null): boolean {
+  return Boolean(status && ACTIVE_KUNJUNGAN_STATUSES.has(status));
+}
+
+export function isInpatientLayanan(jenis?: string | null): boolean {
+  return Boolean(jenis && INPATIENT_LAYANAN_SET.has(jenis));
+}
+
+export function getJenisLayananBadgeClass(jenis?: string | null): string {
+  switch (jenis) {
+    case JenisLayananPendaftaran.RAWAT_JALAN:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case JenisLayananPendaftaran.RAWAT_INAP:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    case JenisLayananPendaftaran.IGD:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    case JenisLayananPendaftaran.INTENSIVE:
+      return "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getStatusKunjunganBadgeClass(status?: string | null): string {
+  switch (status) {
+    case StatusKunjungan.TERDAFTAR:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    case StatusKunjungan.DALAM_PELAYANAN:
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+    case StatusKunjungan.DIRAWAT:
+      return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25";
+    case StatusKunjungan.SELESAI:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case StatusKunjungan.BATAL:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getStatusPenempatanBadgeClass(status?: string | null): string {
+  switch (status) {
+    case StatusPenempatanUnit.AKTIF:
+      return "bg-primary/10 text-primary border-primary/25";
+    case StatusPenempatanUnit.SELESAI:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case StatusPenempatanUnit.BATAL:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export interface JadwalDokterKuotaInfo {
+  kuotaJkn: number;
+  terpakaiJkn: number;
+  sisaKuotaJkn: number | null;
+  kuotaNonJkn: number;
+  terpakaiNonJkn: number;
+  sisaKuotaNonJkn: number | null;
+  kuotaTotal: number;
+  terpakaiTotal: number;
+  sisaKuotaTotal: number | null;
+  isUnlimited: boolean;
+  isPenuh: boolean;
+  alasanPenuh: string | null;
+}
+
+export interface JadwalDokterTersediaItem extends JadwalDokterItem {
+  tanggal: string;
+  kuotaInfo: JadwalDokterKuotaInfo;
+}
+
+export interface PendaftaranPasienSummary {
+  id: number;
+  noRm: string;
+  isBayiBaruLahir: boolean;
+  isIdentitasTidakDiketahui: boolean;
+  penduduk?: {
+    id: number;
+    nik?: string | null;
+    namaLengkap: string;
+    tanggalLahir?: string | null;
+    jenisKelamin?: JenisKelamin;
+    noTelepon?: string | null;
+  } | null;
+}
+
+export interface PendaftaranUnitSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisUnit: JenisUnit;
+}
+
+export interface PendaftaranDokterSummary {
+  id: number;
+  kodeDokter: string;
+  gelarDepan?: string | null;
+  gelarBelakang?: string | null;
+  namaTampilan?: string;
+  spesialisasi?: string | null;
+  penduduk?: {
+    id: number;
+    namaLengkap: string;
+  } | null;
+}
+
+export interface PendaftaranJadwalSummary {
+  id: number;
+  hari: HariPraktik;
+  jamMulai: string;
+  jamSelesai: string;
+  sesi?: SesiPraktik | null;
+  ruangan?: string | null;
+}
+
+export interface PendaftaranKelasSummary {
+  id: number;
+  kode: string;
+  nama: string;
+}
+
+export interface PendaftaranBedSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  namaKamar?: string | null;
+  statusKetersediaan?: StatusKetersediaanBed;
+}
+
+export interface PendaftaranPenjaminSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisPenjamin: JenisPenjamin;
+}
+
+export interface PendaftaranPenjaminItem {
+  id: number;
+  pendaftaranId: number;
+  urutan: number;
+  isUtama: boolean;
+  jenisPenjamin: JenisPenjamin;
+  penjaminId?: number | null;
+  penjamin?: PendaftaranPenjaminSummary | null;
+  pasienPenjaminId?: number | null;
+  pasienPenjamin?: PasienPenjaminItem | null;
+  namaPenjaminSnapshot: string;
+  noKartuSnapshot?: string | null;
+  kelasHakIdSnapshot?: number | null;
+  kelasHakSnapshot?: PendaftaranKelasSummary | null;
+  noSep?: string | null;
+  noRujukan?: string | null;
+  keterangan?: string | null;
+}
+
+export interface CreatePendaftaranPenjaminItemPayload {
+  urutan?: number;
+  isUtama?: boolean;
+  jenisPenjamin?: JenisPenjamin;
+  penjaminId?: number;
+  pasienPenjaminId?: number;
+  noKartu?: string;
+  kelasHakId?: number;
+  faskesPerujuk?: string;
+  berlakuSampai?: string;
+  simpanKeProfilPasien?: boolean;
+  noSep?: string;
+  noRujukan?: string;
+  keterangan?: string;
+}
+
+export interface UpdatePenjaminPendaftaranPayload {
+  penjaminList: CreatePendaftaranPenjaminItemPayload[];
+}
+
+export interface PendaftaranUnitHistoryItem {
+  id: number;
+  pendaftaranId: number;
+  urutan: number;
+  tanggalKunjungan: string;
+  jenisPerpindahan: JenisPerpindahanUnit;
+  unitAsalId?: number | null;
+  unitAsal?: PendaftaranUnitSummary | null;
+  kelasAsalId?: number | null;
+  kelasAsal?: PendaftaranKelasSummary | null;
+  bedAsalId?: number | null;
+  bedAsal?: PendaftaranBedSummary | null;
+  dokterAsalId?: number | null;
+  dokterAsal?: PendaftaranDokterSummary | null;
+  unitTujuanId: number;
+  unitTujuan?: PendaftaranUnitSummary | null;
+  jenisLayananTujuan: JenisLayananPendaftaran;
+  kelasTujuanId?: number | null;
+  kelasTujuan?: PendaftaranKelasSummary | null;
+  bedTujuanId?: number | null;
+  bedTujuan?: PendaftaranBedSummary | null;
+  dokterTujuanId: number;
+  dokterTujuan?: PendaftaranDokterSummary | null;
+  jadwalDokterId?: number | null;
+  jadwalDokter?: PendaftaranJadwalSummary | null;
+  noAntrean?: number | null;
+  kodeAntrean?: string | null;
+  waktuMasuk: string;
+  waktuKeluar?: string | null;
+  durasiMenit?: number;
+  statusPenempatan: StatusPenempatanUnit;
+  alasan?: string | null;
+  catatan?: string | null;
+  diprosesOlehId?: number | null;
+}
+
+export interface PendaftaranItem {
+  id: number;
+  noRegistrasi: string;
+  pasienId: number;
+  pasien?: PendaftaranPasienSummary | null;
+  tanggalKunjungan: string;
+  waktuDaftar: string;
+  jenisLayananAwal: JenisLayananPendaftaran;
+  jenisLayananSaatIni: JenisLayananPendaftaran;
+  unitSaatIniId: number;
+  unitSaatIni?: PendaftaranUnitSummary | null;
+  dokterSaatIniId: number;
+  dokterSaatIni?: PendaftaranDokterSummary | null;
+  jadwalDokterSaatIniId?: number | null;
+  jadwalDokterSaatIni?: PendaftaranJadwalSummary | null;
+  kelasSaatIniId?: number | null;
+  kelasSaatIni?: PendaftaranKelasSummary | null;
+  bedSaatIniId?: number | null;
+  bedSaatIni?: PendaftaranBedSummary | null;
+  noAntreanSaatIni?: number | null;
+  kodeAntreanSaatIni?: string | null;
+  caraMasuk: CaraMasukPasien;
+  asalRujukan?: string | null;
+  keluhanUtama?: string | null;
+  jenisPenjamin: JenisPenjamin;
+  penjaminId?: number | null;
+  penjamin?: PendaftaranPenjaminSummary | null;
+  pasienPenjaminId?: number | null;
+  pasienPenjamin?: PasienPenjaminItem | null;
+  namaPenjaminSnapshot: string;
+  noKartuSnapshot?: string | null;
+  kelasHakIdSnapshot?: number | null;
+  kelasHakSnapshot?: PendaftaranKelasSummary | null;
+  noSep?: string | null;
+  noRujukan?: string | null;
+  statusKunjungan: StatusKunjungan;
+  waktuKeluar?: string | null;
+  caraKeluar?: CaraKeluarPasien | null;
+  alasanBatal?: string | null;
+  catatan?: string | null;
+  ihsEncounterId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  historyUnit?: PendaftaranUnitHistoryItem[];
+  penjaminList?: PendaftaranPenjaminItem[];
+}
+
+export interface CreatePendaftaranPayload {
+  pasienId?: number;
+  pasienBaru?: CreatePasienPayload;
+  tanggalKunjungan?: string;
+  unitId: number;
+  jadwalDokterId?: number;
+  dokterId?: number;
+  bedId?: number;
+  jenisPenjamin?: JenisPenjamin;
+  penjaminId?: number;
+  pasienPenjaminId?: number;
+  noKartu?: string;
+  kelasHakId?: number;
+  faskesPerujuk?: string;
+  berlakuSampai?: string;
+  simpanKeProfilPasien?: boolean;
+  noSep?: string;
+  noRujukan?: string;
+  penjaminList?: CreatePendaftaranPenjaminItemPayload[];
+  caraMasuk?: CaraMasukPasien;
+  asalRujukan?: string;
+  keluhanUtama?: string;
+  catatan?: string;
+  ihsEncounterId?: string;
+}
+
+export interface MutasiPendaftaranPayload {
+  unitTujuanId: number;
+  jadwalDokterId?: number;
+  dokterTujuanId?: number;
+  bedTujuanId?: number;
+  tanggalMutasi?: string;
+  alasan?: string;
+  catatan?: string;
+}
+
+export interface SelesaiPendaftaranPayload {
+  caraKeluar?: CaraKeluarPasien;
+  waktuKeluar?: string;
+  catatan?: string;
+}
+
+export interface BatalPendaftaranPayload {
+  alasan: string;
+  catatan?: string;
+}
+
+export interface BatalRanapPayload {
+  alasan: string;
+  catatan?: string;
+}
+
+export type PendaftaranSortField =
+  | "id"
+  | "noRegistrasi"
+  | "tanggalKunjungan"
+  | "waktuDaftar"
+  | "createdAt";
+
+export interface QueryPendaftaranParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  tanggalDari?: string;
+  tanggalSampai?: string;
+  jenisLayanan?: JenisLayananPendaftaran | "";
+  unitId?: number;
+  dokterId?: number;
+  penjaminId?: number;
+  jenisPenjamin?: JenisPenjamin | "";
+  statusKunjungan?: StatusKunjungan | "";
+  aktifSaja?: boolean | "";
+  sortBy?: PendaftaranSortField;
+  sortType?: "ASC" | "DESC";
+}
+
+export interface QueryJadwalTersediaPendaftaranParams {
+  tanggal?: string;
+  unitId?: number;
+  dokterId?: number;
+  sesi?: SesiPraktik | "";
+  jenisPenjamin?: JenisPenjamin | "";
+  search?: string;
 }
