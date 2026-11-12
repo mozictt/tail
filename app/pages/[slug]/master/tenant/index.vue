@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
 import { useTenantMasterStore, type TenantItem } from "@/stores/tenantMaster";
+import { useTenantSettingsStore } from "@/stores/tenant-settings";
 import { TenantService } from "@/services/tenant.service";
 import Swal from "sweetalert2";
 import {
@@ -38,6 +39,7 @@ import {
   Info,
   ChevronDown,
   Eye,
+  SlidersHorizontal,
 } from "lucide-vue-next";
 
 import DateTimePicker from "@/components/DateTimePicker.vue";
@@ -50,6 +52,13 @@ definePageMeta({
 
 const { showToast } = useToast();
 const tenantMasterStore = useTenantMasterStore();
+const tenantSettingsStore = useTenantSettingsStore();
+
+const openTenantSettings = async (tenant: TenantItem) => {
+  tenantMasterStore.setTargetTenant(tenant.isMaster ? null : tenant);
+  tenantSettingsStore.clearSettings();
+  await navigateTo(`/${tenant.slug}/pengaturan`);
+};
 const {
   formatDate,
   formatDateTime,
@@ -728,6 +737,16 @@ const handleCloneConfig = async () => {
             </button>
 
             <button
+              type="button"
+              @click="openTenantSettings(tenant)"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-600 hover:text-white text-amber-700 dark:text-amber-300 text-xs font-semibold transition-all duration-200"
+              title="Pengaturan Kustomisasi Tenant"
+            >
+              <SlidersHorizontal class="w-3 h-3" />
+              <span class="hidden sm:inline">Setting</span>
+            </button>
+
+            <button
               v-if="!tenant.isMaster"
               @click="openCloneModal(tenant)"
               class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-600 hover:text-white text-indigo-700 text-xs font-semibold transition-all duration-200"
@@ -839,6 +858,15 @@ const handleCloneConfig = async () => {
                   >
                     <Pencil class="w-3 h-3" />
                     <span class="hidden sm:inline">Edit</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    @click="openTenantSettings(tenant)"
+                    class="btn btn-xs btn-ghost text-amber-600 hover:bg-amber-500/10 border-none gap-1 rounded-lg text-xs"
+                    title="Pengaturan Kustomisasi Tenant"
+                  >
+                    <SlidersHorizontal class="w-3 h-3" />
                   </button>
 
                   <button

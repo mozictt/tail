@@ -135,6 +135,12 @@ export enum SesiPraktik {
   MALAM = "MALAM",
 }
 
+export enum JenisTarif {
+  BIASA = "BIASA",
+  LABORATORIUM = "LABORATORIUM",
+  RADIOLOGI = "RADIOLOGI",
+}
+
 export interface SelectOption<T = string> {
   value: T;
   label: string;
@@ -253,6 +259,22 @@ export const STATUS_KETERSEDIAAN_BED_OPTIONS: SelectOption<StatusKetersediaanBed
   { value: StatusKetersediaanBed.BOOKING, label: "Booking / Dipesan" },
   { value: StatusKetersediaanBed.PEMBERSIHAN, label: "Pembersihan / Sterilisasi" },
   { value: StatusKetersediaanBed.PERBAIKAN, label: "Perbaikan / Maintenance" },
+];
+
+export const JENIS_TARIF_OPTIONS: SelectOption<JenisTarif>[] = [
+  { value: JenisTarif.BIASA, label: "Tarif Biasa (Tindakan / Poli)" },
+  { value: JenisTarif.LABORATORIUM, label: "Laboratorium" },
+  { value: JenisTarif.RADIOLOGI, label: "Radiologi" },
+];
+
+export const MODALITAS_RADIOLOGI_OPTIONS: SelectOption<string>[] = [
+  { value: "X-RAY", label: "X-Ray / Rontgen" },
+  { value: "USG", label: "USG (Ultrasonografi)" },
+  { value: "CT-SCAN", label: "CT-Scan" },
+  { value: "MRI", label: "MRI" },
+  { value: "PANORAMIK", label: "Panoramik / Dental" },
+  { value: "MAMOGRAFI", label: "Mamografi" },
+  { value: "LAINNYA", label: "Modalitas Lainnya" },
 ];
 
 export const BED_CAPABLE_UNIT_TYPES: ReadonlySet<JenisUnit> = new Set([
@@ -382,6 +404,32 @@ export function getSesiPraktikBadgeClass(sesi?: string | null): string {
       return "bg-slate-600/15 text-slate-700 dark:text-slate-300 border-slate-500/30";
     default:
       return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getJenisTarifBadgeClass(jenis?: string | null): string {
+  switch (jenis) {
+    case JenisTarif.BIASA:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    case JenisTarif.LABORATORIUM:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case JenisTarif.RADIOLOGI:
+      return "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getJenisTarifShortLabel(jenis?: string | null): string {
+  switch (jenis) {
+    case JenisTarif.BIASA:
+      return "Tarif Biasa";
+    case JenisTarif.LABORATORIUM:
+      return "Laboratorium";
+    case JenisTarif.RADIOLOGI:
+      return "Radiologi";
+    default:
+      return jenis || "-";
   }
 }
 
@@ -841,7 +889,7 @@ export interface PasienLookupItem {
 
 export interface CreatePasienPayload {
   noRm?: string;
-  formatNoRm?: FormatNoRm;
+  formatNoRm?: FormatNoRm | string;
   pendudukId?: number;
   penduduk?: CreatePendudukPayload;
   pendudukIbuId?: number;
@@ -877,6 +925,70 @@ export interface QueryPasienParams {
   sortBy?: "id" | "noRm" | "createdAt";
   sortType?: "ASC" | "DESC";
 }
+
+/* =========================
+   TENANT SETTINGS TYPES
+========================= */
+export type TenantNoRmPresetKode = "PLAIN_8" | "PLAIN_4" | "DASH_6" | "CUSTOM";
+
+export interface TenantNoRmSetting {
+  mode: "PRESET" | "CUSTOM";
+  presetKode: TenantNoRmPresetKode;
+  jumlahDigit: number;
+  prefix: string | null;
+  suffix: string | null;
+  panjangBlok: number | null;
+  pemisahBlok: "-" | "." | "/" | null;
+  izinkanPilihFormatDiPendaftaran: boolean;
+}
+
+export interface TenantPendaftaranSetting {
+  judulHalaman: string;
+  subjudulHalaman: string;
+  judulHalamanSukses: string;
+  subjudulHalamanSukses: string;
+}
+
+export interface TenantSettingsConfig {
+  noRm: TenantNoRmSetting;
+  pendaftaran: TenantPendaftaranSetting;
+  noRmFormat?: FormatNoRm;
+  [key: string]: unknown;
+}
+
+export interface TenantSettingsResponse {
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
+  settings: TenantSettingsConfig;
+  previewNoRm: string;
+}
+
+export interface UpdateTenantSettingsPayload {
+  noRm?: Partial<TenantNoRmSetting>;
+  pendaftaran?: Partial<TenantPendaftaranSetting>;
+}
+
+export const DEFAULT_TENANT_SETTINGS: TenantSettingsConfig = {
+  noRm: {
+    mode: "PRESET",
+    presetKode: "PLAIN_8",
+    jumlahDigit: 8,
+    prefix: null,
+    suffix: null,
+    panjangBlok: null,
+    pemisahBlok: null,
+    izinkanPilihFormatDiPendaftaran: false,
+  },
+  pendaftaran: {
+    judulHalaman: "Pendaftaran Kunjungan Pasien",
+    subjudulHalaman:
+      "Formulir terpadu pendaftaran pasien baru maupun pasien lama (pilih pasien lama & dokter melalui popup)",
+    judulHalamanSukses: "Informasi Pasien yang Didaftarkan",
+    subjudulHalamanSukses:
+      "Ringkasan hasil registrasi kunjungan pasien beserta opsi cetak nomor antrean dan slip pendaftaran",
+  },
+};
 
 /* =========================
    KELAS PERAWATAN TYPES
@@ -1259,6 +1371,41 @@ export enum StatusKunjungan {
   BATAL = "BATAL",
 }
 
+export enum StatusPembayaranKunjungan {
+  BELUM_BAYAR = "BELUM_BAYAR",
+  SEBAGIAN = "SEBAGIAN",
+  LUNAS = "LUNAS",
+  DITANGGUNG_PENJAMIN = "DITANGGUNG_PENJAMIN",
+}
+
+export enum TipeHasilLab {
+  NUMERIC = "NUMERIC",
+  OPTION = "OPTION",
+  TEXT = "TEXT",
+}
+
+export enum JenisKelaminRujukanLab {
+  ALL = "ALL",
+  LAKI_LAKI = "L",
+  PEREMPUAN = "P",
+}
+
+export enum FlagHasilLab {
+  NORMAL = "NORMAL",
+  LOW = "LOW",
+  HIGH = "HIGH",
+  CRITICAL_LOW = "CRITICAL_LOW",
+  CRITICAL_HIGH = "CRITICAL_HIGH",
+  ABNORMAL = "ABNORMAL",
+}
+
+export enum StatusPenunjangLab {
+  DIPROSES = "DIPROSES",
+  SELESAI_INPUT = "SELESAI_INPUT",
+  TERVERIFIKASI = "TERVERIFIKASI",
+  BATAL = "BATAL",
+}
+
 export enum StatusPenempatanUnit {
   AKTIF = "AKTIF",
   SELESAI = "SELESAI",
@@ -1432,13 +1579,21 @@ export interface PendaftaranPasienSummary {
   noRm: string;
   isBayiBaruLahir: boolean;
   isIdentitasTidakDiketahui: boolean;
+  alamatSamaKtp?: boolean;
+  alamatDomisili?: string | null;
+  namaPj?: string | null;
+  hubunganPj?: HubunganPenanggungJawab | null;
+  noHpPj?: string | null;
   penduduk?: {
     id: number;
     nik?: string | null;
+    noIdentitasLain?: string | null;
     namaLengkap: string;
+    tempatLahir?: string | null;
     tanggalLahir?: string | null;
     jenisKelamin?: JenisKelamin;
     noTelepon?: string | null;
+    alamatKtp?: string | null;
   } | null;
 }
 
@@ -1603,6 +1758,7 @@ export interface PendaftaranItem {
   noSep?: string | null;
   noRujukan?: string | null;
   statusKunjungan: StatusKunjungan;
+  statusPembayaran?: StatusPembayaranKunjungan;
   waktuKeluar?: string | null;
   caraKeluar?: CaraKeluarPasien | null;
   alasanBatal?: string | null;
@@ -1697,4 +1853,596 @@ export interface QueryJadwalTersediaPendaftaranParams {
   sesi?: SesiPraktik | "";
   jenisPenjamin?: JenisPenjamin | "";
   search?: string;
+}
+
+/* =========================
+   MASTER TARIF TINDAKAN & MATRIKS HARGA TYPES
+========================= */
+export interface TarifAtributLab {
+  spesimen?: string;
+  metode?: string;
+  butuhPuasa?: boolean;
+  estimasiHasilJam?: number;
+}
+
+export interface TarifAtributRadiologi {
+  modalitas?: string;
+  proyeksi?: string;
+  butuhKontras?: boolean;
+}
+
+export interface TarifAtributKhusus
+  extends TarifAtributLab,
+    TarifAtributRadiologi {
+  catatanTeknis?: string;
+}
+
+export interface TarifUnitSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisUnit: JenisUnit;
+}
+
+export interface TarifPenjaminSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisPenjamin: JenisPenjamin;
+}
+
+export interface TarifKelasSummary {
+  id: number;
+  kode: string;
+  nama: string;
+  urutan: number;
+}
+
+export interface TarifLayananItem {
+  id: number;
+  tindakanId: number;
+  unitId: number | null;
+  penjaminId: number | null;
+  kelasId: number | null;
+  unit?: TarifUnitSummary | null;
+  penjamin?: TarifPenjaminSummary | null;
+  kelas?: TarifKelasSummary | null;
+  jasaSarana: number;
+  bhp: number;
+  jasaDokter: number;
+  jasaNakes: number;
+  totalTarif: number;
+  berlakuMulai: string;
+  berlakuSampai?: string | null;
+  keterangan?: string | null;
+  status: MasterStatus;
+  specificityScore: number;
+  specificityLabel: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TarifTindakanItem {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisTarif: JenisTarif;
+  kelompokTarif?: string | null;
+  satuan: string;
+  kodeEksternal?: string | null;
+  atributKhusus?: TarifAtributKhusus | null;
+  keterangan?: string | null;
+  status: MasterStatus;
+  tenantId?: string | null;
+  jumlahTarif?: number;
+  jumlahTarifAktif?: number;
+  tarifTerendah?: number | null;
+  tarifTertinggi?: number | null;
+  jasaDokterMin?: number | null;
+  jasaDokterMax?: number | null;
+  jasaNakesMin?: number | null;
+  jasaNakesMax?: number | null;
+  daftarHarga?: TarifLayananItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TarifOptionItem {
+  id: number;
+  kode: string;
+  nama: string;
+  jenisTarif: JenisTarif;
+  kelompokTarif?: string | null;
+  satuan: string;
+}
+
+export interface TarifKomponenPayload {
+  jasaSarana?: number;
+  bhp?: number;
+  jasaDokter?: number;
+  jasaNakes?: number;
+}
+
+export interface CreateTarifTindakanPayload {
+  kode: string;
+  nama: string;
+  jenisTarif: JenisTarif;
+  kelompokTarif?: string;
+  satuan?: string;
+  kodeEksternal?: string;
+  atributKhusus?: TarifAtributKhusus;
+  keterangan?: string;
+  status?: MasterStatus;
+  tarifDefault?: TarifKomponenPayload;
+  berlakuMulaiDefault?: string;
+}
+
+export type UpdateTarifTindakanPayload = Partial<
+  Omit<CreateTarifTindakanPayload, "tarifDefault" | "berlakuMulaiDefault">
+>;
+
+export interface CreateTarifLayananPayload extends TarifKomponenPayload {
+  unitId?: number | null;
+  penjaminId?: number | null;
+  kelasId?: number | null;
+  berlakuMulai?: string;
+  berlakuSampai?: string | null;
+  keterangan?: string | null;
+  status?: MasterStatus;
+}
+
+export type UpdateTarifLayananPayload = CreateTarifLayananPayload;
+
+export interface BulkCreateTarifLayananPayload extends TarifKomponenPayload {
+  unitIds?: number[];
+  penjaminIds?: number[];
+  kelasIds?: number[];
+  modeDuplikat?: "SKIP" | "OVERWRITE";
+  berlakuMulai?: string;
+  berlakuSampai?: string | null;
+  keterangan?: string | null;
+  status?: MasterStatus;
+}
+
+export interface BulkCreateTarifLayananResponse {
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  totalCombos: number;
+  tindakan: TarifTindakanItem;
+}
+
+export interface QueryTarifParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  jenisTarif?: JenisTarif | "";
+  unitId?: number;
+  penjaminId?: number;
+  kelasId?: number;
+  status?: MasterStatus | "";
+  sortBy?: "id" | "kode" | "nama" | "jenisTarif" | "createdAt";
+  sortType?: "ASC" | "DESC";
+}
+
+export interface ResolveTarifParams {
+  tindakanId: number;
+  unitId?: number;
+  penjaminId?: number;
+  kelasId?: number;
+  tanggal?: string;
+}
+
+export interface TarifResolveResult {
+  found: boolean;
+  prioritas: string;
+  skorKecocokan: number | null;
+  keteranganKecocokan: string;
+  rule: TarifLayananItem | null;
+  rincian: {
+    jasaSarana: number;
+    bhp: number;
+    jasaDokter: number;
+    jasaNakes: number;
+    totalTarif: number;
+  } | null;
+  kandidatTerurut: TarifLayananItem[];
+  tindakan: TarifOptionItem;
+  konteks: {
+    tanggal: string;
+    unit: { id: number; kode: string; nama: string } | null;
+    penjamin: { id: number; kode: string; nama: string } | null;
+    kelas: { id: number; kode: string; nama: string } | null;
+  };
+}
+
+/* =========================
+   MASTER PARAMETER LAB & TRANSAKSI PENUNJANG LAB TYPES
+========================= */
+export const STATUS_PEMBAYARAN_KUNJUNGAN_OPTIONS: SelectOption<StatusPembayaranKunjungan>[] =
+  [
+    { value: StatusPembayaranKunjungan.BELUM_BAYAR, label: "Belum Bayar" },
+    { value: StatusPembayaranKunjungan.SEBAGIAN, label: "Bayar Sebagian" },
+    { value: StatusPembayaranKunjungan.LUNAS, label: "Lunas" },
+    {
+      value: StatusPembayaranKunjungan.DITANGGUNG_PENJAMIN,
+      label: "Ditanggung Penjamin",
+    },
+  ];
+
+export const TIPE_HASIL_LAB_OPTIONS: SelectOption<TipeHasilLab>[] = [
+  { value: TipeHasilLab.NUMERIC, label: "Angka (Numerik)" },
+  { value: TipeHasilLab.OPTION, label: "Pilihan (Kualitatif)" },
+  { value: TipeHasilLab.TEXT, label: "Teks Bebas" },
+];
+
+export const STATUS_PENUNJANG_LAB_OPTIONS: SelectOption<StatusPenunjangLab>[] = [
+  { value: StatusPenunjangLab.DIPROSES, label: "Diproses" },
+  { value: StatusPenunjangLab.SELESAI_INPUT, label: "Selesai Input Hasil" },
+  { value: StatusPenunjangLab.TERVERIFIKASI, label: "Terverifikasi" },
+  { value: StatusPenunjangLab.BATAL, label: "Dibatalkan" },
+];
+
+export function getStatusPembayaranBadgeClass(status?: string | null): string {
+  switch (status) {
+    case StatusPembayaranKunjungan.BELUM_BAYAR:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    case StatusPembayaranKunjungan.SEBAGIAN:
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+    case StatusPembayaranKunjungan.LUNAS:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case StatusPembayaranKunjungan.DITANGGUNG_PENJAMIN:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getStatusPenunjangLabBadgeClass(status?: string | null): string {
+  switch (status) {
+    case StatusPenunjangLab.DIPROSES:
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25";
+    case StatusPenunjangLab.SELESAI_INPUT:
+      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25";
+    case StatusPenunjangLab.TERVERIFIKASI:
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25";
+    case StatusPenunjangLab.BATAL:
+      return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getFlagHasilLabBadgeClass(flag?: string | null): string {
+  switch (flag) {
+    case FlagHasilLab.NORMAL:
+      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+    case FlagHasilLab.LOW:
+      return "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30";
+    case FlagHasilLab.HIGH:
+      return "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+    case FlagHasilLab.CRITICAL_LOW:
+    case FlagHasilLab.CRITICAL_HIGH:
+    case FlagHasilLab.ABNORMAL:
+      return "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30";
+    default:
+      return "bg-base-200 text-base-content/70 border-base-content/15";
+  }
+}
+
+export function getFlagHasilLabLabel(flag?: string | null): string {
+  switch (flag) {
+    case FlagHasilLab.NORMAL:
+      return "Normal";
+    case FlagHasilLab.LOW:
+      return "Rendah (L)";
+    case FlagHasilLab.HIGH:
+      return "Tinggi (H)";
+    case FlagHasilLab.CRITICAL_LOW:
+      return "Kritis Rendah (!)";
+    case FlagHasilLab.CRITICAL_HIGH:
+      return "Kritis Tinggi (!)";
+    case FlagHasilLab.ABNORMAL:
+      return "Abnormal";
+    default:
+      return "-";
+  }
+}
+
+export interface LabParameterRujukanItem {
+  id?: number;
+  parameterId?: number;
+  jenisKelamin: JenisKelaminRujukanLab;
+  usiaMinHari: number;
+  usiaMaxHari: number;
+  labelUsia?: string | null;
+  nilaiMin?: string | number | null;
+  nilaiMax?: string | number | null;
+  kritisMin?: string | number | null;
+  kritisMax?: string | number | null;
+  nilaiNormalText?: string | null;
+  keterangan?: string | null;
+}
+
+export interface LabParameterItem {
+  id: number;
+  kode: string;
+  nama: string;
+  grup?: string | null;
+  satuan?: string | null;
+  tipeHasil: TipeHasilLab;
+  opsiPilihan?: string[] | null;
+  desimal: number;
+  metode?: string | null;
+  loincCode?: string | null;
+  urutanDefault: number;
+  keterangan?: string | null;
+  status: MasterStatus;
+  rujukanList?: LabParameterRujukanItem[];
+  jumlahTindakan?: number;
+}
+
+export interface CreateLabParameterPayload {
+  kode: string;
+  nama: string;
+  grup?: string;
+  satuan?: string;
+  tipeHasil?: TipeHasilLab;
+  opsiPilihan?: string[];
+  desimal?: number;
+  metode?: string;
+  loincCode?: string;
+  urutanDefault?: number;
+  keterangan?: string;
+  status?: MasterStatus;
+  rujukanList?: LabParameterRujukanItem[];
+}
+
+export type UpdateLabParameterPayload = Partial<CreateLabParameterPayload>;
+
+export interface QueryLabParameterParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  grup?: string;
+  tipeHasil?: TipeHasilLab | "";
+  status?: MasterStatus | "";
+  sortBy?: "id" | "kode" | "nama" | "grup" | "urutanDefault" | "createdAt";
+  sortType?: "ASC" | "DESC";
+}
+
+export interface LabTindakanOverviewItem {
+  id: number;
+  kode: string;
+  nama: string;
+  kelompokTarif?: string | null;
+  satuan: string;
+  status: MasterStatus;
+  jumlahParameter: number;
+}
+
+export interface LabTindakanParameterMappingItem {
+  id?: number;
+  tindakanId?: number;
+  parameterId: number;
+  urutan: number;
+  subGrupLabel?: string | null;
+  isWajib: boolean;
+  parameter?: LabParameterItem;
+}
+
+export interface LabTindakanMappingResponse {
+  tindakan: TarifTindakanItem;
+  items: LabTindakanParameterMappingItem[];
+}
+
+export interface QuickAddParameterToTindakanPayload
+  extends CreateLabParameterPayload {
+  subGrupLabel?: string;
+  isWajib?: boolean;
+}
+
+export interface PenunjangLabEligibleKunjunganItem extends PendaftaranItem {
+  jumlahOrderLab: number;
+}
+
+export interface PreviewTindakanParameterItem {
+  parameterId: number | null;
+  kode: string;
+  nama: string;
+  grup?: string | null;
+  satuan?: string | null;
+  tipeHasil: TipeHasilLab;
+  opsiPilihan?: string[] | null;
+  desimal: number;
+  isWajib: boolean;
+  urutan: number;
+  isStandaloneDirect?: boolean;
+  rujukan?: {
+    id: number | null;
+    jenisKelamin: string;
+    labelUsia?: string | null;
+    nilaiMin: number | null;
+    nilaiMax: number | null;
+    kritisMin: number | null;
+    kritisMax: number | null;
+    nilaiNormalText?: string | null;
+    displayText: string;
+  } | null;
+}
+
+export interface PreviewTindakanLabBlock {
+  tindakan: {
+    id: number;
+    kode: string;
+    nama: string;
+    satuan: string;
+    kelompokTarif?: string | null;
+  };
+  tarifResolved: boolean;
+  tarifLayananId: number | null;
+  skorKecocokan: number | null;
+  keteranganTarif: string;
+  rincianTarif: {
+    jasaSarana: number;
+    bhp: number;
+    jasaDokter: number;
+    jasaNakes: number;
+    totalTarif: number;
+  };
+  parameters: PreviewTindakanParameterItem[];
+}
+
+export interface PenunjangLabPreviewResponse {
+  pendaftaran: PendaftaranItem;
+  totalTarif: number;
+  totalJasaDokter: number;
+  totalJasaNakes: number;
+  items: PreviewTindakanLabBlock[];
+}
+
+export interface PenunjangLabItemDetail {
+  id: number;
+  tindakanId: number;
+  tarifLayananId?: number | null;
+  kodeTindakanSnapshot: string;
+  namaTindakanSnapshot: string;
+  kelompokTarifSnapshot?: string | null;
+  satuanSnapshot: string;
+  jasaSarana: number;
+  bhp: number;
+  jasaDokter: number;
+  jasaNakes: number;
+  tarifSatuan: number;
+  qty: number;
+  subtotalTarif: number;
+  keteranganTarifSnapshot?: string | null;
+  urutan: number;
+}
+
+export interface PenunjangLabHasilDetail {
+  id: number;
+  penunjangLabId: number;
+  penunjangLabItemId: number;
+  parameterId: number | null;
+  kodeParameterSnapshot: string;
+  namaParameterSnapshot: string;
+  grupSnapshot?: string | null;
+  satuanSnapshot?: string | null;
+  tipeHasilSnapshot: TipeHasilLab;
+  opsiPilihanSnapshot?: string[] | null;
+  desimalSnapshot: number;
+  nilaiRujukanMinSnapshot: number | null;
+  nilaiRujukanMaxSnapshot: number | null;
+  kritisMinSnapshot: number | null;
+  kritisMaxSnapshot: number | null;
+  nilaiNormalTextSnapshot?: string | null;
+  isWajib: boolean;
+  urutan: number;
+  hasilNilai?: string | null;
+  hasilAngka: number | null;
+  flagAbnormal?: FlagHasilLab | null;
+  isKritis: boolean;
+  catatan?: string | null;
+  diinputPada?: string | null;
+}
+
+export interface PenunjangLabOrderItem {
+  id: number;
+  noLab: string;
+  pendaftaranId: number;
+  pasienId: number;
+  pendaftaran?: PendaftaranItem | null;
+  pasien?: PendaftaranPasienSummary | null;
+  unitPengirim?: { id: number; nama: string } | null;
+  unitLabId?: number | null;
+  unitLab?: { id: number; nama: string } | null;
+  dokterPengirimId?: number | null;
+  dokterPengirimNama?: string | null;
+  dokterLabId?: number | null;
+  dokterLabNama?: string | null;
+  petugasLabId?: number | null;
+  petugasLab?: {
+    id: number;
+    name: string;
+    nip?: string | null;
+    position?: string | null;
+  } | null;
+  waktuOrder: string;
+  waktuSampelDiambil?: string | null;
+  waktuHasilSelesai?: string | null;
+  waktuVerifikasi?: string | null;
+  statusLab: StatusPenunjangLab;
+  statusPembayaran: StatusPembayaranKunjungan;
+  isCito: boolean;
+  diagnosaKlinis?: string | null;
+  catatanKlinis?: string | null;
+  kesanLab?: string | null;
+  alasanBatal?: string | null;
+  totalTarif: number;
+  totalJasaDokter: number;
+  totalJasaNakes: number;
+  itemNames?: string[];
+  jumlahItem?: number;
+  jumlahParameter?: number;
+  jumlahTerisi?: number;
+  jumlahAbnormal?: number;
+  jumlahKritis?: number;
+  items?: PenunjangLabItemDetail[];
+  hasilList?: PenunjangLabHasilDetail[];
+}
+
+export interface CreatePenunjangLabPayload {
+  pendaftaranId: number;
+  unitLabId?: number | null;
+  dokterLabId?: number | null;
+  petugasLabId?: number | null;
+  isCito?: boolean;
+  diagnosaKlinis?: string;
+  catatanKlinis?: string;
+  kesanLab?: string;
+  tindakanIds: number[];
+  hasilInputs?: Array<{
+    tindakanId: number;
+    parameterId?: number | null;
+    hasilNilai?: string | null;
+    catatan?: string | null;
+  }>;
+  tandaiSelesaiInput?: boolean;
+}
+
+export interface SaveHasilPenunjangLabPayload {
+  dokterLabId?: number | null;
+  petugasLabId?: number | null;
+  waktuSampelDiambil?: string | null;
+  kesanLab?: string | null;
+  tandaiSelesaiInput?: boolean;
+  hasilList: Array<{
+    id: number;
+    hasilNilai?: string | null;
+    catatan?: string | null;
+  }>;
+}
+
+export interface QueryEligibleKunjunganLabParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  tanggalDari?: string;
+  tanggalSampai?: string;
+  filterEligible?: "ALL" | "DIPERIKSA" | "BELUM_BAYAR";
+  unitId?: number;
+}
+
+export interface QueryPenunjangLabParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  tanggalDari?: string;
+  tanggalSampai?: string;
+  statusLab?: StatusPenunjangLab | "";
+  pendaftaranId?: number;
+  isCito?: boolean | "";
+  sortBy?: "id" | "noLab" | "waktuOrder" | "statusLab" | "totalTarif";
+  sortType?: "ASC" | "DESC";
 }

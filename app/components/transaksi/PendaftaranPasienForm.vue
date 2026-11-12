@@ -11,8 +11,6 @@ import {
 import FlatpickrDate from "@/components/ui/FlatpickrDate.vue";
 import UiAutocompleteWilayah from "@/components/ui/AutocompleteWilayah.vue";
 import {
-  FORMAT_NO_RM_OPTIONS,
-  FormatNoRm,
   HUBUNGAN_PJ_OPTIONS,
   JENIS_IDENTITAS_OPTIONS,
   JENIS_KELAMIN_OPTIONS,
@@ -21,12 +19,16 @@ import {
   type HubunganPenanggungJawab,
   type PasienItem,
 } from "@/types/simrs";
+import { useTenantSettingsStore } from "@/stores/tenant-settings";
+import { usePermission } from "@/composables/usePermission";
+import { useSlugRoute } from "@/composables/useSlugRoute";
+import { NO_RM_PRESET_OPTIONS } from "@/utils/format-no-rm.util";
 
 export interface UnifiedPasienFormState {
   selectedPasienId: number | null;
   rmMode: "auto" | "manual";
   noRm: string;
-  formatNoRm: FormatNoRm | "";
+  formatNoRm: string;
   isBayiBaruLahir: boolean;
   isIdentitasTidakDiketahui: boolean;
   jenisIdentitas: JenisIdentitas;
@@ -61,8 +63,22 @@ const emit = defineEmits<{
   (e: "clear-error", key: string): void;
 }>();
 
+const tenantSettingsStore = useTenantSettingsStore();
+const { canRead } = usePermission();
+const { slugPath } = useSlugRoute();
+
 const isExistingMode = computed(() => Boolean(props.form.selectedPasienId));
 const showExtraSection = ref(false);
+const canOpenSettings = computed(() => canRead("/pengaturan", "Pengaturan"));
+
+const tenantNoRmModelLabel = computed(() => {
+  const noRm = tenantSettingsStore.noRm;
+  if (noRm.mode === "PRESET") {
+    const preset = NO_RM_PRESET_OPTIONS.find((item) => item.kode === noRm.presetKode);
+    if (preset) return preset.label;
+  }
+  return `Kustom ${noRm.jumlahDigit} Digit`;
+});
 
 watch(
   () => [props.selectedPasien, props.form.namaPj, props.form.alamatSamaKtp] as const,
@@ -215,18 +231,47 @@ watch(
         </div>
 
         <div v-if="form.rmMode === 'auto'">
-          <label class="block text-xs font-bold text-base-content/80 mb-1.5">
-            Format Auto No. RM
-          </label>
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <label class="block text-xs font-bold text-base-content/80">
+              Format Auto No. RM
+            </label>
+            <NuxtLink
+              v-if="canOpenSettings"
+              :to="slugPath('/pengaturan')"
+              class="text-[11px] font-bold text-primary hover:underline"
+            >
+              Atur di Setting
+            </NuxtLink>
+          </div>
+
           <select
+            v-if="tenantSettingsStore.allowFormOverrideNoRm"
             v-model="form.formatNoRm"
             class="select select-bordered w-full rounded-xl h-11 text-sm"
           >
-            <option value="">Default Pengaturan RS</option>
-            <option v-for="opt in FORMAT_NO_RM_OPTIONS" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
+            <option value="">
+              Sesuai Setting Tenant ({{ tenantNoRmModelLabel }} • {{ tenantSettingsStore.noRmPreview }})
+            </option>
+            <option
+              v-for="opt in NO_RM_PRESET_OPTIONS"
+              :key="opt.kode"
+              :value="opt.kode"
+            >
+              {{ opt.label }} ({{ opt.kode }})
             </option>
           </select>
+
+          <div
+            v-else
+            class="h-11 px-3.5 rounded-xl bg-base-200/60 border border-base-content/15 flex items-center justify-between gap-2 text-sm"
+          >
+            <span class="font-semibold text-base-content/80 truncate">
+              {{ tenantNoRmModelLabel }}
+            </span>
+            <code class="font-mono font-extrabold text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary shrink-0">
+              {{ tenantSettingsStore.noRmPreview }}
+            </code>
+          </div>
         </div>
 
         <div v-else>

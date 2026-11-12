@@ -9,17 +9,26 @@ import {
   Clock,
   CreditCard,
   History,
+  Printer,
   RotateCcw,
   Stethoscope,
+  Ticket,
   UserRound,
   X,
   XCircle,
 } from "lucide-vue-next";
 import { PendaftaranService } from "@/services/pendaftaran.service";
+import { useAuthStore } from "@/stores/auth";
+import { useCompanyProfileStore } from "@/stores/company-profile";
 import { useDate } from "@/composables/useDate";
 import { useToast } from "@/composables/useToast";
 import { extractApiErrorMessage } from "@/utils/api-error.util";
 import { getVisitPenjaminList } from "@/utils/pendaftaran-penjamin.util";
+import {
+  printNomorAntreanVisit,
+  printSlipPendaftaranVisit,
+} from "@/utils/pendaftaran-print.util";
+import { resolvePrintClinicHeader } from "@/utils/print-document.util";
 import {
   CARA_KELUAR_PASIEN_OPTIONS,
   CARA_MASUK_PASIEN_OPTIONS,
@@ -63,6 +72,8 @@ const emit = defineEmits<{
 }>();
 
 const pendaftaranService = PendaftaranService();
+const authStore = useAuthStore();
+const companyProfileStore = useCompanyProfileStore();
 const { formatDate, formatDateTime } = useDate();
 const { showToast } = useToast();
 
@@ -70,6 +81,36 @@ const loading = ref(false);
 const detail = ref<PendaftaranItem | null>(null);
 
 const penjaminEntries = computed(() => getVisitPenjaminList(detail.value));
+
+const hasQueueNumber = computed(() =>
+  Boolean(
+    detail.value?.kodeAntreanSaatIni ||
+      (detail.value?.noAntreanSaatIni !== undefined &&
+        detail.value?.noAntreanSaatIni !== null),
+  ),
+);
+
+const handlePrintAntrean = () => {
+  if (!detail.value || !hasQueueNumber.value) return;
+  const header = resolvePrintClinicHeader(
+    companyProfileStore.profile,
+    authStore.username,
+  );
+  if (!printNomorAntreanVisit(detail.value, header)) {
+    showToast("Gagal membuka dialog cetak. Periksa izin pop-up browser.", "error");
+  }
+};
+
+const handlePrintSlip = () => {
+  if (!detail.value) return;
+  const header = resolvePrintClinicHeader(
+    companyProfileStore.profile,
+    authStore.username,
+  );
+  if (!printSlipPendaftaranVisit(detail.value, header)) {
+    showToast("Gagal membuka dialog cetak. Periksa izin pop-up browser.", "error");
+  }
+};
 
 const canAct = computed(() =>
   Boolean(props.canManage && detail.value && isActiveKunjunganStatus(detail.value.statusKunjungan)),
@@ -149,9 +190,10 @@ watch(
                 </span>
                 <span
                   v-if="detail.kodeAntreanSaatIni"
-                  class="font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                  class="inline-flex items-center gap-1 font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-lg bg-warning/20 text-base-content border border-warning/50"
                 >
-                  Antrean: {{ detail.kodeAntreanSaatIni }}
+                  <Ticket class="w-3.5 h-3.5 text-warning shrink-0" />
+                  <span>Antrean: {{ detail.kodeAntreanSaatIni }}</span>
                 </span>
                 <span
                   class="text-[11px] font-bold px-2.5 py-0.5 rounded-md border"
@@ -370,9 +412,10 @@ watch(
                     </span>
                     <span
                       v-if="hist.kodeAntrean"
-                      class="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 border border-amber-500/20"
+                      class="inline-flex items-center gap-1 font-mono text-[10px] font-extrabold px-2 py-0.5 rounded bg-warning/20 text-base-content border border-warning/50"
                     >
-                      {{ hist.kodeAntrean }}
+                      <Ticket class="w-3 h-3 text-warning shrink-0" />
+                      <span>{{ hist.kodeAntrean }}</span>
                     </span>
                   </div>
                   <span
@@ -420,48 +463,67 @@ watch(
         </div>
 
         <div class="flex-none modal-action gap-2 pt-4 mt-2 border-t border-base-content/10 flex-wrap justify-between">
-          <div v-if="canAct && detail" class="flex flex-wrap items-center gap-2">
+          <div v-if="detail" class="flex flex-wrap items-center gap-2">
             <button
-              type="button"
-              class="btn btn-outline btn-secondary btn-sm rounded-xl gap-1.5"
-              @click="emit('edit-penjamin', detail)"
-            >
-              <CreditCard class="w-3.5 h-3.5" />
-              Ubah Penjamin
-            </button>
-            <button
-              type="button"
-              class="btn btn-outline btn-primary btn-sm rounded-xl gap-1.5"
-              @click="emit('mutasi', detail)"
-            >
-              <ArrowRightLeft class="w-3.5 h-3.5" />
-              Mutasi
-            </button>
-            <button
-              v-if="canCancelRanap"
+              v-if="hasQueueNumber"
               type="button"
               class="btn btn-outline btn-warning btn-sm rounded-xl gap-1.5"
-              @click="emit('batal-ranap', detail)"
+              @click="handlePrintAntrean"
             >
-              <RotateCcw class="w-3.5 h-3.5" />
-              Batal Ranap
+              <Ticket class="w-3.5 h-3.5" />
+              Cetak Antrian
             </button>
             <button
               type="button"
-              class="btn btn-outline btn-success btn-sm rounded-xl gap-1.5"
-              @click="emit('selesai', detail)"
+              class="btn btn-outline btn-sm rounded-xl gap-1.5"
+              @click="handlePrintSlip"
             >
-              <CheckCircle2 class="w-3.5 h-3.5" />
-              Selesai
+              <Printer class="w-3.5 h-3.5" />
+              Cetak Slip
             </button>
-            <button
-              type="button"
-              class="btn btn-outline btn-error btn-sm rounded-xl gap-1.5"
-              @click="emit('batal', detail)"
-            >
-              <XCircle class="w-3.5 h-3.5" />
-              Batalkan
-            </button>
+            <template v-if="canAct">
+              <button
+                type="button"
+                class="btn btn-outline btn-secondary btn-sm rounded-xl gap-1.5"
+                @click="emit('edit-penjamin', detail)"
+              >
+                <CreditCard class="w-3.5 h-3.5" />
+                Ubah Penjamin
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-primary btn-sm rounded-xl gap-1.5"
+                @click="emit('mutasi', detail)"
+              >
+                <ArrowRightLeft class="w-3.5 h-3.5" />
+                Mutasi
+              </button>
+              <button
+                v-if="canCancelRanap"
+                type="button"
+                class="btn btn-outline btn-warning btn-sm rounded-xl gap-1.5"
+                @click="emit('batal-ranap', detail)"
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+                Batal Ranap
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-success btn-sm rounded-xl gap-1.5"
+                @click="emit('selesai', detail)"
+              >
+                <CheckCircle2 class="w-3.5 h-3.5" />
+                Selesai
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-error btn-sm rounded-xl gap-1.5"
+                @click="emit('batal', detail)"
+              >
+                <XCircle class="w-3.5 h-3.5" />
+                Batalkan
+              </button>
+            </template>
           </div>
           <button type="button" class="btn btn-primary btn-sm rounded-xl px-5 ml-auto" @click="emit('close')">
             Tutup

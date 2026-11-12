@@ -15,6 +15,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Ticket,
   X,
   XCircle,
 } from "lucide-vue-next";
@@ -378,14 +379,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <NuxtLink
-          v-if="canManageData"
-          :to="slugPath('/transaksi/pendaftaran')"
-          class="btn btn-primary rounded-xl font-bold shadow-md shadow-primary/25 hover:shadow-lg transition gap-2 w-full sm:w-auto shrink-0"
-        >
-          <ClipboardPlus class="w-4 h-4 stroke-[2.5]" />
-          <span>Pendaftaran Baru</span>
-        </NuxtLink>
+       
       </div>
     </div>
 
@@ -631,9 +625,10 @@ onUnmounted(() => {
                   </div>
                   <div
                     v-if="item.kodeAntreanSaatIni"
-                    class="inline-block font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25"
+                    class="inline-flex items-center gap-1 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-warning/20 text-base-content border border-warning/50"
                   >
-                    Antrean: {{ item.kodeAntreanSaatIni }}
+                    <Ticket class="w-3 h-3 text-warning shrink-0" />
+                    <span>Antrean: {{ item.kodeAntreanSaatIni }}</span>
                   </div>
                 </td>
                 <td class="py-3.5 px-4">
@@ -776,9 +771,10 @@ onUnmounted(() => {
                   <span class="font-mono text-xs font-extrabold text-primary">{{ item.noRegistrasi }}</span>
                   <span
                     v-if="item.kodeAntreanSaatIni"
-                    class="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 border border-amber-500/20"
+                    class="inline-flex items-center gap-1 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-warning/20 text-base-content border border-warning/50"
                   >
-                    {{ item.kodeAntreanSaatIni }}
+                    <Ticket class="w-3 h-3 text-warning shrink-0" />
+                    <span>{{ item.kodeAntreanSaatIni }}</span>
                   </span>
                 </div>
                 <h4 class="font-bold text-sm text-base-content truncate mt-1">

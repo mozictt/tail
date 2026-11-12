@@ -2,11 +2,9 @@
 import { computed, onMounted, ref, watch } from "vue";
 import {
   Building,
-  CheckCircle2,
   ClipboardCheck,
   ClipboardPlus,
   Clock,
-  Eye,
   RotateCcw,
   Search,
   Stethoscope,
@@ -31,6 +29,9 @@ import BedKosongPicker from "@/components/transaksi/BedKosongPicker.vue";
 import PasienPickerModal from "@/components/transaksi/PasienPickerModal.vue";
 import DokterJadwalPickerModal from "@/components/transaksi/DokterJadwalPickerModal.vue";
 import PendaftaranDetailModal from "@/components/transaksi/PendaftaranDetailModal.vue";
+import PendaftaranSuccessSummary from "@/components/transaksi/PendaftaranSuccessSummary.vue";
+import { useCompanyProfileStore } from "@/stores/company-profile";
+import { useTenantSettingsStore } from "@/stores/tenant-settings";
 import { PendaftaranService } from "@/services/pendaftaran.service";
 import { PasienService } from "@/services/pasien.service";
 import { UnitService } from "@/services/unit.service";
@@ -69,19 +70,22 @@ definePageMeta({
   layout: "admin",
 });
 
-useHead({
-  title: "Pendaftaran Pasien",
-});
-
 const pendaftaranService = PendaftaranService();
 const pasienService = PasienService();
 const unitService = UnitService();
 const penjaminService = PenjaminService();
 const kelasService = KelasService();
+const companyProfileStore = useCompanyProfileStore();
+const tenantSettingsStore = useTenantSettingsStore();
 const { formatDateForInput } = useDate();
 const { slugPath } = useSlugRoute();
 const { showToast } = useToast();
 const { canWrite } = usePermission();
+
+// Initialize tenantSettingsStore before useHead so the eager title computed does not hit TDZ.
+useHead({
+  title: computed(() => tenantSettingsStore.pendaftaranTitle),
+});
 
 const ROUTE_PATH = "/transaksi/pendaftaran";
 const RESOURCE_NAME = "Pendaftaran";
@@ -424,7 +428,11 @@ const buildPasienBaruPayload = (): CreatePasienPayload => {
   return {
     noRm: pf.rmMode === "manual" ? pf.noRm.trim() : undefined,
     formatNoRm:
-      pf.rmMode === "auto" && pf.formatNoRm ? pf.formatNoRm : undefined,
+      pf.rmMode === "auto" &&
+      tenantSettingsStore.allowFormOverrideNoRm &&
+      pf.formatNoRm
+        ? pf.formatNoRm
+        : undefined,
     isBayiBaruLahir: pf.isBayiBaruLahir,
     isIdentitasTidakDiketahui: pf.isIdentitasTidakDiketahui,
     alamatSamaKtp: pf.alamatSamaKtp,
@@ -491,6 +499,9 @@ const handleSubmit = async () => {
       : "";
     showToast(`Pendaftaran berhasil (${created.noRegistrasi}${queueLabel})`, "success");
     resetFullForm();
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   } catch (err: unknown) {
     showToast(extractApiErrorMessage(err, "Gagal memproses pendaftaran pasien"), "error");
   } finally {
@@ -498,8 +509,17 @@ const handleSubmit = async () => {
   }
 };
 
+const startNewRegistration = () => {
+  lastCreatedVisit.value = null;
+  if (typeof window !== "undefined") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+
 onMounted(() => {
   loadReferences();
+  companyProfileStore.fetchProfile();
+  tenantSettingsStore.fetchSettings();
 });
 </script>
 
@@ -514,10 +534,18 @@ onMounted(() => {
           </div>
           <div class="min-w-0">
             <h1 class="text-lg sm:text-xl font-extrabold text-base-content tracking-tight">
-              Pendaftaran Kunjungan Pasien
+              {{
+                lastCreatedVisit
+                  ? tenantSettingsStore.pendaftaranSuksesTitle
+                  : tenantSettingsStore.pendaftaranTitle
+              }}
             </h1>
             <p class="text-xs sm:text-sm text-base-content/60 mt-1">
-              Formulir terpadu pendaftaran pasien baru maupun pasien lama (pilih pasien lama & dokter melalui popup)
+              {{
+                lastCreatedVisit
+                  ? tenantSettingsStore.pendaftaranSuksesSubtitle
+                  : tenantSettingsStore.pendaftaranSubtitle
+              }}
             </p>
           </div>
         </div>
@@ -532,61 +560,15 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- BANNER PENDAFTARAN BERHASIL TERAKHIR -->
-    <div
+    <!-- HASIL PENDAFTARAN: HALAMAN INFORMASI PASIEN YANG DIDAFTARKAN -->
+    <PendaftaranSuccessSummary
       v-if="lastCreatedVisit"
-      class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-    >
-      <div class="flex items-start gap-3 min-w-0">
-        <CheckCircle2 class="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
-        <div class="min-w-0 text-xs space-y-1">
-          <div class="font-extrabold text-sm text-emerald-700 dark:text-emerald-300 flex items-center gap-2 flex-wrap">
-            <span>Pendaftaran Berhasil: {{ lastCreatedVisit.noRegistrasi }}</span>
-            <span
-              v-if="lastCreatedVisit.kodeAntreanSaatIni"
-              class="font-mono px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/30"
-            >
-              No. Antrean: {{ lastCreatedVisit.kodeAntreanSaatIni }}
-            </span>
-          </div>
-          <p class="text-base-content/75">
-            Pasien <strong>{{ lastCreatedVisit.pasien?.penduduk?.namaLengkap || "-" }}</strong>
-            (RM: <span class="font-mono font-bold">{{ lastCreatedVisit.pasien?.noRm || "-" }}</span>)
-            • {{ lastCreatedVisit.unitSaatIni?.nama || "-" }}
-            <template v-if="lastCreatedVisit.bedSaatIni">
-              • Bed {{ lastCreatedVisit.bedSaatIni.kode }}
-            </template>
-          </p>
-        </div>
-      </div>
+      :visit="lastCreatedVisit"
+      @open-detail="showDetailModal = true"
+      @register-another="startNewRegistration"
+    />
 
-      <div class="flex flex-wrap items-center gap-2 shrink-0">
-        <button
-          type="button"
-          class="btn btn-xs sm:btn-sm btn-outline rounded-xl gap-1"
-          @click="showDetailModal = true"
-        >
-          <Eye class="w-3.5 h-3.5" />
-          Lihat Detail
-        </button>
-        <NuxtLink
-          :to="slugPath('/transaksi/informasi-kunjungan')"
-          class="btn btn-xs sm:btn-sm btn-primary rounded-xl gap-1"
-        >
-          Informasi Kunjungan
-        </NuxtLink>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square rounded-lg"
-          aria-label="Tutup banner"
-          @click="lastCreatedVisit = null"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-
-    <form class="space-y-5" @submit.prevent="handleSubmit">
+    <form v-else class="space-y-5" @submit.prevent="handleSubmit">
       <!-- 1. FORM TERPADU IDENTITAS PASIEN (LAMA / BARU) -->
       <PendaftaranPasienForm
         :form="pasienForm"

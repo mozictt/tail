@@ -3,6 +3,7 @@ import { useRuntimeConfig, navigateTo, useCookie } from "#app";
 import { useTenantMasterStore } from "@/stores/tenantMaster";
 import { useMenuStore } from "@/stores/menu";
 import { useCompanyProfileStore } from "@/stores/company-profile";
+import { useTenantSettingsStore } from "@/stores/tenant-settings";
 import { isSuperAdminRole } from "@/utils/role.util";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 hari dalam detik
@@ -262,6 +263,8 @@ export const useAuthStore = defineStore("auth", {
           try {
             const masterStore = useTenantMasterStore();
             masterStore.clearTargetTenant();
+            const settingsStore = useTenantSettingsStore();
+            settingsStore.clearSettings();
           } catch (e) {}
 
           const menuStore = useMenuStore();
@@ -309,6 +312,11 @@ export const useAuthStore = defineStore("auth", {
           useCookie("impersonator_info").value = null;
 
           this.saveCookies();
+
+          try {
+            const settingsStore = useTenantSettingsStore();
+            settingsStore.clearSettings();
+          } catch (e) {}
 
           const menuStore = useMenuStore();
           menuStore.clearMenus();
@@ -368,6 +376,9 @@ export const useAuthStore = defineStore("auth", {
           if (typeof companyProfileStore.$reset === "function") {
             companyProfileStore.$reset();
           }
+
+          const settingsStore = useTenantSettingsStore();
+          settingsStore.clearSettings();
         } catch (e) {
           console.error("Error resetting stores on logout:", e);
         }

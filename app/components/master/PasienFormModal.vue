@@ -21,14 +21,14 @@ import PendudukSelector from "@/components/master/PendudukSelector.vue";
 import PendudukFormModal from "@/components/master/PendudukFormModal.vue";
 import PasienPenjaminManager from "@/components/master/PasienPenjaminManager.vue";
 import { PasienService } from "@/services/pasien.service";
+import { useTenantSettingsStore } from "@/stores/tenant-settings";
 import { useMasterReferences } from "@/composables/useMasterReferences";
 import { useDate } from "@/composables/useDate";
 import { useToast } from "@/composables/useToast";
 import { extractApiErrorMessage } from "@/utils/api-error.util";
+import { NO_RM_PRESET_OPTIONS } from "@/utils/format-no-rm.util";
 import type { MasterStatus } from "@/types/master-data";
 import {
-  FORMAT_NO_RM_OPTIONS,
-  FormatNoRm,
   formatKelurahanLabel,
   GOLONGAN_DARAH_OPTIONS,
   HUBUNGAN_PJ_OPTIONS,
@@ -66,6 +66,7 @@ const emit = defineEmits<{
 }>();
 
 const pasienService = PasienService();
+const tenantSettingsStore = useTenantSettingsStore();
 const { formatDate } = useDate();
 const { showToast } = useToast();
 const {
@@ -98,7 +99,7 @@ const livePenjaminList = ref<PasienPenjaminItem[]>([]);
 
 interface PasienFormState {
   noRm: string;
-  formatNoRm: FormatNoRm | "";
+  formatNoRm: string;
   pendudukId: number | undefined;
   pendudukIbuId: number | undefined;
   isBayiBaruLahir: boolean;
@@ -268,12 +269,24 @@ const loadDetail = async (id: number) => {
   }
 };
 
+const tenantNoRmModelLabel = computed(() => {
+  const noRm = tenantSettingsStore.noRm;
+  if (noRm.mode === "PRESET") {
+    const preset = NO_RM_PRESET_OPTIONS.find((item) => item.kode === noRm.presetKode);
+    if (preset) return preset.label;
+  }
+  return `Kustom ${noRm.jumlahDigit} Digit`;
+});
+
 watch(
   () => [props.show, props.editId] as const,
   async ([isOpen, targetId]) => {
     if (!isOpen) return;
     resetState();
-    await loadReferences();
+    await Promise.all([
+      loadReferences(),
+      targetId ? Promise.resolve() : tenantSettingsStore.fetchSettings(),
+    ]);
 
     if (targetId) {
       await loadDetail(targetId);
@@ -518,7 +531,9 @@ const handleSubmit = async () => {
       const createPayload: CreatePasienPayload = {
         noRm: rmMode.value === "manual" ? f.noRm.trim() : undefined,
         formatNoRm:
-          rmMode.value === "auto" && f.formatNoRm
+          rmMode.value === "auto" &&
+          tenantSettingsStore.allowFormOverrideNoRm &&
+          f.formatNoRm
             ? f.formatNoRm
             : undefined,
         pendudukId: pendudukMode.value === "existing" ? f.pendudukId : undefined,
@@ -706,18 +721,32 @@ onUnmounted(() => {
                   Format Nomor RM Otomatis
                 </label>
                 <select
+                  v-if="tenantSettingsStore.allowFormOverrideNoRm"
                   v-model="form.formatNoRm"
                   class="select select-bordered w-full rounded-xl h-11 text-sm"
                 >
-                  <option value="">Ikuti Pengaturan Tenant (Default)</option>
+                  <option value="">
+                    Sesuai Setting Tenant ({{ tenantNoRmModelLabel }} • {{ tenantSettingsStore.noRmPreview }})
+                  </option>
                   <option
-                    v-for="opt in FORMAT_NO_RM_OPTIONS"
-                    :key="opt.value"
-                    :value="opt.value"
+                    v-for="opt in NO_RM_PRESET_OPTIONS"
+                    :key="opt.kode"
+                    :value="opt.kode"
                   >
-                    {{ opt.label }}
+                    {{ opt.label }} ({{ opt.kode }})
                   </option>
                 </select>
+                <div
+                  v-else
+                  class="h-11 px-3.5 rounded-xl bg-base-200/60 border border-base-content/15 flex items-center justify-between gap-2 text-sm"
+                >
+                  <span class="font-semibold text-base-content/80 truncate">
+                    {{ tenantNoRmModelLabel }}
+                  </span>
+                  <code class="font-mono font-extrabold text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary shrink-0">
+                    {{ tenantSettingsStore.noRmPreview }}
+                  </code>
+                </div>
               </div>
 
               <div v-else>
